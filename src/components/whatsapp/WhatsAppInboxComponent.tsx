@@ -407,8 +407,8 @@ export default function WhatsAppInboxComponent() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
       
-      // Determine a mimeType supported by both the browser and Meta API
-      let selectedMime = 'audio/ogg; codecs=opus';
+      // Record in browser native webm format - the server will transcode it to MP3 automatically
+      let selectedMime = 'audio/webm';
       if (typeof MediaRecorder !== 'undefined') {
         if (!MediaRecorder.isTypeSupported(selectedMime)) {
           selectedMime = 'audio/mp4';
@@ -436,7 +436,7 @@ export default function WhatsAppInboxComponent() {
           setSendingMsg(true);
           
           // Determine extension and clean mimeType
-          const ext = selectedMime.includes('ogg') ? 'ogg' : selectedMime.includes('mp4') ? 'm4a' : 'aac';
+          const ext = selectedMime.includes('mp4') ? 'm4a' : selectedMime.includes('aac') ? 'aac' : 'webm';
           const cleanMime = selectedMime.split(';')[0];
           
           try {
@@ -1171,6 +1171,14 @@ export default function WhatsAppInboxComponent() {
                         <p className="message-text-content" style={msg.isInternalNote ? { color: '#713f12' } : {}}>{msg.content}</p>
                       )}
 
+                      {msg.status === "FAILED" && (
+                        <div 
+                          style={{ color: "#ef4444", fontSize: "11px", display: "flex", alignItems: "center", gap: "5px", marginTop: "6px", background: "#fef2f2", padding: "6px 10px", borderRadius: "6px", border: "1px solid #fecaca", width: "fit-content" }}
+                          title="Delivery failed. Possible reasons: 24-hour service session expired, user number not registered on WhatsApp, or temporary Meta API credentials error."
+                        >
+                          <span>⚠️ Delivery Failed (24h window closed or invalid configuration)</span>
+                        </div>
+                      )}
                       <div className="message-meta-line">
                         <span className="message-timestamp" style={msg.isInternalNote ? { color: '#a16207' } : {}}>
                           {new Date(msg.sentAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
