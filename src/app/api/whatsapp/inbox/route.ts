@@ -146,6 +146,56 @@ export async function GET(req: NextRequest) {
     }
   }
 
+    // -- 4. GET CONVERSATION DETAIL BY ID --------------------------------------
+  if (action === "detail") {
+    const convId = searchParams.get("convId");
+    if (!convId) return NextResponse.json({ error: "convId required" }, { status: 400 });
+    
+    try {
+      const conversation = await prisma.whatsAppConversation.findUnique({
+        where: { id: convId },
+        include: {
+          account: true,
+          customer: {
+            include: {
+              orders: { orderBy: { createdAt: 'desc' }, take: 5 },
+              quotations: { orderBy: { createdAt: 'desc' }, take: 5 },
+              invoices: { orderBy: { createdAt: 'desc' }, take: 5 },
+              tasks: { orderBy: { createdAt: 'desc' }, take: 5 },
+              followUps: { orderBy: { createdAt: 'desc' }, take: 5 }
+            }
+          },
+          assignedEmployee: { include: { user: true } },
+          messages: { orderBy: { sentAt: 'asc' } },
+          paymentLinks: { orderBy: { createdAt: 'desc' }, take: 3 }
+        }
+      });
+      
+      if (!conversation) {
+        return NextResponse.json({ success: false, error: "Conversation not found" }, { status: 404 });
+      }
+
+      // Reset unread count when viewed
+      if (conversation.unreadCount > 0) {
+        await prisma.whatsAppConversation.update({
+          where: { id: convId },
+          data: { unreadCount: 0 }
+        });
+      }
+
+      // Add default SLA status
+      const formatted = {
+        ...conversation,
+        slaStatus: conversation.priority === 'HIGH' ? 'RED' : 'GREEN'
+      };
+
+      return NextResponse.json({ success: true, conversation: formatted });
+    } catch (err: any) {
+      return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    }
+  }
+
+
   // -- 3. GET AI EXECUTION LOGS ---------------------------------------------
   if (action === "executions") {
     try {

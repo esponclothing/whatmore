@@ -89,6 +89,7 @@ export default function WhatsAppInboxComponent() {
   const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState<boolean>(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState<boolean>(true);
+  const [showFilters, setShowFilters] = useState<boolean>(false);
 
   // Attachment File Upload Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -271,7 +272,10 @@ export default function WhatsAppInboxComponent() {
   const fetchConversationDetail = async (id: string, silent = false) => {
     if (!silent) setLoadingDetail(true);
     try {
-      const res = await getWhatsAppConversationById(id);
+      const params = new URLSearchParams({ action: 'detail', convId: id });
+      const apiRes = await fetch('/api/whatsapp/inbox?' + params.toString());
+      if (!apiRes.ok) throw new Error('API error ' + apiRes.status);
+      const res = await apiRes.json();
       if (res.success && res.conversation) {
         setActiveConvDetail(res.conversation);
         setCrmEditData({
@@ -609,6 +613,14 @@ export default function WhatsAppInboxComponent() {
               </button>
               <button
                 className="panel-toggle-btn"
+                onClick={() => setShowFilters(!showFilters)}
+                title="Toggle Filters"
+                style={{ color: showFilters ? "#6d28d9" : "#64748b" }}
+              >
+                <Filter size={16} />
+              </button>
+              <button
+                className="panel-toggle-btn"
                 onClick={toggleFullScreenMode}
                 title={isFullScreen ? "Exit Full Screen Mode (Esc)" : "Full Screen Mode"}
                 style={{ color: isFullScreen ? "#10b981" : "#64748b" }}
@@ -675,7 +687,8 @@ export default function WhatsAppInboxComponent() {
 
 
               {/* Filter Pills */}
-              <div className="inbox-filters-row">
+              {showFilters && (
+        <div className="inbox-filters-row">
                 <button
                   className={`filter-pill ${unreadOnly ? "active" : ""}`}
                   onClick={() => setUnreadOnly(!unreadOnly)}
@@ -706,6 +719,7 @@ export default function WhatsAppInboxComponent() {
                   ))}
                 </select>
               </div>
+              )}
             </>
           )}
         </div>
@@ -829,7 +843,7 @@ export default function WhatsAppInboxComponent() {
           <>
             {/* Chat Header */}
             <div className="chat-header">
-              <div className="chat-header-user-info" onClick={() => setIsRightCollapsed(!isRightCollapsed)} style={{ cursor: 'pointer' }}>
+              <div className="chat-header-user-info">
                 <div className="chat-avatar-large">
                   <span>{(activeConvDetail.customer?.contactPerson || "C").slice(0, 2).toUpperCase()}</span>
                 </div>
@@ -904,13 +918,7 @@ export default function WhatsAppInboxComponent() {
                   {isFullScreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
                   <span>{isFullScreen ? "Exit Full Screen" : "Full Screen"}</span>
                 </button>
-                <button
-                  className="panel-toggle-btn"
-                  onClick={() => setIsRightCollapsed(!isRightCollapsed)}
-                  title="Toggle CRM 360° Profile Panel"
-                >
-                  <User size={16} />
-                </button>
+
               </div>
             </div>
 
@@ -1234,7 +1242,7 @@ export default function WhatsAppInboxComponent() {
       {/* ----------------------------------------------------------------- */}
       {/* RIGHT COLUMN: CRM 360° CUSTOMER PROFILE PANEL */}
       {/* ----------------------------------------------------------------- */}
-      <div className={`inbox-right-panel ${isRightCollapsed ? "collapsed" : ""}`}>
+      <div className="inbox-right-panel collapsed" style={{ display: 'none' }}>
         {!isRightCollapsed && activeConvDetail && (
           <div className="crm-panel-container">
             {/* Panel Header */}
