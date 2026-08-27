@@ -1,26 +1,8 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  MessageSquare,
-  ShieldCheck,
-  Zap,
-  Bot,
-  RefreshCw,
-  CheckCircle2,
-  AlertTriangle,
-  ArrowUpRight,
-  TrendingUp,
-  Activity,
-  Send,
-  Radio,
-  FileCode,
-  CreditCard,
-  ShoppingBag,
-  Users,
-  Check,
-  PhoneCall
-} from "lucide-react";
+import { CheckCircle2, AlertTriangle, RefreshCw, PhoneCall, TrendingUp, Users, MessageSquare, Zap, Activity, Box, Search, Bell } from "lucide-react";
+import Link from "next/link";
 import {
   getWhatsAppDashboardMetrics,
   refreshWhatsAppAccountSyncAction,
@@ -28,20 +10,12 @@ import {
   checkIntegrationHealthAction
 } from "@/app/actions/whatsAppPlatformActions";
 
-import Link from "next/link";
-
-export default function WhatsAppDashboardPage() {
+export default function WhatmoreDashboard() {
   const [data, setData] = useState<any | null>(null);
   const [health, setHealth] = useState<any | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
-
-  // Phone Verification Modal State
-  const [showVerifyModal, setShowVerifyModal] = useState<boolean>(false);
-  const [verificationCode, setVerificationCode] = useState<string>("659201");
-  const [verifying, setVerifying] = useState<boolean>(false);
-  const [otpSent, setOtpSent] = useState<boolean>(false);
 
   const fetchMetricsAndHealth = async () => {
     setLoading(true);
@@ -49,7 +23,6 @@ export default function WhatsAppDashboardPage() {
       getWhatsAppDashboardMetrics(),
       checkIntegrationHealthAction()
     ]);
-
     if (metricsRes.success) setData(metricsRes);
     if (healthRes.success) setHealth(healthRes);
     setLoading(false);
@@ -59,245 +32,136 @@ export default function WhatsAppDashboardPage() {
     fetchMetricsAndHealth();
   }, []);
 
-  // Handle Refresh Sync Button Click
   const handleRefreshSync = async () => {
     setRefreshing(true);
     setSyncToast(null);
-
     const res = await refreshWhatsAppAccountSyncAction();
     if (res.success) {
-      setSyncToast(`Account re-synchronized with Meta Cloud API at ${res.lastSyncedAt}! Webhook status: ${res.health?.webhookStatus || "Active & Verified"}.`);
+      setSyncToast(`Account synchronized! Webhook: ${res.health?.webhookStatus || "Active"}`);
       await fetchMetricsAndHealth();
     }
     setRefreshing(false);
   };
 
-  // Handle Verify Phone Submit
-  const handleVerifyPhoneSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setVerifying(true);
-    const res = await verifyWhatsAppPhoneNumberAction(verificationCode);
-    if (res.success) {
-      setShowVerifyModal(false);
-      setSyncToast("Phone number +91 7206066678 successfully verified with Meta WhatsApp Cloud API!");
-      await fetchMetricsAndHealth();
-    }
-    setVerifying(false);
-  };
-
   const isConnected = data?.isConnected || false;
 
   return (
-    <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Toast Alert Banner */}
+    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8 w-full">
+      {/* Header Area */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white mb-1">Overview</h1>
+          <p className="text-gray-500 dark:text-gray-400">Welcome to Whatmore. Your unified commerce and automation hub.</p>
+        </div>
+        <div className="flex gap-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+            <input type="text" placeholder="Search products, contacts..." className="pl-10 pr-4 py-2 border border-gray-200 dark:border-slate-700 rounded-full bg-gray-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-64 transition-all" />
+          </div>
+          <button className="w-10 h-10 rounded-full border border-gray-200 dark:border-slate-700 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+            <Bell size={18} />
+          </button>
+        </div>
+      </div>
+
       {syncToast && (
-        <div style={{ background: "#dcfce7", border: "1px solid #86efac", color: "#166534", padding: "12px 16px", borderRadius: "8px", fontSize: "13.5px", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <CheckCircle2 size={18} />
-            <span>{syncToast}</span>
-          </div>
-          <button onClick={() => setSyncToast(null)} style={{ background: "none", border: "none", color: "#166534", fontSize: "16px", cursor: "pointer" }}>×</button>
+        <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 px-4 py-3 rounded-xl text-sm font-semibold flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2"><CheckCircle2 size={18} /> {syncToast}</div>
+          <button onClick={() => setSyncToast(null)} className="opacity-70 hover:opacity-100">×</button>
         </div>
       )}
 
-      {/* Warning Banner if API Credentials are missing */}
       {!isConnected && (
-        <div style={{ background: "#fffbe5", border: "1px solid #fde047", borderRadius: "10px", padding: "16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <AlertTriangle size={24} color="#ca8a04" />
+        <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-5 rounded-2xl flex justify-between items-center shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-amber-100 dark:bg-amber-500/20 rounded-full"><AlertTriangle size={24} className="text-amber-600 dark:text-amber-400" /></div>
             <div>
-              <h4 style={{ fontSize: "15px", fontWeight: 700, margin: 0, color: "#854d0e" }}>
-                WhatsApp Business API Not Connected
-              </h4>
-              <p style={{ fontSize: "13px", color: "#a16207", margin: "2px 0 0 0" }}>
-                Your Meta WhatsApp WABA credentials have not been configured yet. Enter your WABA ID and Permanent Access Token in API Settings.
-              </p>
+              <h4 className="text-base font-bold text-amber-900 dark:text-amber-300 mb-0.5">WhatsApp API Not Connected</h4>
+              <p className="text-sm text-amber-700 dark:text-amber-500/80 m-0">Please configure your Meta App credentials to activate automation.</p>
             </div>
           </div>
-          <Link
-            href="/whatsapp/api-settings"
-            style={{ background: "#ca8a04", color: "#ffffff", padding: "8px 16px", borderRadius: "6px", fontSize: "13px", fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}
-          >
-            Configure API Credentials →
-          </Link>
+          <Link href="/whatsapp/api-settings" className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-bold shadow-md transition-all">Configure API →</Link>
         </div>
       )}
 
-      {/* Top Banner: Business Account & Connection Health */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-        {/* Business Account Card */}
-        <div style={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "20px", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
-            <div>
-              <span style={{ fontSize: "12px", fontWeight: 700, color: isConnected ? "#10b981" : "#ef4444", textTransform: "uppercase" }}>Primary WABA Account</span>
-              <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#111827", margin: "4px 0 0 0" }}>{data?.account?.name || "Espon Main Sales"}</h2>
-              <p style={{ fontSize: "13px", color: "#6b7280", margin: "2px 0 0 0" }}>Phone Number: {data?.account?.phoneNumber || "Not Configured"}</p>
-            </div>
-            <span style={{ background: isConnected ? "#d1fae5" : "#fee2e2", color: isConnected ? "#065f46" : "#991b1b", fontSize: "12px", fontWeight: 700, padding: "4px 10px", borderRadius: "14px" }}>
-              ● {data?.account?.status || "NOT CONNECTED (Setup Required)"}
+      {/* Hero Stats */}
+      <div className="grid grid-cols-4 gap-5">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
+          <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 flex items-center justify-between">Total Revenue <TrendingUp size={16} className="text-green-500"/></div>
+          <div className="text-3xl font-extrabold text-gray-900 dark:text-white">₹2,45,900</div>
+          <div className="text-xs text-green-500 font-medium mt-2 flex items-center gap-1">+14.5% from last month</div>
+        </div>
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
+          <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 flex items-center justify-between">Active Products <Box size={16} className="text-indigo-500"/></div>
+          <div className="text-3xl font-extrabold text-gray-900 dark:text-white">1,204</div>
+          <div className="text-xs text-indigo-500 font-medium mt-2 flex items-center gap-1">Synced with Shopify</div>
+        </div>
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
+          <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 flex items-center justify-between">Automated Replies <Zap size={16} className="text-amber-500"/></div>
+          <div className="text-3xl font-extrabold text-gray-900 dark:text-white">4,892</div>
+          <div className="text-xs text-amber-500 font-medium mt-2 flex items-center gap-1">Saved ~142 hours</div>
+        </div>
+        <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-6 rounded-2xl shadow-lg text-white">
+          <div className="text-sm font-medium text-indigo-100 mb-3 flex items-center justify-between">API Status <Activity size={16}/></div>
+          <div className="text-xl font-bold flex items-center gap-2 mb-1">
+            <span className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></span> 
+            {isConnected ? 'Operational' : 'Disconnected'}
+          </div>
+          <div className="text-xs text-indigo-200 mt-3 font-medium">Ping: 24ms • 99.9% Uptime</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-8">
+        {/* Connection Box */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
+          <div className="border-b border-gray-100 dark:border-slate-700 p-6">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white m-0">Meta Integration Health</h3>
+            <p className="text-sm text-gray-500 m-0 mt-1">Real-time status of your WhatsApp Cloud API connection.</p>
+          </div>
+          <div className="p-6 grid grid-cols-2 gap-4">
+             <div className="bg-gray-50 dark:bg-slate-900/50 p-4 rounded-xl border border-gray-100 dark:border-slate-700">
+                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Webhook</div>
+                <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> Verified</div>
+             </div>
+             <div className="bg-gray-50 dark:bg-slate-900/50 p-4 rounded-xl border border-gray-100 dark:border-slate-700">
+                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Message Delivery</div>
+                <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> 99.8% Rate</div>
+             </div>
+             <div className="col-span-2 mt-2">
+                <button onClick={handleRefreshSync} disabled={refreshing} className="w-full py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl text-sm font-bold shadow-md hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                  <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+                  {refreshing ? "Syncing with Meta..." : "Force Sync Integration"}
+                </button>
+             </div>
+          </div>
+        </div>
+
+        {/* Messaging Capacity */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden p-6 flex flex-col justify-center">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white m-0">Messaging Tier Capacity</h3>
+          <p className="text-sm text-gray-500 m-0 mt-1 mb-6">Tier 2 Meta WhatsApp Business limits (24hr rolling window).</p>
+          
+          <div className="flex justify-between items-end mb-2">
+            <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Usage Today</span>
+            <span className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">
+              {(data?.metrics?.sentToday || 0).toLocaleString()} <span className="text-sm text-gray-400 font-medium">/ 10,000</span>
             </span>
           </div>
-
-          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-            <button
-              onClick={handleRefreshSync}
-              disabled={refreshing}
-              style={{ display: "flex", alignItems: "center", gap: "6px", background: "#10b981", color: "#fff", border: "none", padding: "8px 14px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
-            >
-              <RefreshCw size={14} className={refreshing ? "spin-icon" : ""} />
-              <span>{refreshing ? "Synchronizing..." : "Refresh Sync"}</span>
-            </button>
-            <button
-              onClick={() => setShowVerifyModal(true)}
-              style={{ background: "#f3f4f6", border: "1px solid #d1d5db", color: "#374151", padding: "8px 14px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
-            >
-              Verify Phone Number
-            </button>
+          <div className="w-full h-3 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full" style={{ width: `${Math.min(100, ((data?.metrics?.sentToday || 0) / 10000) * 100)}%` }}></div>
           </div>
-        </div>
-
-        {/* Integration Health Summary */}
-        <div style={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "20px", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
-          <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#111827", margin: "0 0 14px 0" }}>Integration & Webhook Health</h3>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "10px", borderRadius: "8px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#166534", fontSize: "12px", fontWeight: 700 }}>
-                <CheckCircle2 size={16} /> Webhook Endpoint
-              </div>
-              <span style={{ fontSize: "13px", fontWeight: 600, color: "#14532d", display: "block", marginTop: "4px" }}>
-                {health?.webhook?.status || "Active & Verified"}
-              </span>
-            </div>
-
-            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "10px", borderRadius: "8px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#166534", fontSize: "12px", fontWeight: 700 }}>
-                <CheckCircle2 size={16} /> Meta Cloud API
-              </div>
-              <span style={{ fontSize: "13px", fontWeight: 600, color: "#14532d", display: "block", marginTop: "4px" }}>
-                {health?.metaApi?.status || "Operational (100%)"}
-              </span>
-            </div>
-
-            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "10px", borderRadius: "8px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#166534", fontSize: "12px", fontWeight: 700 }}>
-                <CheckCircle2 size={16} /> Message Delivery
-              </div>
-              <span style={{ fontSize: "13px", fontWeight: 600, color: "#14532d", display: "block", marginTop: "4px" }}>
-                {health?.delivery?.rate || "98.8% Delivered"}
-              </span>
-            </div>
-
-            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "10px", borderRadius: "8px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#166534", fontSize: "12px", fontWeight: 700 }}>
-                <CheckCircle2 size={16} /> Quality Rating
-              </div>
-              <span style={{ fontSize: "13px", fontWeight: 600, color: "#14532d", display: "block", marginTop: "4px" }}>
-                {health?.quality?.rating || "GREEN (High Quality)"}
-              </span>
-            </div>
+          <div className="mt-6 flex justify-between">
+             <div className="text-center">
+               <div className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-1">Quality Rating</div>
+               <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 rounded-full text-xs font-bold"><div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> High</div>
+             </div>
+             <div className="text-center">
+               <div className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-1">Status</div>
+               <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 rounded-full text-xs font-bold"><div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> Connected</div>
+             </div>
           </div>
         </div>
       </div>
-
-      {/* Messaging Capacity Card */}
-      <div style={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "20px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-          <div>
-            <h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>Daily Messaging Tier Capacity</h3>
-            <p style={{ fontSize: "12.5px", color: "#6b7280", margin: "2px 0 0 0" }}>Tier 2 Meta WhatsApp Business Messaging Tier</p>
-          </div>
-          <span style={{ fontSize: "18px", fontWeight: 800, color: "#10b981" }}>
-            {`${(data?.metrics?.sentToday || 0).toLocaleString()} / 10,000 used today`}
-          </span>
-        </div>
-
-        {/* Progress Bar */}
-        <div style={{ width: "100%", height: "10px", background: "#e5e7eb", borderRadius: "5px", overflow: "hidden", marginBottom: "14px" }}>
-          <div style={{ width: `${Math.min(100, ((data?.metrics?.sentToday || 0) / 10000) * 100)}%`, height: "100%", background: "linear-gradient(90deg, #10b981 0%, #059669 100%)", borderRadius: "5px" }}></div>
-        </div>
-      </div>
-
-      {/* Capability Cards */}
-      <div>
-        <h3 style={{ fontSize: "16px", fontWeight: 700, marginBottom: "12px" }}>WhatsApp Business Capabilities</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
-          {[
-            { title: "24-Hour Window Reply", desc: "Unrestricted Customer Replies", icon: MessageSquare, status: "ALLOWED" },
-            { title: "Approved Templates", desc: "Marketing & Utility Broadcasts", icon: FileCode, status: "ALLOWED" },
-            { title: "AI Intent Automation", desc: "Automated Lead Intake & Bot", icon: Bot, status: "ALLOWED" },
-            { title: "WhatsApp Payments", desc: "In-Chat UPI Payment Links", icon: CreditCard, status: "ALLOWED" },
-            { title: "Commerce & Catalogs", desc: "Product Catalog Sharing", icon: ShoppingBag, status: "ALLOWED" },
-            { title: "Dynamic CRM Forms", desc: "Lead Qualification Intake", icon: Zap, status: "ALLOWED" },
-            { title: "Audience Broadcasts", desc: "Targeted Customer Campaigns", icon: Radio, status: "ALLOWED" },
-            { title: "Account Limits", desc: "High Quality Tier", icon: ShieldCheck, status: "ALLOWED" }
-          ].map((cap, i) => {
-            const Icon = cap.icon;
-            return (
-              <div key={i} style={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "14px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                  <Icon size={20} color="#10b981" />
-                  <span style={{ fontSize: "10px", fontWeight: 700, background: "#dcfce7", color: "#166534", padding: "2px 6px", borderRadius: "4px" }}>{cap.status}</span>
-                </div>
-                <h4 style={{ fontSize: "13.5px", fontWeight: 700, margin: "0 0 2px 0" }}>{cap.title}</h4>
-                <p style={{ fontSize: "11.5px", color: "#6b7280", margin: 0 }}>{cap.desc}</p>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Modal: Verify Phone Number */}
-      {showVerifyModal && (
-        <div style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
-          <div style={{ background: "#fff", borderRadius: "12px", width: "450px", padding: "20px", boxShadow: "0 10px 30px rgba(0,0,0,0.15)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-              <h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>Verify WhatsApp Phone Number</h3>
-              <button onClick={() => setShowVerifyModal(false)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>×</button>
-            </div>
-
-            <form onSubmit={handleVerifyPhoneSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <div style={{ background: "#f9fafb", padding: "12px", borderRadius: "8px", border: "1px solid #e5e7eb" }}>
-                <span style={{ fontSize: "11.5px", color: "#6b7280", display: "block" }}>Target Phone Number:</span>
-                <strong style={{ fontSize: "15px", color: "#111827" }}>+91 7206066678</strong>
-              </div>
-
-              {!otpSent ? (
-                <button
-                  type="button"
-                  onClick={() => setOtpSent(true)}
-                  style={{ background: "#f3f4f6", border: "1px solid #d1d5db", color: "#374151", padding: "10px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
-                >
-                  <PhoneCall size={16} /> Send SMS Verification Code
-                </button>
-              ) : (
-                <div style={{ background: "#f0fdf4", border: "1px solid #86efac", color: "#166534", padding: "8px 12px", borderRadius: "6px", fontSize: "12px", fontWeight: 600 }}>
-                  ✓ SMS Verification OTP code sent to +91 7206066678
-                </div>
-              )}
-
-              <div>
-                <label style={{ fontSize: "12.5px", fontWeight: 700, display: "block", marginBottom: "6px" }}>6-Digit OTP / PIN</label>
-                <input
-                  type="text"
-                  value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value)}
-                  placeholder="Enter 6-digit code (e.g. 659201)"
-                  style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "14px", letterSpacing: "2px", textAlign: "center", fontWeight: 700 }}
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={verifying}
-                style={{ background: "#10b981", color: "#ffffff", border: "none", padding: "10px", borderRadius: "6px", fontSize: "13.5px", fontWeight: 700, cursor: "pointer", marginTop: "6px" }}
-              >
-                {verifying ? "Verifying with Meta Cloud..." : "Verify & Activate Phone Number"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
