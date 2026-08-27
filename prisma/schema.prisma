@@ -29,7 +29,7 @@ model Organization {
   state                 String?
   pincode               String?
   country               String    @default("India")
-  
+
   // Subscription Plan & Billing Cycle
   subscriptionPlan      String    @default("GROWTH") // TRIAL, STARTER, GROWTH, ENTERPRISE, CUSTOM
   billingCycle          String    @default("MONTHLY") // MONTHLY, QUARTERLY, ANNUALLY
@@ -38,18 +38,18 @@ model Organization {
   currentPeriodStart    DateTime  @default(now())
   currentPeriodEnd      DateTime  @default(now())
   cancelAtPeriodEnd     Boolean   @default(false)
-  
+
   // Payment Gateway References
   gatewayCustomerId     String?   // Razorpay Customer ID
   gatewaySubscriptionId String?   // Razorpay Subscription ID
-  
+
   // Quotas & Feature Access
   maxUsers              Int       @default(10)
   maxBranches           Int       @default(3)
   maxWarehouses         Int       @default(2)
   monthlyOrderLimit     Int       @default(2000)
   whatsAppCreditBalance Int       @default(1000)
-  
+
   isGstEnabled          Boolean   @default(true)
   isWhatsAppEnabled     Boolean   @default(true)
   isEWayBillEnabled     Boolean   @default(true)
@@ -202,7 +202,7 @@ model Employee {
   address         String?
   emergencyContact String?
   notes           String?
-  
+
   branchId        String?
   branch          Branch?  @relation(fields: [branchId], references: [id])
 
@@ -266,20 +266,20 @@ model Customer {
   state           String?
   pincode         String?
   landmark        String?
-  
+
   openingBalance  Float    @default(0)
   openingBalanceType String? @default("DEBIT") // "DEBIT" (To Receive / Dr) or "CREDIT" (To Pay / Cr)
 
   regularDiscount String?
   preferredPaymentMethod String?
-  
+
   customerType    String?  // e.g., Wholesaler, Retailer
-  businessCategory String? 
+  businessCategory String?
   source          String?  // e.g., Website, Reference, Cold Call
 
   status          String   @default("New Lead")
   leadStage       String   @default("Contacted")
-  
+
   assignedSalespersonId String?
   assignedSalesperson   Employee? @relation("AssignedSalesperson", fields: [assignedSalespersonId], references: [id])
 
@@ -407,7 +407,7 @@ model Product {
   description     String?
   weight          Float?   @default(0)
   images          String[] @default([])
-  
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -453,10 +453,10 @@ model Order {
   customer        Customer @relation(fields: [customerId], references: [id])
   salespersonId   String
   salesperson     Employee @relation(fields: [salespersonId], references: [id])
-  
+
   orderDate       DateTime @default(now())
   deliveryDate    DateTime?
-  
+
   totalValue      Float
   discount        Float    @default(0)
   tax             Float    @default(0)
@@ -499,7 +499,7 @@ model OrderItem {
   order     Order   @relation(fields: [orderId], references: [id])
   productId String
   product   Product @relation(fields: [productId], references: [id])
-  
+
   quantity  Int
   rate      Float
   hsnCode   String? @default("6109")
@@ -663,17 +663,17 @@ model CompanySettings {
   email         String?  @default("clothingespon@gmail.com")
   website       String?  @default("www.espon.in")
   logoUrl       String?
-  
+
   bankAccountName String? @default("ESPON CLOTHING PRIVATE LIMITED.")
   accountNumber   String? @default("016805006415")
   ifscCode        String? @default("ICIC0000168")
   branch          String? @default("Rohtak")
   upiId           String? @default("7206066678@OKBIZAXIS")
-  
+
   signatoryUrl    String?
   signatoryName   String? @default("Ashish Aggarwal")
   signatoryDesignation String? @default("Authorized Signatory")
-  
+
   themeColor      String? @default("#4f46e5")
   fontFamily      String? @default("Inter")
   fontSize        String? @default("16px")
@@ -702,7 +702,7 @@ model Quotation {
   customer        Customer @relation(fields: [customerId], references: [id])
   salespersonId   String
   salesperson     Employee @relation(fields: [salespersonId], references: [id])
-  
+
   date            DateTime @default(now())
   expiryDate      DateTime?
   placeOfSupply   String?
@@ -735,11 +735,11 @@ model Quotation {
   totalQuantity   Float    @default(0)
   totalItems      Int      @default(0)
   totalWeight     Float?   @default(0)
-  
+
   isInterstate    Boolean  @default(false)
   status          String   @default("Draft") // Draft, Sent, Viewed, Accepted, Declined, Expired, Converted
   approvalStatus  String   @default("Approved") // Pending Approval, Approved, Rejected
-  
+
   notes           String?
   internalNotes   String?
   termsConditions String?
@@ -763,7 +763,7 @@ model QuotationItem {
   quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   productId   String
   product     Product   @relation(fields: [productId], references: [id])
-  
+
   sku         String?
   description String?
   hsnCode     String?   @default("6103")
@@ -780,7 +780,7 @@ model QuotationItem {
   sgst        Float     @default(0)
   igst        Float     @default(0)
   total       Float
-  
+
   warehouse   String?
   availableStock Int?
 }
@@ -901,21 +901,21 @@ model Bill {
   vendor           Vendor    @relation(fields: [vendorId], references: [id])
   purchaseOrderId  String?
   purchaseOrder    PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
-  
+
   billDate         DateTime  @default(now())
   dueDate          DateTime?
   paymentTerms     String?   @default("Net 30")
-  
+
   subtotal         Float     @default(0)
   taxAmount        Float     @default(0)
   discountAmount   Float     @default(0)
   totalAmount      Float
   amountPaid       Float     @default(0)
   amountDue        Float
-  
+
   status           String    @default("Open") // Draft, Open, Paid, Partially Paid, Overdue, Void
   notes            String?
-  
+
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -930,7 +930,7 @@ model BillItem {
   bill        Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
   productId   String?
   product     Product? @relation(fields: [productId], references: [id])
-  
+
   description String
   hsnCode     String?  @default("6109")
   quantity    Int      @default(1)
@@ -948,7 +948,7 @@ model VendorPayment {
   vendor           Vendor    @relation(fields: [vendorId], references: [id])
   billId           String?
   bill             Bill?     @relation(fields: [billId], references: [id])
-  
+
   amount           Float
   paymentDate      DateTime  @default(now())
   paymentMode      String    // Bank Transfer (NEFT/RTGS), UPI, Cheque, Cash, Advance Adjustment, Other
@@ -958,7 +958,7 @@ model VendorPayment {
   status           String    @default("Completed") // Completed, Pending, Cancelled
   notes            String?
   recordedBy       String?
-  
+
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -970,17 +970,17 @@ model VendorCredit {
   vendor           Vendor    @relation(fields: [vendorId], references: [id])
   billId           String?
   bill             Bill?     @relation(fields: [billId], references: [id])
-  
+
   creditDate       DateTime  @default(now())
   reason           String    // Goods Return, Rate Difference, Quality Rejection, Post-Purchase Discount, Other
   status           String    @default("OPEN") // OPEN, ADJUSTED, REFUNDED, CANCELLED
-  
+
   subtotal         Float     @default(0)
   taxAmount        Float     @default(0)
   totalAmount      Float     @default(0)
   allocatedAmount  Float     @default(0)
   balanceAmount    Float     @default(0)
-  
+
   notes            String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
@@ -994,7 +994,7 @@ model VendorCreditItem {
   vendorCredit   VendorCredit @relation(fields: [vendorCreditId], references: [id], onDelete: Cascade)
   productId      String?
   product        Product?     @relation(fields: [productId], references: [id])
-  
+
   description    String
   hsnCode        String?      @default("6109")
   quantity       Int          @default(1)
@@ -1042,11 +1042,11 @@ model CreditNote {
   order            Order?   @relation(fields: [orderId], references: [id])
   customerId       String
   customer         Customer @relation(fields: [customerId], references: [id])
-  
+
   creditNoteDate   DateTime @default(now())
   reason           String   // Sales Return, Post-Sale Discount, Defective Goods, Price Correction, Other
   status           String   @default("OPEN") // OPEN, ADJUSTED, REFUNDED, CANCELLED
-  
+
   subtotal         Float    @default(0)
   taxAmount        Float    @default(0)
   cgst             Float    @default(0)
@@ -1072,7 +1072,7 @@ model CreditNoteItem {
   creditNote    CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
   productId     String?
   product       Product?   @relation(fields: [productId], references: [id])
-  
+
   description   String
   sku           String?
   hsnCode       String?    @default("6109")
@@ -1095,12 +1095,12 @@ model EWayBill {
   ewbNumber       String    @unique // 12-digit EWB Number e.g. 141289345678
   ewbDate         DateTime  @default(now())
   validUntil      DateTime?
-  
+
   // Document Reference
   docType         String    @default("Tax Invoice") // Tax Invoice, Bill of Supply, Delivery Challan, Credit Note
   docNumber       String    // e.g. INV-1001, CN-1001, ORD-1001
   docDate         DateTime  @default(now())
-  
+
   // Links
   orderId         String?
   order           Order?    @relation(fields: [orderId], references: [id])
@@ -1111,7 +1111,7 @@ model EWayBill {
   supplyType      String    @default("Outward") // Outward, Inward
   subSupplyType   String    @default("Supply") // Supply, Export, Job Work, For Own Use, Recipient Not Known, Line Sales
   transactionType String    @default("Regular") // Regular, Bill To - Ship To, Bill From - Dispatch From
-  
+
   // Consignor (From) Details
   fromGstin       String?
   fromTradeName   String?
@@ -1119,7 +1119,7 @@ model EWayBill {
   fromPlace       String?
   fromPincode     String?
   fromState       String?
-  
+
   // Consignee (To) Details
   toGstin         String?
   toTradeName     String?
@@ -1136,7 +1136,7 @@ model EWayBill {
   cessAmount         Float  @default(0)
   totalInvoiceValue  Float  @default(0)
   mainHsnCode        String?
-  
+
   // Part B (Transporter & Vehicle Details)
   transporterId   String?  // Transporter GSTIN or Transporter ID
   transporterName String?
@@ -1146,10 +1146,10 @@ model EWayBill {
   vehicleNumber   String?  // e.g. DL-01-AB-1234
   docNoOrLorryReceipt String? // LR/GR/RR/Airway Bill Number
   docDatePartB    DateTime?
-  
+
   status          String   @default("GENERATED") // GENERATED, ACTIVE, EXTENDED, CANCELLED
   cancelReason    String?
-  
+
   notes           String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1256,7 +1256,7 @@ model Candidate {
   overallRating   Float    @default(0)
   finalConclusion String?
   finalDecisionBy String?
-  
+
   evaluations     CandidateEvaluation[]
   roundSummaries  CandidateRoundSummary[]
 
@@ -1331,7 +1331,7 @@ model WhatsAppConversation {
   id                 String   @id @default(uuid())
   accountId          String
   account            WhatsAppAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  
+
   customerId         String
   customer           Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
@@ -1346,15 +1346,15 @@ model WhatsAppConversation {
   leadStatus         String   @default("New Lead") // New Lead, Contacted, Qualified, Negotiation, Won, Lost
   orderStatus        String?  // Processing, Packed, Dispatched, Delivered, Payment Pending
   customerType       String   @default("Wholesale") // Retailer, Wholesaler, Distributor, VIP
-  
+
   aiHandled          Boolean  @default(true)
   aiConfidence       Float    @default(0.92)
   unreadCount        Int      @default(0)
-  
+
   lastMessageText    String?
   lastMessageAt      DateTime @default(now())
   tags               String?  // Comma separated tags e.g. "Hot Lead, Follow-up"
-  
+
   snoozedUntil       DateTime?
   followUpDueAt      DateTime?
   slaStatus          String   @default("GREEN") // GREEN, ORANGE, RED
@@ -1374,8 +1374,8 @@ model WhatsAppMessage {
 
   senderType       String   // "CUSTOMER", "AGENT", "SYSTEM", "BOT", "AI"
   senderId         String?  // Agent User/Employee ID if applicable
-  senderName       String?  
-  
+  senderName       String?
+
   messageType      String   @default("TEXT") // TEXT, IMAGE, VIDEO, DOCUMENT, AUDIO, LOCATION, CONTACT, TEMPLATE, QUICK_REPLY, CATALOG, PAYMENT_LINK, BUTTONS, LIST
   content          String   // Message text or caption
   mediaUrl         String?
@@ -1384,12 +1384,12 @@ model WhatsAppMessage {
 
   templateId       String?
   metadata         String?  // JSON string storing interactive data (buttons, product IDs, payment IDs)
-  
+
   status           String   @default("SENT") // SENT, DELIVERED, READ, FAILED, RECEIVED
   isInternalNote   Boolean  @default(false)
   replyToMessageId String?
   metaMessageId    String?  @unique
-  
+
   sentAt           DateTime @default(now())
   deliveredAt      DateTime?
   readAt           DateTime?
@@ -1465,7 +1465,7 @@ model WhatsAppFormSubmission {
   id             String   @id @default(uuid())
   formId         String
   form           WhatsAppForm @relation(fields: [formId], references: [id], onDelete: Cascade)
-  
+
   conversationId String?
   conversation   WhatsAppConversation? @relation(fields: [conversationId], references: [id])
 
@@ -1510,7 +1510,7 @@ model WhatsAppPaymentLink {
   id             String   @id @default(uuid())
   conversationId String
   conversation   WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  
+
   customerId     String
   customer       Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
@@ -1535,27 +1535,27 @@ model TeamBroadcast {
   content         String
   category        String   @default("GENERAL") // "OFFER", "HOLIDAY", "ANNOUNCEMENT", "URGENT", "GENERAL", "MEETING"
   priority        String   @default("NORMAL")  // "LOW", "NORMAL", "HIGH", "URGENT"
-  
+
   // Attachments (JSON array of { name: string, url: string, type: string, size?: number })
   attachments     String?  // JSON string
-  
+
   // Audience Targeting
   targetAudience  String   @default("ALL")     // "ALL" or "SELECTED"
   targetUserIds   String[] @default([])        // Array of User IDs
   targetRoles     String[] @default([])        // Array of Roles e.g. ["SALES", "HR"]
-  
+
   // Author
   authorId        String
   author          User     @relation("BroadcastAuthor", fields: [authorId], references: [id])
-  
+
   // Pinned & Status
   isPinned        Boolean  @default(false)
   expiresAt       DateTime?
-  
+
   // Relations
   replies         BroadcastReply[]
   reads           BroadcastRead[]
-  
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -1564,13 +1564,13 @@ model BroadcastReply {
   id              String   @id @default(uuid())
   broadcastId     String
   broadcast       TeamBroadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
-  
+
   userId          String
   user            User     @relation(fields: [userId], references: [id])
-  
+
   content         String
   attachments     String?  // JSON array of attachments if any
-  
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -1790,9 +1790,7 @@ model GstPortalLog {
   createdAt       DateTime @default(now())
 }
 
-
- 
- // ---------------------------------------------------------
+// ---------------------------------------------------------
 // Legacy Support Models (Migrated from Supabase)
 // ---------------------------------------------------------
 
