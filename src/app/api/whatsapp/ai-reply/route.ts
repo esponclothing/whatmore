@@ -60,7 +60,7 @@ Rules:
     fullPrompt += `\n--- Chat History ---\n${chatHistory}\n\nAgent (Your suggested reply):`;
 
     // 5. Call Gemini API
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || settings?.geminiApiKey;
     if (!apiKey) {
       return NextResponse.json({ error: "GEMINI_API_KEY environment variable is not configured." }, { status: 500 });
     }

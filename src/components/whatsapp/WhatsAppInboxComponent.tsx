@@ -332,7 +332,7 @@ export default function WhatsAppInboxComponent() {
 
 
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    chatBottomRef.current?.scrollIntoView({ behavior: "auto" });
   }, [activeConvDetail?.messages]);
 
   // Handle Send Message
