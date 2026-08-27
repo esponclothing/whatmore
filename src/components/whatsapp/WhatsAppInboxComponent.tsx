@@ -407,7 +407,13 @@ export default function WhatsAppInboxComponent() {
         ? "AUDIO"
         : "DOCUMENT";
 
-      const uploadRes = await uploadMediaToMetaAction(fileDataUrl, file.name, file.type);
+      const apiRes = await fetch('/api/whatsapp/upload-media', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileDataUrl, filename: file.name, mimeType: file.type })
+      });
+      if (!apiRes.ok) throw new Error('Upload API error ' + apiRes.status);
+      const uploadRes = await apiRes.json();
       if (!uploadRes.success || !uploadRes.mediaId) {
         setToastMsg(`❌ Upload Failed: ${uploadRes.error}`);
         setSendingMsg(false);
