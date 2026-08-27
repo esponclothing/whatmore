@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store } from "lucide-react";
+import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store, MessageSquare, Facebook } from "lucide-react";
 import Link from "next/link";
-import { getWhatsAppApiCredentialsAction, saveWhatsAppApiCredentialsAction, getShopifyCredentialsAction, saveShopifyCredentialsAction } from "@/app/actions/whatsAppPlatformActions";
+import { getWhatsAppApiCredentialsAction, saveWhatsAppApiCredentialsAction, getShopifyCredentialsAction, saveShopifyCredentialsAction, sendWhatsAppHelloWorldAction } from "@/app/actions/whatsAppPlatformActions";
 
 export default function WhatsAppAPISettingsPage() {
   const [wabaId, setWabaId] = useState("");
@@ -25,6 +25,11 @@ export default function WhatsAppAPISettingsPage() {
   const [showShopifyToken, setShowShopifyToken] = useState(false);
   const [savingShopify, setSavingShopify] = useState(false);
   const [shopifyResultMsg, setShopifyResultMsg] = useState<{ success: boolean; text: string } | null>(null);
+
+  // Test Message State
+  const [testPhone, setTestPhone] = useState("");
+  const [sendingTest, setSendingTest] = useState(false);
+  const [testResultMsg, setTestResultMsg] = useState<{ success: boolean; text: string } | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -88,6 +93,25 @@ export default function WhatsAppAPISettingsPage() {
     setSavingShopify(false);
   };
 
+  const handleSendTestMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testPhone) return;
+    
+    setSendingTest(true);
+    setTestResultMsg(null);
+    const res = await sendWhatsAppHelloWorldAction(testPhone);
+    if (res.success) {
+      setTestResultMsg({ success: true, text: "Test message sent successfully!" });
+    } else {
+      setTestResultMsg({ success: false, text: res.error || "Failed to send test message." });
+    }
+    setSendingTest(false);
+  };
+
+  const handleFacebookLogin = () => {
+    alert("This will launch the Meta Embedded Signup flow to connect a new number directly.");
+  };
+
   return (
     <div className="p-8 max-w-4xl mx-auto flex flex-col gap-8 w-full">
       <div>
@@ -107,17 +131,22 @@ export default function WhatsAppAPISettingsPage() {
 
       {/* Meta WhatsApp Integration Card */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
-        <div className="border-b border-gray-100 dark:border-slate-700 p-6 flex justify-between items-center">
+        <div className="border-b border-gray-100 dark:border-slate-700 p-6 flex justify-between items-center bg-gray-50/50 dark:bg-slate-800/50">
           <div>
             <h2 className="text-lg font-bold text-gray-900 dark:text-white m-0">WhatsApp Business API</h2>
             <p className="text-sm text-gray-500 m-0 mt-1">Manage Meta Cloud API tokens and Webhook configuration.</p>
           </div>
-          <span className={`px-3 py-1 text-xs font-bold rounded-full ${isConnected ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-            ● {isConnected ? "CONNECTED" : "NOT CONNECTED"}
-          </span>
+          <div className="flex items-center gap-3">
+             <button onClick={handleFacebookLogin} className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#1877F2] hover:bg-[#166FE5] text-white rounded-lg text-sm font-bold shadow-sm transition-all">
+                <Facebook size={16} /> Register New Number
+             </button>
+            <span className={`px-3 py-2 text-xs font-bold rounded-lg ${isConnected ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+              ● {isConnected ? "CONNECTED" : "NOT CONNECTED"}
+            </span>
+          </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 border-b border-gray-100 dark:border-slate-700">
           {resultMsg && (
             <div className={`mb-6 p-4 rounded-xl text-sm font-semibold flex items-center gap-2 ${resultMsg.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
               {resultMsg.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
@@ -168,6 +197,27 @@ export default function WhatsAppAPISettingsPage() {
                 {saving ? "Saving..." : "Save Meta Credentials"}
               </button>
             </div>
+          </form>
+        </div>
+
+        {/* Test Message Section */}
+        <div className="p-6 bg-slate-50 dark:bg-slate-900/50">
+          <h3 className="text-md font-bold text-gray-900 dark:text-white mb-3">Test Connection</h3>
+          <p className="text-sm text-gray-500 mb-4">Send a "hello_world" test template to verify your Meta API connection is working properly.</p>
+          
+          {testResultMsg && (
+            <div className={`mb-4 p-4 rounded-xl text-sm font-semibold flex items-center gap-2 ${testResultMsg.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+              {testResultMsg.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+              <span>{testResultMsg.text}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSendTestMessage} className="flex gap-3">
+             <input type="text" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="Recipient Phone (e.g. 919876543210)" required className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+             <button type="submit" disabled={sendingTest || !isConnected} className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 disabled:bg-gray-400 disabled:dark:bg-gray-700 rounded-xl text-sm font-bold shadow-sm transition-all">
+                {sendingTest ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />}
+                {sendingTest ? "Sending..." : "Send Test Message"}
+             </button>
           </form>
         </div>
       </div>

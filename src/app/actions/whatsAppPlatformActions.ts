@@ -1965,3 +1965,84 @@ export async function saveShopifyCredentialsAction(data: { storeDomain: string; 
     return { success: false, error: error.message };
   }
 }
+
+// ---------------------------------------------------------
+// 6. TEST & SETUP ACTIONS
+// ---------------------------------------------------------
+
+export async function sendWhatsAppHelloWorldAction(phone: string) {
+  try {
+    const account = await prisma.whatsAppAccount.findFirst();
+    if (!account || !account.accessToken || !account.phoneId || !account.businessAccountId) {
+      return { success: false, error: "WhatsApp API Account is not fully configured." };
+    }
+
+    const cleanPhone = phone.replace(/\D/g, "");
+    const toPhone = cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`;
+    const token = account.accessToken;
+    const phoneId = account.phoneId;
+    const wabaId = account.businessAccountId;
+
+    const sendPayload = {
+      messaging_product: "whatsapp",
+      to: toPhone,
+      type: "template",
+      template: {
+        name: "hello_world",
+        language: { code: "en_US" }
+      }
+    };
+
+    const url = `https://graph.facebook.com/v20.0/${phoneId}/messages`;
+    let response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(sendPayload)
+    });
+    
+    let resData = await response.json();
+
+    if (resData.error && resData.error.message.includes('template')) {
+      // Template doesn't exist, create it
+      const createUrl = `https://graph.facebook.com/v20.0/${wabaId}/message_templates`;
+      const createPayload = {
+        name: "hello_world",
+        language: "en_US",
+        category: "UTILITY",
+        components: [
+          { type: "HEADER", format: "TEXT", text: "Hello World" },
+          { type: "BODY", text: "Welcome and congratulations!! This message demonstrates your ability to send a WhatsApp message notification from the Cloud API, hosted by Meta. Thank you for taking the time to test with us." },
+          { type: "FOOTER", text: "Meta App Setup" }
+        ]
+      };
+      
+      const createRes = await fetch(createUrl, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(createPayload)
+      });
+      
+      const createData = await createRes.json();
+      console.log("Create template result:", createData);
+
+      // Wait a bit for propagation
+      await new Promise(r => setTimeout(r, 2000));
+
+      // Retry send
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(sendPayload)
+      });
+      resData = await response.json();
+    }
+
+    if (resData.error) {
+      return { success: false, error: resData.error.message || "Failed to send message" };
+    }
+
+    return { success: true, messageId: resData.messages?.[0]?.id };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
