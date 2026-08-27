@@ -40,10 +40,36 @@ export default function WhatsAppLogsComponent() {
   const fetchAILogs = async (silent = false) => {
     if (!silent) setLoadingLogs(true);
     try {
-      const res = await getWhatsAppAILogsAction(logsSearch, logsStatusFilter);
-      if (res.success) {
-        setAiLogs(res.logs || []);
-        setAiLogStats(res.stats || { total: 0, success: 0, error: 0, manual: 0, avgDuration: 0 });
+      // Use Shopify Price Editor-style inbox API
+      const res = await fetch('/api/whatsapp/inbox?action=executions');
+      const data = await res.json();
+      if (data.success) {
+        const logs = (data.executions || []).map((e: any) => ({
+          id: e.id,
+          phone: e.phone,
+          userMessage: e.user_message,
+          aiReply: e.ai_reply,
+          toolsCalled: e.tools_called,
+          status: e.status,
+          errorMessage: e.error_message,
+          durationMs: e.duration_ms,
+          createdAt: e.created_at,
+        }));
+        setAiLogs(logs);
+        setAiLogStats({
+          total: data.stats?.total_count || 0,
+          success: data.stats?.success_count || 0,
+          error: data.stats?.error_count || 0,
+          manual: 0,
+          avgDuration: data.stats?.avg_duration || 0,
+        });
+      } else {
+        // Fallback to server action
+        const fallback = await getWhatsAppAILogsAction(logsSearch, logsStatusFilter);
+        if (fallback.success) {
+          setAiLogs(fallback.logs || []);
+          setAiLogStats(fallback.stats || { total: 0, success: 0, error: 0, manual: 0, avgDuration: 0 });
+        }
       }
     } catch (err) {
       console.error('Failed to load AI logs', err);
@@ -314,3 +340,4 @@ export default function WhatsAppLogsComponent() {
     </div>
   );
 }
+

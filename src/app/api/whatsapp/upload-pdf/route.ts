@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import pdfParse from 'pdf-parse';
+
+export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
@@ -8,23 +9,24 @@ export async function POST(req: NextRequest) {
     const file = formData.get('file') as File;
     
     if (!file) {
-      return NextResponse.json({ success: false, error: "No file uploaded" }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'No file uploaded' }, { status: 400 });
     }
     
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     
-    // Parse PDF
+    // Lazy-load pdf-parse to avoid DOMMatrix error at module eval time
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { default: pdfParse } = await import('pdf-parse/lib/pdf-parse.js');
     const data = await pdfParse(buffer);
-    const newText = \n\n--- Source: PDF Upload (${file.name}) ---\n;
+    const newText = '\n\n--- Source: PDF Upload (' + file.name + ') ---\n' + data.text.trim();
     
-    // Append to settings
     let settings = await prisma.whatsAppSettings.findFirst();
     if (!settings) {
       settings = await prisma.whatsAppSettings.create({ data: {} });
     }
     
-    const updatedKnowledgeBase = (settings.aiKnowledgeBase || "") + newText;
+    const updatedKnowledgeBase = (settings.aiKnowledgeBase || '') + newText;
     
     await prisma.whatsAppSettings.update({
       where: { id: settings.id },
@@ -33,7 +35,7 @@ export async function POST(req: NextRequest) {
     
     return NextResponse.json({ success: true, textExtracted: data.text.length, newKnowledgeBase: updatedKnowledgeBase });
   } catch (err: any) {
-    console.error("PDF Upload Error:", err);
+    console.error('PDF Upload Error:', err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }

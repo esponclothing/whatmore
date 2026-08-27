@@ -6,30 +6,29 @@ export async function POST(req: NextRequest) {
   try {
     const { url } = await req.json();
     if (!url) {
-      return NextResponse.json({ success: false, error: "No URL provided" }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'No URL provided' }, { status: 400 });
     }
 
     const response = await fetch(url);
     const html = await response.text();
-    const $ = cheerio.load(html);
+    const ch = cheerio.load(html);
 
-    // Extract useful text
-    let extractedText = "";
-    $('h1, h2, h3, p, li').each((_, el) => {
-      const text = $(el).text().trim();
+    let extractedText = '';
+    ch('h1, h2, h3, p, li').each((_: number, el: any) => {
+      const text = ch(el).text().trim();
       if (text.length > 20) {
         extractedText += text + '\n';
       }
     });
 
-    const newText = \n\n--- Source: Web Scrape (${url}) ---\n;
+    const newText = '\n\n--- Source: Web Scrape (' + url + ') ---\n' + extractedText.trim().slice(0, 10000);
 
     let settings = await prisma.whatsAppSettings.findFirst();
     if (!settings) {
       settings = await prisma.whatsAppSettings.create({ data: {} });
     }
 
-    const updatedKnowledgeBase = (settings.aiKnowledgeBase || "") + newText;
+    const updatedKnowledgeBase = (settings.aiKnowledgeBase || '') + newText;
 
     await prisma.whatsAppSettings.update({
       where: { id: settings.id },
@@ -38,7 +37,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, textExtracted: extractedText.length, newKnowledgeBase: updatedKnowledgeBase });
   } catch (err: any) {
-    console.error("Scrape Error:", err);
+    console.error('Scrape Error:', err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
