@@ -1,4 +1,4 @@
-﻿"use server";
+"use server";
 
 import { prisma } from "@/lib/prisma";
 import { seedWhatsAppPlatformData } from "@/lib/seedWhatsApp";
@@ -463,7 +463,7 @@ export async function sendWhatsAppMessageAction(data: {
           
           if (subs.length > 0) {
             const pushPayload = JSON.stringify({ 
-              title: `ðŸ”” Mentioned by ${data.senderName || 'Team'}`, 
+              title: `🔔 Mentioned by ${data.senderName || 'Team'}`, 
               body: `You were tagged in a note for ${conversation.customer.contactPerson}: "${data.content.slice(0, 50)}"`, 
               data: { url: `/whatsapp/inbox` } 
             });
@@ -516,7 +516,7 @@ export async function sendWhatsAppMessageAction(data: {
 }
 
 // ---------------------------------------------------------
-// 3. CRM 360Â° PROFILE UPDATE DIRECTLY FROM WHATSAPP
+// 3. CRM 360° PROFILE UPDATE DIRECTLY FROM WHATSAPP
 // ---------------------------------------------------------
 
 export async function updateCRMProfileFromWhatsApp(data: {
@@ -630,7 +630,7 @@ export async function createWhatsAppQuotation(data: {
       senderType: 'AGENT',
       senderName: employee.user?.name || 'Sales Agent',
       messageType: 'DOCUMENT',
-      content: `Quotation ${qNum} generated for â‚¹${totalValue.toLocaleString('en-IN')}.\nItems: ${data.items.map(i => `${i.name} x${i.quantity}`).join(', ')}.`,
+      content: `Quotation ${qNum} generated for ₹${totalValue.toLocaleString('en-IN')}.\nItems: ${data.items.map(i => `${i.name} x${i.quantity}`).join(', ')}.`,
       mediaUrl: `/samples/Quotation-${qNum}.pdf`,
       mediaFilename: `${qNum}.pdf`,
       metadata: JSON.stringify({ quotationId: quotation.id, totalValue })
@@ -673,7 +673,7 @@ export async function generateWhatsAppPaymentLinkAction(data: {
       senderType: 'AGENT',
       senderName: 'Billing System',
       messageType: 'PAYMENT_LINK',
-      content: `Payment Request: â‚¹${data.amount.toLocaleString('en-IN')} for ${data.description}.\nClick link to complete payment via UPI / Card / NetBanking:\n${paymentUrl}`,
+      content: `Payment Request: ₹${data.amount.toLocaleString('en-IN')} for ${data.description}.\nClick link to complete payment via UPI / Card / NetBanking:\n${paymentUrl}`,
       metadata: JSON.stringify({ paymentLinkId: paymentLink.id, amount: data.amount, paymentUrl })
     });
 
@@ -746,7 +746,7 @@ export async function getWhatsAppDashboardMetrics() {
         phoneId: account?.phoneId || "",
         businessAccountId: account?.businessAccountId || "",
         businessManagerId: account?.businessManagerId || "",
-        accessToken: account?.accessToken ? "â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" : "",
+        accessToken: account?.accessToken ? "••••••••••••••••" : "",
         webhookVerifyToken: account?.webhookVerifyToken || "espon_whatsapp_secure_webhook_token_2026",
         status: accountStatus,
         dailyLimit: account?.dailyLimit || "10K per day",
@@ -1633,7 +1633,7 @@ export async function getWhatsAppAudienceSegments() {
       success: true,
       segments: [
         { key: 'ALL', label: 'All Customers', count: all },
-        { key: 'HOT', label: 'Hot Leads ðŸ”¥', count: hot },
+        { key: 'HOT', label: 'Hot Leads 🔥', count: hot },
         { key: 'WARM', label: 'Warm Leads', count: warm },
         { key: 'COLD', label: 'Cold Leads', count: cold },
         { key: 'LEADS', label: 'New Enquiries', count: leads }
@@ -1809,7 +1809,7 @@ export async function getWhatsAppCannedResponsesAction() {
         data: [
           { title: "Return Policy", shortcut: "/return", content: "Our return policy is 7 days from the date of delivery. Items must be unwashed and unworn. Can I help you initiate a return?" },
           { title: "Shipping Time", shortcut: "/shipping", content: "Standard shipping takes 3-5 business days. You will receive a tracking link as soon as your order is dispatched." },
-          { title: "Greeting", shortcut: "/hi", content: "Hi there! ðŸ‘‹ How can I help you today?" },
+          { title: "Greeting", shortcut: "/hi", content: "Hi there! 👋 How can I help you today?" },
           { title: "Discount Code", shortcut: "/discount", content: "Use code ESPON10 at checkout for 10% off your next purchase!" },
         ]
       });
@@ -1898,11 +1898,7 @@ export async function getWhatsAppWebhookLogsAction(search = '') {
         orderBy: { sentAt: 'desc' },
         take: 100
       }),
-      prisma.whatsAppMessage.findMany({
-        where: payloadWhere,
-        orderBy: { sentAt: 'desc' },
-        take: 30
-      }),
+      prisma.whatsAppWebhookLog.findMany({ orderBy: { createdAt: 'desc' }, take: 30 }),
       prisma.whatsAppMessage.count({ where: { senderType: 'CUSTOMER' } }),
       prisma.whatsAppMessage.count({ where: { senderType: 'CUSTOMER', status: 'READ' } }),
     ]);
@@ -2078,4 +2074,6 @@ export async function registerWhatsAppPhoneNumberAction(pin: string) {
     return { success: false, error: error.message };
   }
 }
+
+
 

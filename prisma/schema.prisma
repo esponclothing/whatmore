@@ -1645,6 +1645,7 @@ model WhatsAppSettings {
   aiKnowledgeBase      String?
   aiSystemPrompt       String?
   aiFallbackLanguage   String   @default("English")
+  geminiApiKey         String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
@@ -1867,3 +1868,15 @@ model WhatsAppLegacyScheduledMessage {
   createdAt       DateTime @default(now())
 }
 
+
+// ---------------------------------------------------------
+// WhatsApp Webhook Raw Logs
+// ---------------------------------------------------------
+model WhatsAppWebhookLog {
+  id           String   @id @default(uuid())
+  event        String
+  status       String   @default("RECEIVED") // RECEIVED, IGNORED, ERROR, PROCESSED
+  payload      Json?
+  errorMessage String?
+  createdAt    DateTime @default(now())
+}

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React from "react";
 import Link from "next/link";
@@ -15,6 +15,7 @@ const subNavItems = [
   { name: "AI Automation", path: "/whatsapp/ai-automation", icon: Bot, highlight: true },
   { name: "Products & Prices", path: "/whatsapp/commerce", icon: Box },
   { name: "Settings", path: "/whatsapp/api-settings", icon: Key },
+  { name: "Logs", path: "/whatsapp/logs", icon: Activity },
 ];
 
 export default function WhatsAppHeaderNav() {
@@ -85,3 +86,4 @@ export default function WhatsAppHeaderNav() {
     </header>
   );
 }
+
