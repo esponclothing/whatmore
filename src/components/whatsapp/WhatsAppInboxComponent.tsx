@@ -987,7 +987,19 @@ export default function WhatsAppInboxComponent() {
                         <span className="message-timestamp" style={msg.isInternalNote ? { color: '#a16207' } : {}}>
                           {new Date(msg.sentAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </span>
-                        {isAgent && !msg.isInternalNote && <CheckCheck size={14} className="msg-check-icon" />}
+                        {isAgent && !msg.isInternalNote && (
+                          <span className="msg-status-tick" style={{ display: "inline-flex", alignItems: "center" }}>
+                            {msg.status?.toUpperCase() === "READ" ? (
+                              <CheckCheck size={14} style={{ color: "#3b82f6", marginLeft: "4px" }} title="Read" />
+                            ) : msg.status?.toUpperCase() === "DELIVERED" ? (
+                              <CheckCheck size={14} style={{ color: "#94a3b8", marginLeft: "4px" }} title="Delivered" />
+                            ) : msg.status?.toUpperCase() === "FAILED" ? (
+                              <span style={{ color: "#ef4444", fontSize: "11px", marginLeft: "4px" }} title="Failed to send">⚠️</span>
+                            ) : (
+                              <Check size={14} style={{ color: "#94a3b8", marginLeft: "4px" }} title="Sent" />
+                            )}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
