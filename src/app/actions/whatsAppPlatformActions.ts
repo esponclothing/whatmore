@@ -2046,3 +2046,35 @@ export async function sendWhatsAppHelloWorldAction(phone: string) {
     return { success: false, error: error.message };
   }
 }
+
+export async function registerWhatsAppPhoneNumberAction(pin: string) {
+  try {
+    const account = await prisma.whatsAppAccount.findFirst();
+    if (!account || !account.accessToken || !account.phoneId) {
+      return { success: false, error: "WhatsApp API Account is not fully configured. Please save credentials first." };
+    }
+
+    const token = account.accessToken;
+    const phoneId = account.phoneId;
+
+    const url = `https://graph.facebook.com/v20.0/${phoneId}/register`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        pin: pin
+      })
+    });
+    
+    const resData = await response.json();
+
+    if (resData.error) {
+      return { success: false, error: resData.error.message || "Failed to register number" };
+    }
+
+    return { success: true, message: "Number successfully registered with Meta!" };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

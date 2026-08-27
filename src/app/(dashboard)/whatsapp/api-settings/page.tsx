@@ -1,9 +1,9 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect } from "react";
 import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store, MessageSquare } from "lucide-react";
 import Link from "next/link";
-import { getWhatsAppApiCredentialsAction, saveWhatsAppApiCredentialsAction, getShopifyCredentialsAction, saveShopifyCredentialsAction, sendWhatsAppHelloWorldAction } from "@/app/actions/whatsAppPlatformActions";
+import { getWhatsAppApiCredentialsAction, saveWhatsAppApiCredentialsAction, getShopifyCredentialsAction, saveShopifyCredentialsAction, sendWhatsAppHelloWorldAction, registerWhatsAppPhoneNumberAction } from "@/app/actions/whatsAppPlatformActions";
 
 export default function WhatsAppAPISettingsPage() {
   const [wabaId, setWabaId] = useState("");
@@ -108,8 +108,22 @@ export default function WhatsAppAPISettingsPage() {
     setSendingTest(false);
   };
 
-  const handleFacebookLogin = () => {
-    alert("This will launch the Meta Embedded Signup flow to connect a new number directly.");
+  const [registering, setRegistering] = useState(false);
+  const handleFacebookLogin = async () => {
+    const pin = window.prompt("Enter the 6-digit Registration PIN to register this phone number with Meta Cloud API:");
+    if (!pin) return;
+    if (pin.length !== 6) {
+      alert("PIN must be exactly 6 digits.");
+      return;
+    }
+    setRegistering(true);
+    const res = await registerWhatsAppPhoneNumberAction(pin);
+    setRegistering(false);
+    if (res.success) {
+      alert(res.message);
+    } else {
+      alert("Registration Error: " + res.error);
+    }
   };
 
   return (
@@ -138,7 +152,7 @@ export default function WhatsAppAPISettingsPage() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
              <button onClick={handleFacebookLogin} className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#1877F2] hover:bg-[#166FE5] text-white rounded-lg text-sm font-bold shadow-sm transition-all">
-                <MessageSquare size={16} /> Register New Number
+                {registering ? <RefreshCw size={16} className="animate-spin" /> : <MessageSquare size={16} />} {registering ? "Registering..." : "Register New Number"}
              </button>
             <span className={`px-3 py-2 text-xs font-bold rounded-lg ${isConnected ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
               â— {isConnected ? "CONNECTED" : "NOT CONNECTED"}
