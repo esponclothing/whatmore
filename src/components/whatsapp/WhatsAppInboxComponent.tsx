@@ -406,7 +406,19 @@ export default function WhatsAppInboxComponent() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      
+      // Determine a mimeType supported by both the browser and Meta API
+      let selectedMime = 'audio/ogg; codecs=opus';
+      if (typeof MediaRecorder !== 'undefined') {
+        if (!MediaRecorder.isTypeSupported(selectedMime)) {
+          selectedMime = 'audio/mp4';
+        }
+        if (!MediaRecorder.isTypeSupported(selectedMime)) {
+          selectedMime = 'audio/aac';
+        }
+      }
+      
+      const recorder = new MediaRecorder(stream, { mimeType: selectedMime });
       
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -415,7 +427,7 @@ export default function WhatsAppInboxComponent() {
       };
 
       recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: selectedMime });
         
         // Convert Blob to base64 Data URL to feed to upload-media
         const reader = new FileReader();
@@ -423,11 +435,15 @@ export default function WhatsAppInboxComponent() {
           const fileDataUrl = reader.result as string;
           setSendingMsg(true);
           
+          // Determine extension and clean mimeType
+          const ext = selectedMime.includes('ogg') ? 'ogg' : selectedMime.includes('mp4') ? 'm4a' : 'aac';
+          const cleanMime = selectedMime.split(';')[0];
+          
           try {
             const apiRes = await fetch('/api/whatsapp/upload-media', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fileDataUrl, filename: 'voice-note.webm', mimeType: 'audio/webm' })
+              body: JSON.stringify({ fileDataUrl, filename: `voice-note.${ext}`, mimeType: cleanMime })
             });
             const uploadRes = await apiRes.json();
             
@@ -436,7 +452,7 @@ export default function WhatsAppInboxComponent() {
                 conversationId: selectedConvId!,
                 content: '[AUDIO]',
                 mediaUrl: uploadRes.mediaId,
-                mediaFilename: 'voice-note.webm',
+                mediaFilename: `voice-note.${ext}`,
                 messageType: 'AUDIO',
                 senderType: 'AGENT',
                 senderName: 'Sales Rep'
