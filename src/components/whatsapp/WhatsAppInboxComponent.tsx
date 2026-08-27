@@ -188,23 +188,63 @@ export default function WhatsAppInboxComponent() {
     fetchCanned();
   }, []);
 
-  // Fetch Conversations List
+  // Fetch Conversations List — uses /api/whatsapp/inbox
   const fetchConversationsList = async (silent = false) => {
     if (!silent) setLoadingConvs(true);
     try {
-      const res = await getWhatsAppConversations({
-        search: searchQuery,
-        tab: activeNavTab as any,
-        unreadOnly,
-        leadStatus: leadStatusFilter || undefined,
-        filterEmployeeId: filterEmployeeId || undefined
-      });
-      if (res.success && res.conversations) {
-        setConversations(res.conversations);
-        if (res.conversations.length > 0) {
-          const isCurrentInList = res.conversations.some((c: any) => c.id === selectedConvId);
+      const params = new URLSearchParams({ action: 'chats' });
+      if (searchQuery) params.set('search', searchQuery);
+      const res = await fetch('/api/whatsapp/inbox?' + params.toString());
+      if (!res.ok) throw new Error('API error ' + res.status);
+      const data = await res.json();
+
+      if (data.success && data.chats) {
+        const mapped = data.chats.map((c) => ({
+          id: c.id,
+          status: c.chat_status === 'open' ? 'OPEN' : 'CLOSED',
+          priority: c.priority || 'MEDIUM',
+          unreadCount: c.unreadCount || 0,
+          lastMessageText: c.last_message,
+          lastMessageAt: c.created_at,
+          aiHandled: !c.ai_paused,
+          tags: Array.isArray(c.tags) ? c.tags.join(', ') : (c.tags || ''),
+          customer: {
+            id: c.customerId,
+            contactPerson: c.customer_name,
+            businessName: c.customer_name,
+            mobile: c.phone,
+            whatsappNumber: c.phone,
+            totalOrders: c.order_count || 0,
+            leadStage: '',
+            temperature: '',
+          },
+          _raw: c
+        }));
+
+        // Apply Tab Filter (All, Assigned, Unassigned)
+        let filtered = mapped;
+        if (activeNavTab === 'assigned_to_me' || activeNavTab === 'assigned') {
+          filtered = mapped.filter((c) => c._raw.assignedEmployeeId !== null);
+        } else if (activeNavTab === 'unassigned') {
+          filtered = mapped.filter((c) => c._raw.assignedEmployeeId === null);
+        }
+
+        // Apply Lead Status Filter
+        if (leadStatusFilter) {
+          filtered = filtered.filter((c) => c.leadStatus === leadStatusFilter);
+        }
+
+        // Apply Unread Only Filter
+        if (unreadOnly) {
+          filtered = filtered.filter((c) => c.unreadCount > 0);
+        }
+
+        setConversations(filtered);
+        
+        if (filtered.length > 0) {
+          const isCurrentInList = filtered.some((c) => c.id === selectedConvId);
           if (!selectedConvId || !isCurrentInList) {
-            setSelectedConvId(res.conversations[0].id);
+            setSelectedConvId(filtered[0].id);
           }
         } else {
           setSelectedConvId(null);
@@ -217,8 +257,10 @@ export default function WhatsAppInboxComponent() {
       }
     } catch (err) {
       console.error("Failed to fetch conversations", err);
+      setConversations([]);
+    } finally {
+      if (!silent) setLoadingConvs(false);
     }
-    if (!silent) setLoadingConvs(false);
   };
 
   useEffect(() => {
