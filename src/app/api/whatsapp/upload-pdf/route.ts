@@ -15,9 +15,8 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     
-    // Lazy-load pdf-parse to avoid DOMMatrix error at module eval time
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { default: pdfParse } = await import('pdf-parse/lib/pdf-parse.js');
+    // Dynamically import the Node bundle of pdf-parse to avoid browser polyfill errors
+    const { default: pdfParse } = await import('pdf-parse/node');
     const data = await pdfParse(buffer);
     const newText = '\n\n--- Source: PDF Upload (' + file.name + ') ---\n' + data.text.trim();
     
