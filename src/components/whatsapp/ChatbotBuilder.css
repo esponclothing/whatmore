@@ -1078,4 +1078,12 @@
 .bot-manage-table tr:hover {
   background: #f8fafc;
 }
-
+/* Shopify-style Progress Bar Keyframe Animation */
+@keyframes shopify-progress-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

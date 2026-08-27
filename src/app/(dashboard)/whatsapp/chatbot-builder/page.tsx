@@ -386,6 +386,12 @@ const BOT_TEMPLATES = [
 export default function WhatsAppChatbotBuilderPage() {
   // DB Saved Flow State
   const [savedFlows, setSavedFlows] = useState<any[]>([]);
+
+  // Shopify-style Unsaved Tracking State
+  const [lastSavedNodesJson, setLastSavedNodesJson] = useState<string>("");
+  const [lastSavedFlowName, setLastSavedFlowName] = useState<string>("");
+  const [lastSavedTriggerKeyword, setLastSavedTriggerKeyword] = useState<string>("");
+  const [lastSavedIsBotActive, setLastSavedIsBotActive] = useState<boolean>(true);
   const [currentFlowId, setCurrentFlowId] = useState<string | null>(null);
   const [flowName, setFlowName] = useState<string>("Default Chatbot Flow");
   const [triggerKeyword, setTriggerKeyword] = useState<string>("HI, HELLO, CATALOG");
@@ -442,7 +448,31 @@ export default function WhatsAppChatbotBuilderPage() {
   const [simMessages, setSimMessages] = useState<any[]>([]);
   const [drawerTab, setDrawerTab] = useState<"basic" | "advanced">("basic");
 
-  // Fetch Saved Chatbot Flows from DB
+  // Discard unsaved changes handler
+  const handleDiscardChanges = () => {
+    setFlowName(lastSavedFlowName);
+    setTriggerKeyword(lastSavedTriggerKeyword);
+    setIsBotActive(lastSavedIsBotActive);
+    if (lastSavedNodesJson) {
+      try {
+        const parsed = JSON.parse(lastSavedNodesJson);
+        if (Array.isArray(parsed)) {
+          setNodes(parsed);
+          setHistoryStack([parsed]);
+          setHistoryIndex(0);
+          setSelectedNodeId(null);
+          setIsDrawerOpen(false);
+          setToastMsg("✓ Discarded unsaved changes");
+          setTimeout(() => setToastMsg(null), 3000);
+        }
+      } catch (e) {
+        console.error("Discard failed:", e);
+      }
+    }
+  };
+
+
+    // Fetch Saved Chatbot Flows from DB
   const fetchFlows = async () => {
     setIsLoadingFlows(true);
     const res = await getWhatsAppChatbotFlows();
@@ -454,12 +484,17 @@ export default function WhatsAppChatbotBuilderPage() {
         setFlowName(target.name);
         setTriggerKeyword(target.triggerKeyword || "HI, HELLO, CATALOG");
         setIsBotActive(target.isActive);
+        // Set last saved Shopify states
+        setLastSavedFlowName(target.name);
+        setLastSavedTriggerKeyword(target.triggerKeyword || "HI, HELLO, CATALOG");
+        setLastSavedIsBotActive(target.isActive);
         try {
           const parsedNodes = JSON.parse(target.nodesJson);
           if (Array.isArray(parsedNodes)) {
             setNodes(parsedNodes);
             setHistoryStack([parsedNodes]);
             setHistoryIndex(0);
+            setLastSavedNodesJson(JSON.stringify(parsedNodes));
           }
         } catch (e) {
           console.error("Failed to parse nodesJson:", e);
@@ -486,6 +521,10 @@ export default function WhatsAppChatbotBuilderPage() {
     setFlowName(target.name);
     setTriggerKeyword(target.triggerKeyword || "HI, HELLO, CATALOG");
     setIsBotActive(target.isActive);
+    // Set last saved Shopify states
+    setLastSavedFlowName(target.name);
+    setLastSavedTriggerKeyword(target.triggerKeyword || "HI, HELLO, CATALOG");
+    setLastSavedIsBotActive(target.isActive);
     try {
       const parsedNodes = JSON.parse(target.nodesJson);
       if (Array.isArray(parsedNodes)) {
@@ -494,6 +533,7 @@ export default function WhatsAppChatbotBuilderPage() {
         setHistoryIndex(0);
         setSelectedNodeId(null);
         setIsDrawerOpen(false);
+        setLastSavedNodesJson(JSON.stringify(parsedNodes));
       }
     } catch (e) {
       console.error("Error loading selected flow nodes:", e);
@@ -619,6 +659,11 @@ export default function WhatsAppChatbotBuilderPage() {
     if (res.success && res.flow) {
       setCurrentFlowId(res.flow.id);
       setToastMsg("✓ Chatbot Flow successfully saved & published to WhatsApp database!");
+      // Update last saved Shopify states
+      setLastSavedFlowName(flowName);
+      setLastSavedTriggerKeyword(triggerKeyword);
+      setLastSavedIsBotActive(isBotActive);
+      setLastSavedNodesJson(JSON.stringify(nodes));
       await fetchFlows();
     } else {
       setToastMsg(`Error saving flow: ${res.error}`);
@@ -1121,8 +1166,64 @@ export default function WhatsAppChatbotBuilderPage() {
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
 
+  const hasUnsavedChanges = 
+    currentFlowId !== null && 
+    (lastSavedNodesJson !== JSON.stringify(nodes) ||
+     lastSavedFlowName !== flowName ||
+     lastSavedTriggerKeyword !== triggerKeyword ||
+     lastSavedIsBotActive !== isBotActive);
+
   return (
     <div className={`studio-container ${isFullScreenStudio ? "fullscreen-studio" : ""}`}>
+      {/* SILENT LOADING PROGRESS BAR */}
+      {isLoadingFlows && (
+        <div className="shopify-progress-bar" style={{ position: "absolute", top: 0, left: 0, right: 0, height: "3.5px", background: "linear-gradient(90deg, #6d28d9, #a78bfa, #6d28d9)", backgroundSize: "200% 100%", animation: "shopify-progress-loading 1.2s infinite linear", zIndex: 9999 }} />
+      )}
+
+      {/* SHOPIFY-STYLE FLOATING SAVE BANNER */}
+      {hasUnsavedChanges && (
+        <div className="shopify-save-banner" style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "14px 28px",
+          background: "#1e1b4b",
+          color: "#ffffff",
+          borderRadius: "12px",
+          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.15)",
+          position: "fixed",
+          top: "84px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "92%",
+          maxWidth: "680px",
+          zIndex: 1000,
+          border: "1px solid #312e81"
+        }}>
+          <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#e0e7ff" }}>
+            ⚠️ Unsaved changes in "${flowName}"
+          </span>
+          <div style={{ display: "flex", gap: "12px" }}>
+            <button 
+              className="studio-btn" 
+              onClick={handleDiscardChanges} 
+              style={{ background: "rgba(255, 255, 255, 0.1)", color: "#ffffff", border: "1px solid rgba(255, 255, 255, 0.15)", padding: "7px 16px", cursor: "pointer", borderRadius: "8px", fontSize: "12.5px" }}
+            >
+              Discard
+            </button>
+            <button 
+              className="studio-btn primary" 
+              onClick={handlePublishFlow} 
+              disabled={isSaving}
+              style={{ padding: "7px 20px", cursor: "pointer", borderRadius: "8px", fontSize: "12.5px" }}
+            >
+              {isSaving ? "Saving..." : "Save Flow"}
+            </button>
+          </div>
+        </div>
+      )}
+
+
       {/* TOP CONTROL BAR */}
       <div className="studio-top-bar">
         <div className="studio-title-block">
