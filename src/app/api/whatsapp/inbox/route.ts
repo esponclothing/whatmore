@@ -183,6 +183,35 @@ export async function GET(req: NextRequest) {
         });
       }
 
+      // Mark the last incoming customer message as SEEN/READ in Meta WhatsApp API
+      const lastIncoming = conversation.messages
+        .slice()
+        .reverse()
+        .find((m) => m.senderType === "CUSTOMER" && m.metaMessageId);
+
+      if (lastIncoming && conversation.account?.accessToken && conversation.account?.phoneId) {
+        const token = conversation.account.accessToken;
+        const phoneId = conversation.account.phoneId;
+        try {
+          const url = `https://graph.facebook.com/v20.0/${phoneId}/messages`;
+          await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              messaging_product: "whatsapp",
+              status: "read",
+              message_id: lastIncoming.metaMessageId
+            })
+          });
+          console.log(`[Mark Read] Marked message ${lastIncoming.metaMessageId} as read`);
+        } catch (e) {
+          console.error("[Mark Read Error] Failed to mark read in Meta:", e);
+        }
+      }
+
       // Add default SLA status
       const formatted = {
         ...conversation,

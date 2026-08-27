@@ -358,15 +358,19 @@ export async function sendWhatsAppMessageAction(data: {
         const isMediaId = data.mediaUrl && !data.mediaUrl.includes('://') && !data.mediaUrl.startsWith('/');
         const mediaField = isMediaId ? { id: data.mediaUrl } : { link: absoluteMediaUrl };
 
-        if (data.messageType === 'DOCUMENT' && data.mediaUrl) {
-           payload.type = 'document';
-           payload.document = { ...mediaField, caption: data.content, filename: data.mediaFilename || 'Document.pdf' };
-        } else if (data.messageType === 'IMAGE' && data.mediaUrl) {
-           payload.type = 'image';
-           payload.image = { ...mediaField, caption: data.content };
-        } else if (data.messageType === 'VIDEO' && data.mediaUrl) {
-           payload.type = 'video';
-           payload.video = { ...mediaField, caption: data.content };
+        const cleanCaption = (data.content && !data.content.startsWith('[IMAGE]') && !data.content.startsWith('[DOCUMENT]') && !data.content.startsWith('[VIDEO]') && !data.content.startsWith('[AUDIO]') && !data.content.startsWith('Attached file:'))
+           ? data.content
+           : undefined;
+
+         if (data.messageType === 'DOCUMENT' && data.mediaUrl) {
+            payload.type = 'document';
+            payload.document = { ...mediaField, caption: cleanCaption, filename: data.mediaFilename || 'Document.pdf' };
+         } else if (data.messageType === 'IMAGE' && data.mediaUrl) {
+            payload.type = 'image';
+            payload.image = { ...mediaField, caption: cleanCaption };
+         } else if (data.messageType === 'VIDEO' && data.mediaUrl) {
+            payload.type = 'video';
+            payload.video = { ...mediaField, caption: cleanCaption };
         } else if (data.messageType === 'AUDIO' && data.mediaUrl) {
            payload.type = 'audio';
            payload.audio = { ...mediaField }; // Audio does not support caption in Meta API
@@ -405,7 +409,7 @@ export async function sendWhatsAppMessageAction(data: {
         senderName: data.senderName || 'Sales Agent',
         messageType: data.messageType || 'TEXT',
         content: data.content,
-        mediaUrl: data.mediaUrl,
+        mediaUrl: (data.mediaUrl && !data.mediaUrl.includes('://') && !data.mediaUrl.startsWith('/')) ? `/api/whatsapp/media/${data.mediaUrl}` : data.mediaUrl,
         mediaType: data.mediaType,
         mediaFilename: data.mediaFilename,
         metadata: data.metadata,

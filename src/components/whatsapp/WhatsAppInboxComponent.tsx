@@ -91,6 +91,13 @@ export default function WhatsAppInboxComponent() {
   const [isRightCollapsed, setIsRightCollapsed] = useState<boolean>(true);
   const [showFilters, setShowFilters] = useState<boolean>(false);
 
+  // Voice Note Recording states
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [recordingDuration, setRecordingDuration] = useState<number>(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<any>(null);
+
   // Attachment File Upload Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
@@ -390,7 +397,110 @@ export default function WhatsAppInboxComponent() {
     setSendingMsg(false);
   };
 
-  // Direct File Attachment Upload Handler
+  // Start voice recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        
+        // Convert Blob to base64 Data URL to feed to upload-media
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const fileDataUrl = reader.result as string;
+          setSendingMsg(true);
+          
+          try {
+            const apiRes = await fetch('/api/whatsapp/upload-media', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fileDataUrl, filename: 'voice-note.webm', mimeType: 'audio/webm' })
+            });
+            const uploadRes = await apiRes.json();
+            
+            if (uploadRes.success && uploadRes.mediaId) {
+              const res = await sendWhatsAppMessageAction({
+                conversationId: selectedConvId!,
+                content: '[AUDIO]',
+                mediaUrl: uploadRes.mediaId,
+                mediaFilename: 'voice-note.webm',
+                messageType: 'AUDIO',
+                senderType: 'AGENT',
+                senderName: 'Sales Rep'
+              });
+              
+              if (res.success) {
+                setToastMsg('✓ Voice note sent to customer!');
+                setTimeout(() => setToastMsg(null), 3000);
+                await fetchConversationDetail(selectedConvId!, true);
+                await fetchConversationsList(true);
+              }
+            } else {
+              setToastMsg(`❌ Failed to upload voice note: ${uploadRes.error}`);
+              setTimeout(() => setToastMsg(null), 4000);
+            }
+          } catch (err: any) {
+            console.error('Failed to send voice note:', err);
+          } finally {
+            setSendingMsg(false);
+          }
+        };
+        reader.readAsDataURL(audioBlob);
+
+        // Turn off microphone streams
+        stream.getTracks().forEach(t => t.stop());
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start(200);
+      setIsRecording(true);
+      setRecordingDuration(0);
+      
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      alert("Microphone access denied or error starting recorder!");
+      console.error(err);
+    }
+  };
+
+  // Stop and send voice note
+  const stopAndSendRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      clearInterval(recordingTimerRef.current);
+    }
+  };
+
+  // Cancel/Discard voice recording
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      // Discard recorded chunks
+      mediaRecorderRef.current.onstop = () => {
+        // Discard hook implementation - stop tracks
+        mediaRecorderRef.current?.stream.getTracks().forEach(t => t.stop());
+      };
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      clearInterval(recordingTimerRef.current);
+      setToastMsg('🗑 Voice note discarded');
+      setTimeout(() => setToastMsg(null), 2000);
+    }
+  };
+
+
+    // Direct File Attachment Upload Handler
   const handleDirectFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedConvId) return;
@@ -423,7 +533,7 @@ export default function WhatsAppInboxComponent() {
 
       const res = await sendWhatsAppMessageAction({
         conversationId: selectedConvId,
-        content: `Attached file: ${file.name}`,
+        content: fileType === "IMAGE" ? "[IMAGE]" : fileType === "DOCUMENT" ? "[DOCUMENT]" : fileType === "VIDEO" ? "[VIDEO]" : fileType === "AUDIO" ? "[AUDIO]" : `Attached file: ${file.name}`,
         mediaUrl: uploadRes.mediaId, // passing the ID to Meta API
         mediaFilename: file.name,
         messageType: fileType,
@@ -950,7 +1060,7 @@ export default function WhatsAppInboxComponent() {
                             style={{ width: "100%", maxHeight: "220px", objectFit: "cover", borderRadius: "8px", cursor: "pointer" }}
                             onClick={() => window.open(msg.mediaUrl, "_blank")}
                           />
-                          {msg.content && <p className="message-text-content" style={{ marginTop: "4px" }}>{msg.content}</p>}
+                          {msg.content && msg.content !== "[IMAGE]" && !msg.content.startsWith("Attached file:") && <p className="message-text-content" style={{ marginTop: "4px" }}>{msg.content}</p>}
                         </div>
                       )}
 
@@ -958,7 +1068,7 @@ export default function WhatsAppInboxComponent() {
                       {msg.messageType === "VIDEO" && (
                         <div style={{ marginTop: "4px" }}>
                           <video src={msg.mediaUrl || ""} controls style={{ width: "100%", maxHeight: "220px", borderRadius: "8px" }} />
-                          {msg.content && <p className="message-text-content" style={{ marginTop: "4px" }}>{msg.content}</p>}
+                          {msg.content && msg.content !== "[IMAGE]" && !msg.content.startsWith("Attached file:") && <p className="message-text-content" style={{ marginTop: "4px" }}>{msg.content}</p>}
                         </div>
                       )}
 
@@ -1072,7 +1182,29 @@ export default function WhatsAppInboxComponent() {
               )}
 
               {/* Text Area Form */}
-              <form className={`chat-input-form ${isInternalNote ? "internal-mode" : ""}`} onSubmit={handleSendMessage}>
+              {isRecording ? (
+                <div className="voice-recorder-bar" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '24px', flex: 1, margin: '0 8px' }}>
+                  <span className="record-dot-blink" style={{ width: '8px', height: '8px', background: '#ef4444', borderRadius: '50%', display: 'inline-block', animation: 'pulse 1s infinite' }} />
+                  <span style={{ fontSize: '13px', color: '#991b1b', fontWeight: 600, flex: 1 }}>
+                    Recording Voice Note... {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={cancelRecording}
+                    style={{ background: '#ef4444', color: '#ffffff', border: 'none', padding: '6px 14px', borderRadius: '16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stopAndSendRecording}
+                    style={{ background: '#10b981', color: '#ffffff', border: 'none', padding: '6px 14px', borderRadius: '16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Send Voice Note
+                  </button>
+                </div>
+              ) : (
+                <form className={`chat-input-form ${isInternalNote ? "internal-mode" : ""}`} onSubmit={handleSendMessage}>
                 <button
                   type="button"
                   className="input-attachment-btn"
@@ -1080,6 +1212,16 @@ export default function WhatsAppInboxComponent() {
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Paperclip size={18} />
+                </button>
+                
+                <button
+                  type="button"
+                  className="input-attachment-btn"
+                  title="Record Voice Note"
+                  onClick={startRecording}
+                  style={{ color: '#ef4444' }}
+                >
+                  <Mic size={18} />
                 </button>
 
                 <div style={{ position: "relative" }}>
@@ -1217,6 +1359,7 @@ export default function WhatsAppInboxComponent() {
                   <span>{isInternalNote ? "Save Note" : "Send"}</span>
                 </button>
               </form>
+              )}
             </div>
           </>
         )}

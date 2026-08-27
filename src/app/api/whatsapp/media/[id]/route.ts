@@ -30,13 +30,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Failed to download media file from Meta" }, { status: mediaFileRes.status });
     }
 
-    // Step 3: Stream it back to the client directly with proper headers
+    // Step 3: Stream it back to the client directly with proper headers and Content-Length to enable seeking/playback in HTML5 audio
     const contentType = mediaFileRes.headers.get("content-type") || metaUrlData.mime_type || "application/octet-stream";
+    const arrayBuffer = await mediaFileRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
     
-    return new NextResponse(mediaFileRes.body, {
+    return new NextResponse(buffer, {
       status: 200,
       headers: {
         'Content-Type': contentType,
+        'Content-Length': buffer.length.toString(),
         'Cache-Control': 'public, max-age=86400, immutable',
         'Content-Disposition': `inline; filename="whatsapp-media-${mediaId}"`
       }
