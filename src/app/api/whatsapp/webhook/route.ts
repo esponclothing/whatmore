@@ -115,7 +115,24 @@ export async function POST(req: NextRequest) {
       const mediaMimeType = isMedia ? msg[msg.type]?.mime_type : null;
       const proxyMediaUrl = mediaId ? `/api/whatsapp/media/${mediaId}` : null;
       
-      const textContent = msg.text?.body || msg[msg.type]?.caption || msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || (isMedia ? `[${msg.type.toUpperCase()}]` : "[Message]");
+      let textContent = "[Message]";
+      if (msg.text?.body) {
+        textContent = msg.text.body;
+      } else if (msg.button?.text) {
+        textContent = msg.button.text;
+      } else if (msg.interactive?.button_reply?.title) {
+        textContent = msg.interactive.button_reply.title;
+      } else if (msg.interactive?.list_reply?.title) {
+        textContent = msg.interactive.list_reply.title;
+      } else if (msg.reaction?.emoji) {
+        textContent = `Reacted with: ${msg.reaction.emoji}`;
+      } else if (isMedia) {
+        textContent = `[${msg.type.toUpperCase()}]`;
+      } else if (msg[msg.type]?.caption) {
+        textContent = msg[msg.type].caption;
+      } else if (msg.type === "template") {
+        textContent = "[Template Message]";
+      }
 
       // Feature: Intercept `buy_` buttons
       if (msg.interactive?.button_reply?.id?.startsWith("buy_")) {

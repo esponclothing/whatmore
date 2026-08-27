@@ -552,7 +552,33 @@ export default function WhatsAppInboxComponent() {
     reader.readAsDataURL(file);
   };
 
-  // Handle Quick Command Shortcut Insert
+  // Delete selected conversation handler
+  const handleDeleteConversation = async () => {
+    if (!selectedConvId) return;
+    const confirmDelete = window.confirm("Are you sure you want to delete this conversation and all its messages? This action cannot be undone.");
+    if (!confirmDelete) return;
+    
+    try {
+      const res = await fetch(`/api/whatsapp/inbox?convId=${selectedConvId}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToastMsg("✓ Conversation deleted successfully");
+        setTimeout(() => setToastMsg(null), 3000);
+        setSelectedConvId(null);
+        setActiveConvDetail(null);
+        fetchConversationsList(false);
+      } else {
+        alert("Failed to delete conversation: " + data.error);
+      }
+    } catch (err: any) {
+      alert("Error deleting conversation: " + err.message);
+    }
+  };
+
+
+    // Handle Quick Command Shortcut Insert
   const applyQuickShortcut = (text: string) => {
     setMessageInput((prev) => (prev ? `${prev} ${text}` : text));
     setShowReplyLibraryModal(false);
@@ -999,6 +1025,20 @@ export default function WhatsAppInboxComponent() {
                   {isFullScreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
                   <span>{isFullScreen ? "Exit Full Screen" : "Full Screen"}</span>
                 </button>
+                
+                <button
+                  className="chat-action-btn"
+                  onClick={handleDeleteConversation}
+                  title="Delete Conversation"
+                  style={{
+                    background: "#fef2f2",
+                    border: "1px solid #fee2e2",
+                    color: "#ef4444"
+                  }}
+                >
+                  <UserX size={14} />
+                  <span>Delete Chat</span>
+                </button>
 
               </div>
             </div>
@@ -1054,12 +1094,18 @@ export default function WhatsAppInboxComponent() {
                       {/* Image Message Renderer */}
                       {msg.messageType === "IMAGE" && (
                         <div style={{ marginTop: "4px" }}>
-                          <img
-                            src={msg.mediaUrl || "https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=500"}
-                            alt="Media Image"
-                            style={{ width: "100%", maxHeight: "220px", objectFit: "cover", borderRadius: "8px", cursor: "pointer" }}
-                            onClick={() => window.open(msg.mediaUrl, "_blank")}
-                          />
+                          {msg.mediaUrl ? (
+                            <img
+                              src={msg.mediaUrl}
+                              alt="Media Image"
+                              style={{ width: "100%", maxHeight: "220px", objectFit: "cover", borderRadius: "8px", cursor: "pointer" }}
+                              onClick={() => window.open(msg.mediaUrl, "_blank")}
+                            />
+                          ) : (
+                            <div style={{ padding: "12px", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "8px", fontSize: "11.5px", color: "#64748b", textAlign: "center" }}>
+                              📷 Image expired (Stored only for 30 days)
+                            </div>
+                          )}
                           {msg.content && msg.content !== "[IMAGE]" && !msg.content.startsWith("Attached file:") && <p className="message-text-content" style={{ marginTop: "4px" }}>{msg.content}</p>}
                         </div>
                       )}
@@ -1076,7 +1122,13 @@ export default function WhatsAppInboxComponent() {
                       {msg.messageType === "AUDIO" && (
                         <div style={{ marginTop: "4px", background: "#f3f4f6", padding: "8px", borderRadius: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
                           <span style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280" }}>Voice Message</span>
-                          <audio src={msg.mediaUrl || ""} controls style={{ width: "100%", height: "36px" }} />
+                          {msg.mediaUrl ? (
+                            <audio src={msg.mediaUrl} controls style={{ width: "100%", height: "36px" }} />
+                          ) : (
+                            <div style={{ padding: "8px", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "8px", fontSize: "11.5px", color: "#64748b", textAlign: "center" }}>
+                              🎙 Voice note expired (Stored only for 30 days)
+                            </div>
+                          )}
                         </div>
                       )}
 

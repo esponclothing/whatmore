@@ -14,6 +14,18 @@ export async function GET(req: NextRequest) {
   // -- 1. GET ALL CHATS -----------------------------------------------------
   if (action === "chats") {
     try {
+      // Auto-delete media older than 30 days by clearing database mediaUrl field
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      prisma.whatsAppMessage.updateMany({
+        where: {
+          sentAt: { lt: thirtyDaysAgo },
+          mediaUrl: { not: null }
+        },
+        data: {
+          mediaUrl: null
+        }
+      }).catch(err => console.error("[Auto-Delete Media Old 30 Days Error]:", err));
       const conversations = await prisma.whatsAppConversation.findMany({
         include: {
           customer: {
@@ -442,6 +454,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unknown postAction" }, { status: 400 });
   } catch (err: any) {
     console.error("[inbox POST] Error:", err);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
+// --- DELETE CONVERSATION ----------------------------------------------------
+export async function DELETE(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const convId = searchParams.get("convId");
+  if (!convId) return NextResponse.json({ error: "convId required" }, { status: 400 });
+  
+  try {
+    await prisma.whatsAppConversation.delete({
+      where: { id: convId }
+    });
+    return NextResponse.json({ success: true, message: "Conversation deleted successfully" });
+  } catch (err: any) {
+    console.error("[inbox DELETE] Error:", err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
