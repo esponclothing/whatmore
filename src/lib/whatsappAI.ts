@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { sendWhatsAppMessageAction } from '@/actions/whatsapp';
+import { sendWhatsAppMessageAction } from '@/app/actions/whatsAppPlatformActions';
 
 const prisma = new PrismaClient();
 
