@@ -398,6 +398,9 @@ export default function WhatsAppChatbotBuilderPage() {
   const [isBotActive, setIsBotActive] = useState<boolean>(true);
   const [isLoadingFlows, setIsLoadingFlows] = useState<boolean>(true);
 
+  // JSON File Import/Export Ref
+  const jsonFileInputRef = React.useRef<HTMLInputElement | null>(null);
+
   // Modals state
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
@@ -470,6 +473,76 @@ export default function WhatsAppChatbotBuilderPage() {
       }
     }
   };
+  // Import Flow by JSON file
+  const handleImportJsonFlow = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        let importedNodes = null;
+        let importedName = null;
+        let importedKeyword = null;
+
+        if (Array.isArray(parsed)) {
+          importedNodes = parsed;
+        } else if (parsed && typeof parsed === "object") {
+          if (Array.isArray(parsed.nodes)) {
+            importedNodes = parsed.nodes;
+          }
+          if (typeof parsed.name === "string") {
+            importedName = parsed.name;
+          }
+          if (typeof parsed.triggerKeyword === "string") {
+            importedKeyword = parsed.triggerKeyword;
+          }
+        }
+
+        if (!importedNodes || !importedNodes.every((n: any) => n.id && n.type)) {
+          alert("Invalid chatbot flow JSON structure. Missing nodes, node IDs, or node types.");
+          return;
+        }
+
+        setNodes(importedNodes);
+        setHistoryStack([importedNodes]);
+        setHistoryIndex(0);
+        setSelectedNodeId(null);
+        setIsDrawerOpen(false);
+
+        if (importedName) setFlowName(importedName);
+        if (importedKeyword) setTriggerKeyword(importedKeyword);
+
+        setToastMsg("✓ Chatbot flow imported successfully! Click Save to publish.");
+        setTimeout(() => setToastMsg(null), 4000);
+      } catch (err: any) {
+        alert("Failed to parse JSON file: " + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  // Export Flow to JSON file
+  const handleExportJsonFlow = () => {
+    if (nodes.length === 0) return;
+    const exportData = {
+      name: flowName,
+      triggerKeyword: triggerKeyword,
+      nodes: nodes
+    };
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(exportData, null, 2))}`;
+    const downloadAnchor = document.createElement("a");
+    downloadAnchor.setAttribute("href", jsonString);
+    downloadAnchor.setAttribute("download", `${flowName.toLowerCase().replace(/\s+/g, "_")}_flow.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    setToastMsg("✓ Chatbot flow exported successfully!");
+    setTimeout(() => setToastMsg(null), 3000);
+  };
+
 
 
     // Fetch Saved Chatbot Flows from DB
@@ -1262,6 +1335,22 @@ export default function WhatsAppChatbotBuilderPage() {
           <button className="studio-btn" onClick={handleDuplicateCurrentBot} disabled={!currentFlowId} title="Duplicate Current Chatbot">
             <Copy size={14} /> Duplicate
           </button>
+
+          <button className="studio-btn" onClick={() => jsonFileInputRef.current?.click()} title="Import Chatbot Flow from JSON file">
+            <Layers size={14} /> Import JSON
+          </button>
+
+          <button className="studio-btn" onClick={handleExportJsonFlow} disabled={nodes.length === 0} title="Export Current Chatbot Flow as JSON file">
+            <Layers size={14} style={{ transform: "rotate(180deg)" }} /> Export JSON
+          </button>
+
+          <input
+            type="file"
+            ref={jsonFileInputRef}
+            style={{ display: "none" }}
+            accept=".json"
+            onChange={handleImportJsonFlow}
+          />
 
           <button className="studio-btn" onClick={() => setShowManageModal(true)} title="Manage All Chatbots">
             <FolderOpen size={14} /> All Bots ({savedFlows.length})
