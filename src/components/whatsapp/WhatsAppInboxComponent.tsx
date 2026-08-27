@@ -97,6 +97,7 @@ export default function WhatsAppInboxComponent() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<any>(null);
+  const lastScrollConvIdRef = useRef<string | null>(null);
 
   // Attachment File Upload Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -332,8 +333,11 @@ export default function WhatsAppInboxComponent() {
 
 
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: "auto" });
-  }, [activeConvDetail?.messages]);
+    if (!activeConvDetail?.messages) return;
+    const isNewConv = lastScrollConvIdRef.current !== selectedConvId;
+    chatBottomRef.current?.scrollIntoView({ behavior: isNewConv ? "auto" : "smooth" });
+    lastScrollConvIdRef.current = selectedConvId;
+  }, [activeConvDetail?.messages, selectedConvId]);
 
   // Handle Send Message
   const handleSendMessage = async (e?: React.FormEvent) => {
