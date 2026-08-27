@@ -486,7 +486,124 @@ export default function WhatsAppChatbotBuilderPage() {
         let importedName = null;
         let importedKeyword = null;
 
-        if (Array.isArray(parsed)) {
+        // Support for ShopLinx chatbot flow export format mapping
+        if (parsed.kind === "shoplinx_whatsapp_chatbot_flow_export" && parsed.flow?.graph) {
+          console.log("[Import JSON] Parsing ShopLinx graph format...");
+          const graph = parsed.flow.graph;
+          const groups = graph.groups || [];
+          const edges = graph.edges || [];
+          
+          const mappedNodes = [];
+
+          // Helper to resolve the first block ID of a group
+          const getGroupFirstBlockId = (groupId) => {
+            const grp = groups.find((g) => g.id === groupId);
+            if (grp && grp.blocks && grp.blocks.length > 0) {
+              return grp.blocks[0].id;
+            }
+            return null;
+          };
+
+          // Step 1: Create flat nodes from groups and blocks
+          groups.forEach((group) => {
+            const gx = group.position?.x || 100;
+            const gy = group.position?.y || 100;
+
+            (group.blocks || []).forEach((block) => {
+              const node = {
+                id: block.id,
+                x: gx,
+                y: gy,
+                title: group.name || "Block",
+                category: "message",
+                text: ""
+              };
+
+              // Map properties based on ShopLinx block type classifications
+              if (block.type === "conversation_action") {
+                node.type = "START";
+                node.category = "start";
+                node.title = "Auto Assign / Start";
+                node.text = `Assign via ${block.config?.actionType || 'Round Robin'}`;
+              } else if (block.type === "interactive_buttons") {
+                node.type = "CHOICE";
+                node.category = "choice";
+                node.title = "Buttons Option";
+                node.text = block.config?.body?.text || "Options:";
+                node.choices = (block.config?.buttons || []).map((btn) => ({
+                  id: btn.id,
+                  text: btn.title
+                }));
+              } else if (block.type === "update_contact") {
+                node.type = "crm_contact";
+                node.category = "crm";
+                node.title = "Update CRM Tags";
+                node.text = `Add tag IDs: ${(block.config?.addTagIds || []).join(", ")}`;
+              } else if (block.type === "interactive_cta_url") {
+                node.type = "link";
+                node.category = "message";
+                node.title = block.config?.buttonText || "Link Button";
+                node.text = block.config?.bodyText || "Visit website:";
+                node.url = block.config?.url || "";
+              } else {
+                node.type = "TEXT";
+                node.category = "message";
+                node.text = block.config?.text || "Unsupported custom block";
+              }
+
+              mappedNodes.push(node);
+            });
+          });
+
+          // Step 2: Route edges to output ports
+          mappedNodes.forEach((node) => {
+            if (node.type === "CHOICE" && node.choices) {
+              node.choices = node.choices.map((choice) => {
+                const matchingEdge = edges.find((edge) => 
+                  edge.from?.blockId === node.id && 
+                  (edge.from?.portKey === `button:${choice.id}` || edge.from?.portKey === choice.id)
+                );
+                if (matchingEdge) {
+                  const targetBlockId = getGroupFirstBlockId(matchingEdge.to?.groupId);
+                  if (targetBlockId) {
+                    return { ...choice, outputPort: targetBlockId };
+                  }
+                }
+                return choice;
+              });
+            } else {
+              const matchingEdge = edges.find((edge) => edge.from?.blockId === node.id);
+              if (matchingEdge) {
+                const targetBlockId = getGroupFirstBlockId(matchingEdge.to?.groupId);
+                if (targetBlockId) {
+                  node.outputPort = targetBlockId;
+                }
+              }
+            }
+          });
+
+          // Step 3: Insert Trigger block at front if missing
+          const hasTrigger = mappedNodes.some(n => n.type === "TRIGGER");
+          if (!hasTrigger) {
+            const startNode = mappedNodes.find(n => n.type === "START");
+            const entryValues = parsed.flow?.entryRules?.[0]?.values || ["Hi"];
+            const triggerNode = {
+              id: "node_imported_trigger",
+              type: "TRIGGER",
+              category: "trigger",
+              title: "FLOW TRIGGER",
+              x: startNode ? startNode.x - 250 : 30,
+              y: startNode ? startNode.y : 100,
+              text: `Incoming Message matches: ${entryValues.join(", ")}`,
+              outputPort: startNode ? startNode.id : undefined
+            };
+            mappedNodes.unshift(triggerNode);
+          }
+
+          importedNodes = mappedNodes;
+          importedName = parsed.flow?.name || "Imported ShopLinx Flow";
+          importedKeyword = (parsed.flow?.entryRules?.[0]?.values || []).join(", ");
+        } else if (Array.isArray(parsed)) {
           importedNodes = parsed;
         } else if (parsed && typeof parsed === "object") {
           if (Array.isArray(parsed.nodes)) {
