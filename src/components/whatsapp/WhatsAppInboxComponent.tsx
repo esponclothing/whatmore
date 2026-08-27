@@ -580,27 +580,7 @@ export default function WhatsAppInboxComponent() {
           <div className="left-panel-title-row">
             <span className="left-panel-title">WhatsApp Inbox</span>
             <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-              <button
-                className="panel-toggle-btn"
-                onClick={async () => {
-                  const { exportWhatsAppConversationsCSV } = await import("@/app/actions/whatsAppPlatformActions");
-                  const res = await exportWhatsAppConversationsCSV();
-                  if (res.success && res.csv) {
-                    const blob = new Blob([res.csv], { type: 'text/csv' });
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `whatsapp_conversations_${new Date().toISOString().slice(0,10)}.csv`;
-                    a.click();
-                  } else {
-                    alert("Export failed: " + res.error);
-                  }
-                }}
-                title="Export Conversations to CSV"
-                style={{ color: "#64748b" }}
-              >
-                <Download size={16} />
-              </button>
+
               <button
                 className="panel-toggle-btn"
                 onClick={() => {
@@ -619,21 +599,8 @@ export default function WhatsAppInboxComponent() {
               >
                 <Filter size={16} />
               </button>
-              <button
-                className="panel-toggle-btn"
-                onClick={toggleFullScreenMode}
-                title={isFullScreen ? "Exit Full Screen Mode (Esc)" : "Full Screen Mode"}
-                style={{ color: isFullScreen ? "#10b981" : "#64748b" }}
-              >
-                {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-              </button>
-              <button
-                className="panel-toggle-btn"
-                onClick={() => setIsLeftCollapsed(!isLeftCollapsed)}
-                title={isLeftCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-              >
-                {isLeftCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-              </button>
+
+
             </div>
           </div>
 
@@ -853,9 +820,7 @@ export default function WhatsAppInboxComponent() {
                       {activeConvDetail.customer?.contactPerson || activeConvDetail.customer?.businessName || activeConvDetail.customer?.whatsappNumber}
                     </h2>
                     <span className="chat-wa-connected-badge">Connected</span>
-                    <span className={`chat-sla-badge sla-${activeConvDetail.slaStatus.toLowerCase()}`}>
-                      SLA: {activeConvDetail.slaStatus}
-                    </span>
+                    
                   </div>
                   <div className="chat-sub-line">
                     <span>+91 {String(activeConvDetail.customer?.mobile || activeConvDetail.customer?.whatsappNumber || "").replace(/^91/, '').replace(/^\+91/, '').trim()}</span>
