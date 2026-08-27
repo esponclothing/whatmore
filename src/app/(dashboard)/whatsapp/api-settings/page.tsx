@@ -14,6 +14,10 @@ export default function WhatsAppAPISettingsPage() {
   const [webhookToken, setWebhookToken] = useState("espon_whatsapp_secure_webhook_token_2026");
   const [showToken, setShowToken] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [origin, setOrigin] = useState("");
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -155,7 +159,7 @@ export default function WhatsAppAPISettingsPage() {
                 {registering ? <RefreshCw size={16} className="animate-spin" /> : <MessageSquare size={16} />} {registering ? "Registering..." : "Register New Number"}
              </button>
             <span className={`px-3 py-2 text-xs font-bold rounded-lg ${isConnected ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-              Ã¢â€”Â {isConnected ? "CONNECTED" : "NOT CONNECTED"}
+              Ã¢€”Â {isConnected ? "CONNECTED" : "NOT CONNECTED"}
             </span>
           </div>
         </div>

@@ -2002,7 +2002,7 @@ export async function sendWhatsAppHelloWorldAction(phone: string) {
     
     let resData = await response.json();
 
-    if (resData.error && resData.error.message.includes('template')) {
+    if (resData.error && (resData.error.code === 132001 || resData.error.code === 132000 || resData.error.message.toLowerCase().includes('template'))) {
       // Template doesn't exist, create it
       const createUrl = `https://graph.facebook.com/v20.0/${wabaId}/message_templates`;
       const createPayload = {
