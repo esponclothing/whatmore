@@ -81,7 +81,7 @@ const EMOJI_LIST = ["👍", "🙏", "✅", "📦", "📄", "💰", "📞", "❤�
 export default function WhatsAppInboxComponent() {
   const { conversations, setConversations, activeConvDetail, setActiveConvDetail } = useWhatsAppStore();
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
-  const [loadingConvs, setLoadingConvs] = useState<boolean>(true);
+  const [loadingConvs, setLoadingConvs] = useState<boolean>(conversations.length === 0);
   const [loadingDetail, setLoadingDetail] = useState<boolean>(false);
 
 
@@ -259,7 +259,7 @@ export default function WhatsAppInboxComponent() {
       console.error("Failed to fetch conversations", err);
       setConversations([]);
     } finally {
-      if (!silent) setLoadingConvs(false);
+      setLoadingConvs(false);
     }
   };
 
@@ -712,7 +712,7 @@ export default function WhatsAppInboxComponent() {
 
         {/* Conversations List */}
         <div className="conversations-scroll-list">
-          {loadingConvs ? (
+          {loadingConvs && conversations.length === 0 ? (
             <div className="inbox-loading-skeleton">
               {[...Array(5)].map((_, i) => (
                 <div key={i} className="skeleton-conv-card">
@@ -801,7 +801,7 @@ export default function WhatsAppInboxComponent() {
       {/* CENTER COLUMN: LIVE CHAT WINDOW */}
       {/* ----------------------------------------------------------------- */}
       <div className="inbox-center-panel">
-        {loadingDetail ? (
+        {loadingDetail && !activeConvDetail ? (
           // Skeleton loader instead of a boring spinner
           <div className="chat-skeleton-loader">
             <div className="chat-skeleton-header">
