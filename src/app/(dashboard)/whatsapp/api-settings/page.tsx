@@ -221,7 +221,7 @@ export default function WhatsAppAPISettingsPage() {
         {/* Test Message Section */}
         <div className="p-6 bg-slate-50 dark:bg-slate-900/50">
           <h3 className="text-md font-bold text-gray-900 dark:text-white mb-3">Test Connection</h3>
-          <p className="text-sm text-gray-500 mb-4">Send a "hello_world" test template to verify your Meta API connection is working properly.</p>
+          <p className="text-sm text-gray-500 mb-4">Send a "espon_test_message" test template to verify your Meta API connection is working properly.</p>
           
           {testResultMsg && (
             <div className={`mb-4 p-4 rounded-xl text-sm font-semibold flex items-center gap-2 ${testResultMsg.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
@@ -288,3 +288,4 @@ export default function WhatsAppAPISettingsPage() {
     </div>
   );
 }
+
