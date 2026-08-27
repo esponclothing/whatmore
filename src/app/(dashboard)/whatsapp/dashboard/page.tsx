@@ -93,12 +93,12 @@ export default function WhatmoreDashboard() {
         </div>
         <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
           <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 flex items-center justify-between">Active Products <Box size={16} className="text-indigo-500"/></div>
-          <div className="text-3xl font-extrabold text-gray-900 dark:text-white">1,204</div>
+          <div className="text-3xl font-extrabold text-gray-900 dark:text-white">0</div>
           <div className="text-xs text-indigo-500 font-medium mt-2 flex items-center gap-1">Synced with Shopify</div>
         </div>
         <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
           <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 flex items-center justify-between">Automated Replies <Zap size={16} className="text-amber-500"/></div>
-          <div className="text-3xl font-extrabold text-gray-900 dark:text-white">4,892</div>
+          <div className="text-3xl font-extrabold text-gray-900 dark:text-white">{data?.metrics?.totalMessages || 0}</div>
           <div className="text-xs text-amber-500 font-medium mt-2 flex items-center gap-1">Saved ~142 hours</div>
         </div>
         <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-6 rounded-2xl shadow-lg text-white">
