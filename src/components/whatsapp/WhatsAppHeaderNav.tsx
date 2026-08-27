@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  MessageSquare, LayoutDashboard, Bot, ShoppingBag, Key, Activity, Box
+  MessageSquare, LayoutDashboard, Bot, ShoppingBag, Key, Activity, Box, GitBranch
 } from "lucide-react";
 import "./WhatsAppHeaderNav.css";
 import { getWhatsAppDashboardMetrics } from "@/app/actions/whatsAppPlatformActions";
@@ -13,6 +13,7 @@ const subNavItems = [
   { name: "Dashboard", path: "/whatsapp/dashboard", icon: LayoutDashboard },
   { name: "Inbox", path: "/whatsapp/inbox", icon: MessageSquare },
   { name: "AI Automation", path: "/whatsapp/ai-automation", icon: Bot, highlight: true },
+  { name: "Chatbot Builder", path: "/whatsapp/chatbot-builder", icon: GitBranch },
   { name: "Products & Prices", path: "/whatsapp/commerce", icon: Box },
   { name: "Settings", path: "/whatsapp/api-settings", icon: Key },
   { name: "Logs", path: "/whatsapp/logs", icon: Activity },
