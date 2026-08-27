@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect } from "react";
 import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store, MessageSquare } from "lucide-react";
@@ -155,7 +155,7 @@ export default function WhatsAppAPISettingsPage() {
                 {registering ? <RefreshCw size={16} className="animate-spin" /> : <MessageSquare size={16} />} {registering ? "Registering..." : "Register New Number"}
              </button>
             <span className={`px-3 py-2 text-xs font-bold rounded-lg ${isConnected ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-              â— {isConnected ? "CONNECTED" : "NOT CONNECTED"}
+              Ã¢â€”Â {isConnected ? "CONNECTED" : "NOT CONNECTED"}
             </span>
           </div>
         </div>
