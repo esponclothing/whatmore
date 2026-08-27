@@ -1167,7 +1167,7 @@ export default function WhatsAppInboxComponent() {
                       )}
 
                       {/* Standard Text Renderer */}
-                      {msg.messageType !== "DOCUMENT" && msg.messageType !== "IMAGE" && msg.messageType !== "VIDEO" && msg.messageType !== "PAYMENT_LINK" && (
+                      {msg.messageType !== "DOCUMENT" && msg.messageType !== "IMAGE" && msg.messageType !== "VIDEO" && msg.messageType !== "AUDIO" && msg.messageType !== "PAYMENT_LINK" && (
                         <p className="message-text-content" style={msg.isInternalNote ? { color: '#713f12' } : {}}>{msg.content}</p>
                       )}
 
