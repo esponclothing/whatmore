@@ -1663,3 +1663,4 @@ export default function WhatsAppInboxComponent() {
 function LockIcon({ size }: { size: number }) {
   return <ShieldCheck size={size} color="#f59e0b" />;
 }
+

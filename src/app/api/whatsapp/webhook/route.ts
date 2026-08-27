@@ -29,6 +29,16 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
+    // Log Webhook Payload
+    try {
+      await prisma.whatsAppWebhookLog.create({
+        data: {
+          event: "WEBHOOK_RECEIVED",
+          payload: body
+        }
+      });
+    } catch (e) { console.error("Failed to log webhook", e); }
+
     const entry = body.entry?.[0];
     const changes = entry?.changes?.[0];
     const value = changes?.value;
