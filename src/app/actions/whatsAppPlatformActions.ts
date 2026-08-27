@@ -1925,3 +1925,43 @@ export async function getWhatsAppWebhookLogsAction(search = '') {
 
 
 
+export async function getShopifyCredentialsAction() {
+  try {
+    const settings = await prisma.companySettings.findFirst();
+    return {
+      success: true,
+      credentials: {
+        shopifyStoreDomain: settings?.shopifyStoreDomain || '',
+        shopifyAccessToken: settings?.shopifyAccessToken || ''
+      }
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function saveShopifyCredentialsAction(data: { storeDomain: string; accessToken: string }) {
+  try {
+    let settings = await prisma.companySettings.findFirst();
+    if (settings) {
+      await prisma.companySettings.update({
+        where: { id: settings.id },
+        data: {
+          shopifyStoreDomain: data.storeDomain,
+          shopifyAccessToken: data.accessToken
+        }
+      });
+    } else {
+      await prisma.companySettings.create({
+        data: {
+          id: 'default',
+          shopifyStoreDomain: data.storeDomain,
+          shopifyAccessToken: data.accessToken
+        }
+      });
+    }
+    return { success: true, message: 'Shopify credentials saved securely.' };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

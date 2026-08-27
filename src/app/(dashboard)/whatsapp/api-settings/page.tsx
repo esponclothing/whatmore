@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight } from "lucide-react";
+import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store } from "lucide-react";
 import Link from "next/link";
-import { getWhatsAppApiCredentialsAction, saveWhatsAppApiCredentialsAction } from "@/app/actions/whatsAppPlatformActions";
+import { getWhatsAppApiCredentialsAction, saveWhatsAppApiCredentialsAction, getShopifyCredentialsAction, saveShopifyCredentialsAction } from "@/app/actions/whatsAppPlatformActions";
 
 export default function WhatsAppAPISettingsPage() {
   const [wabaId, setWabaId] = useState("");
@@ -19,26 +19,30 @@ export default function WhatsAppAPISettingsPage() {
   const [saving, setSaving] = useState(false);
   const [resultMsg, setResultMsg] = useState<{ success: boolean; text: string } | null>(null);
 
-  // Registration State
-  const [pin, setPin] = useState("");
-  const [registering, setRegistering] = useState(false);
-  const [regResult, setRegResult] = useState<{ success: boolean; text: string } | null>(null);
-
-  // Test Message State
-  const [testPhone, setTestPhone] = useState("");
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; text: string } | null>(null);
+  // Shopify State
+  const [shopifyDomain, setShopifyDomain] = useState("");
+  const [shopifyToken, setShopifyToken] = useState("");
+  const [showShopifyToken, setShowShopifyToken] = useState(false);
+  const [savingShopify, setSavingShopify] = useState(false);
+  const [shopifyResultMsg, setShopifyResultMsg] = useState<{ success: boolean; text: string } | null>(null);
 
   useEffect(() => {
-    getWhatsAppApiCredentialsAction().then((res) => {
-      if (res.success && res.credentials) {
-        setWabaId(res.credentials.businessAccountId || "");
-        setPhoneId(res.credentials.phoneId || "");
-        setManagerId(res.credentials.businessManagerId || "");
-        setPhoneNumber(res.credentials.phoneNumber || "");
-        setToken(res.credentials.accessToken || "");
-        setWebhookToken(res.credentials.webhookVerifyToken || "espon_whatsapp_secure_webhook_token_2026");
-        setIsConnected(res.isConnected || false);
+    Promise.all([
+      getWhatsAppApiCredentialsAction(),
+      getShopifyCredentialsAction()
+    ]).then(([resWA, resShopify]) => {
+      if (resWA.success && resWA.credentials) {
+        setWabaId(resWA.credentials.businessAccountId || "");
+        setPhoneId(resWA.credentials.phoneId || "");
+        setManagerId(resWA.credentials.businessManagerId || "");
+        setPhoneNumber(resWA.credentials.phoneNumber || "");
+        setToken(resWA.credentials.accessToken || "");
+        setWebhookToken(resWA.credentials.webhookVerifyToken || "espon_whatsapp_secure_webhook_token_2026");
+        setIsConnected(resWA.isConnected || false);
+      }
+      if (resShopify.success && resShopify.credentials) {
+        setShopifyDomain(resShopify.credentials.shopifyStoreDomain || "");
+        setShopifyToken(resShopify.credentials.shopifyAccessToken || "");
       }
       setLoading(false);
     });
@@ -48,321 +52,170 @@ export default function WhatsAppAPISettingsPage() {
     e.preventDefault();
     setSaving(true);
     setResultMsg(null);
-
     const res = await saveWhatsAppApiCredentialsAction({
-      wabaId,
-      phoneId,
-      managerId,
-      accessToken: token,
-      phoneNumber,
-      webhookVerifyToken: webhookToken
+      wabaId, phoneId, managerId, accessToken: token, phoneNumber, webhookVerifyToken: webhookToken
     });
-
     if (res.success) {
       setIsConnected(Boolean(res.isConnected));
-      setResultMsg({
-        success: Boolean(res.isConnected),
-        text: res.message || "Credentials updated."
-      });
+      setResultMsg({ success: Boolean(res.isConnected), text: res.message || "Credentials updated." });
     } else {
-      setResultMsg({
-        success: false,
-        text: res.error || "Failed to save API credentials."
-      });
+      setResultMsg({ success: false, text: res.error || "Failed to save API credentials." });
     }
     setSaving(false);
   };
 
-  const handleRegisterPhone = async (e: React.FormEvent) => {
+  const handleSaveShopifyCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phoneId || !pin || !token || !wabaId) {
-      setRegResult({ success: false, text: "Please enter your Phone ID, WABA ID, Access Token, and 6-digit PIN before registering." });
-      return;
-    }
+    setSavingShopify(true);
+    setShopifyResultMsg(null);
     
-    setRegistering(true);
-    setRegResult(null);
-    
-    try {
-      const res = await fetch('/api/whatsapp/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          phoneNumberId: phoneId, 
-          wabaId: wabaId,
-          accessToken: token,
-          pin: pin 
-        })
-      });
-      const data = await res.json();
-      
-      if (data.success) {
-        setRegResult({ success: true, text: "Phone number successfully registered and verified by Meta! Your credentials are saved." });
-        setIsConnected(true);
-      } else {
-        setRegResult({ success: false, text: data.error || "Failed to register phone number" });
-      }
-    } catch (error: any) {
-      setRegResult({ success: false, text: error.message || "Network error while registering" });
+    // Clean domain
+    let cleanDomain = shopifyDomain.replace('https://', '').replace('http://', '').trim();
+    if (cleanDomain && !cleanDomain.includes('.myshopify.com')) {
+       cleanDomain = `${cleanDomain}.myshopify.com`;
     }
-    setRegistering(false);
-  };
+    setShopifyDomain(cleanDomain);
 
-  const handleTestMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!testPhone) {
-      setTestResult({ success: false, text: "Please enter a phone number to test." });
-      return;
+    const res = await saveShopifyCredentialsAction({
+      storeDomain: cleanDomain,
+      accessToken: shopifyToken
+    });
+    if (res.success) {
+      setShopifyResultMsg({ success: true, text: res.message || "Shopify credentials saved." });
+    } else {
+      setShopifyResultMsg({ success: false, text: res.error || "Failed to save Shopify credentials." });
     }
-    
-    setTesting(true);
-    setTestResult(null);
-    
-    try {
-      const res = await fetch('/api/whatsapp/test-message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: testPhone })
-      });
-      const data = await res.json();
-      
-      if (data.success) {
-        setTestResult({ success: true, text: "Test message sent successfully! Check your WhatsApp." });
-      } else {
-        setTestResult({ success: false, text: data.error || "Failed to send test message" });
-      }
-    } catch (error: any) {
-      setTestResult({ success: false, text: error.message || "Network error while testing" });
-    }
-    setTesting(false);
+    setSavingShopify(false);
   };
 
   return (
-    <div style={{ padding: "20px", maxWidth: "840px" }}>
-      {/* Alert Header */}
+    <div className="p-8 max-w-4xl mx-auto flex flex-col gap-8 w-full">
+      <div>
+        <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white mb-1">Integrations & API Settings</h1>
+        <p className="text-gray-500 dark:text-gray-400">Configure your Meta WhatsApp API credentials and external eCommerce platforms.</p>
+      </div>
+
       {!isConnected && (
-        <div style={{ background: "#fffbe5", border: "1px solid #fde047", color: "#854d0e", padding: "14px 18px", borderRadius: "10px", marginBottom: "20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <AlertTriangle size={20} color="#ca8a04" />
-            <div>
-              <strong style={{ fontSize: "14px", display: "block" }}>WhatsApp API Not Connected</strong>
-              <span style={{ fontSize: "12.5px" }}>Please enter your Meta WABA Account ID, Phone Number ID, and Permanent Access Token below to enable live messaging.</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {resultMsg && (
-        <div style={{ background: resultMsg.success ? "#dcfce7" : "#fee2e2", border: `1px solid ${resultMsg.success ? "#86efac" : "#fca5a5"}`, color: resultMsg.success ? "#166534" : "#991b1b", padding: "12px 16px", borderRadius: "8px", fontSize: "13.5px", fontWeight: 600, marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
-          {resultMsg.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-          <span>{resultMsg.text}</span>
-        </div>
-      )}
-
-      <div style={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "24px", boxShadow: "0 4px 14px rgba(0,0,0,0.03)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-5 rounded-2xl flex items-center gap-4 shadow-sm">
+          <div className="p-3 bg-amber-100 dark:bg-amber-500/20 rounded-full"><AlertTriangle size={24} className="text-amber-600 dark:text-amber-400" /></div>
           <div>
-            <h2 style={{ fontSize: "18px", fontWeight: 700, margin: 0, color: "#111827" }}>Meta WhatsApp Business API Credentials</h2>
-            <p style={{ fontSize: "13px", color: "#6b7280", margin: "2px 0 0 0" }}>Manage Meta Cloud API tokens, WABA IDs & Webhook Configuration.</p>
+            <h4 className="text-base font-bold text-amber-900 dark:text-amber-300 mb-0.5">WhatsApp API Not Connected</h4>
+            <p className="text-sm text-amber-700 dark:text-amber-500/80 m-0">Please enter your Meta WABA Account ID, Phone Number ID, and Access Token below to enable live messaging.</p>
           </div>
+        </div>
+      )}
 
-          <span style={{ fontSize: "12px", fontWeight: 700, background: isConnected ? "#dcfce7" : "#fee2e2", color: isConnected ? "#166534" : "#991b1b", padding: "4px 10px", borderRadius: "12px" }}>
-            ● {isConnected ? "API CONNECTED" : "NOT CONNECTED"}
+      {/* Meta WhatsApp Integration Card */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div className="border-b border-gray-100 dark:border-slate-700 p-6 flex justify-between items-center">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white m-0">WhatsApp Business API</h2>
+            <p className="text-sm text-gray-500 m-0 mt-1">Manage Meta Cloud API tokens and Webhook configuration.</p>
+          </div>
+          <span className={`px-3 py-1 text-xs font-bold rounded-full ${isConnected ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+            ● {isConnected ? "CONNECTED" : "NOT CONNECTED"}
           </span>
         </div>
 
-        <form onSubmit={handleSaveCredentials} autoComplete="off" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-            <div>
-              <label style={{ fontSize: "12.5px", fontWeight: 700, display: "block", marginBottom: "6px", color: "#374151" }}>
-                WhatsApp Phone Number <span style={{ color: "#ef4444" }}>*</span>
-              </label>
-              <input
-                type="text"
-                autoComplete="off"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder="e.g. +91 9876543210"
-                required
-                style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "13.5px" }}
-              />
+        <div className="p-6">
+          {resultMsg && (
+            <div className={`mb-6 p-4 rounded-xl text-sm font-semibold flex items-center gap-2 ${resultMsg.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+              {resultMsg.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+              <span>{resultMsg.text}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSaveCredentials} className="flex flex-col gap-5">
+            <div className="grid grid-cols-2 gap-5">
+              <div>
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">WhatsApp Phone Number <span className="text-red-500">*</span></label>
+                <input type="text" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="+91 9876543210" required className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Meta Phone Number ID <span className="text-red-500">*</span></label>
+                <input type="text" value={phoneId} onChange={(e) => setPhoneId(e.target.value)} placeholder="e.g. 10928374659201" required className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
             </div>
 
-            <div>
-              <label style={{ fontSize: "12.5px", fontWeight: 700, display: "block", marginBottom: "6px", color: "#374151" }}>
-                Meta Phone Number ID <span style={{ color: "#ef4444" }}>*</span>
-              </label>
-              <input
-                type="text"
-                autoComplete="off"
-                value={phoneId}
-                onChange={(e) => setPhoneId(e.target.value)}
-                placeholder="e.g. 10928374659201"
-                required
-                style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "13.5px" }}
-              />
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-            <div>
-              <label style={{ fontSize: "12.5px", fontWeight: 700, display: "block", marginBottom: "6px", color: "#374151" }}>
-                WhatsApp Business Account ID (WABA ID) <span style={{ color: "#ef4444" }}>*</span>
-              </label>
-              <input
-                type="text"
-                autoComplete="off"
-                value={wabaId}
-                onChange={(e) => setWabaId(e.target.value)}
-                placeholder="e.g. 991827364501"
-                required
-                style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "13.5px" }}
-              />
+            <div className="grid grid-cols-2 gap-5">
+              <div>
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">WABA ID <span className="text-red-500">*</span></label>
+                <input type="text" value={wabaId} onChange={(e) => setWabaId(e.target.value)} placeholder="e.g. 991827364501" required className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Permanent Access Token <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <input type={showToken ? "text" : "password"} value={token} onChange={(e) => setToken(e.target.value)} placeholder="EAAG..." required className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                  <button type="button" onClick={() => setShowToken(!showToken)} className="absolute right-3 top-3 text-gray-400 hover:text-gray-600">
+                    {showToken ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label style={{ fontSize: "12.5px", fontWeight: 700, display: "block", marginBottom: "6px", color: "#374151" }}>
-                Business Manager ID (Optional)
-              </label>
-              <input
-                type="text"
-                autoComplete="off"
-                value={managerId}
-                onChange={(e) => setManagerId(e.target.value)}
-                placeholder="e.g. 5544332211"
-                style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "13.5px" }}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label style={{ fontSize: "12.5px", fontWeight: 700, display: "block", marginBottom: "6px", color: "#374151" }}>
-              Permanent Meta System User Access Token <span style={{ color: "#ef4444" }}>*</span>
-            </label>
-            <div style={{ position: "relative" }}>
-              <input
-                type={showToken ? "text" : "password"}
-                autoComplete="new-password"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                placeholder="Paste Meta Permanent Token starting with EAAG..."
-                required
-                style={{ width: "100%", padding: "10px 40px 10px 10px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "13.5px" }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowToken(!showToken)}
-                style={{ position: "absolute", right: "10px", top: "10px", background: "none", border: "none", color: "#6b7280", cursor: "pointer" }}
-              >
-                {showToken ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
-
-          <div style={{ background: "#f8fafc", padding: "16px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-            <h4 style={{ fontSize: "13px", fontWeight: 700, margin: "0 0 6px 0", color: "#0f172a" }}>Meta Webhook Endpoint Information</h4>
-            <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 8px 0" }}>Configure this Callback URL inside your Meta Developer Dashboard under WhatsApp API Webhooks:</p>
-            <div style={{ background: "#ffffff", padding: "8px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", marginBottom: "8px" }}>
-              <code style={{ fontSize: "12px", color: "#0f172a", fontWeight: 600 }}>
+            <div className="bg-indigo-50/50 dark:bg-indigo-500/5 p-4 rounded-xl border border-indigo-100 dark:border-indigo-500/20">
+              <h4 className="text-sm font-bold text-indigo-900 dark:text-indigo-300 mb-2">Webhook Configuration</h4>
+              <p className="text-xs text-indigo-700 dark:text-indigo-400/80 mb-3">Set this callback URL in your Meta App Dashboard:</p>
+              <code className="block w-full p-3 bg-white dark:bg-slate-900 rounded-lg border border-indigo-200 dark:border-indigo-500/30 text-xs font-mono font-semibold text-gray-800 dark:text-gray-200 mb-2">
                 {typeof window !== "undefined" ? `${window.location.origin}/api/whatsapp/webhook` : "https://your-domain.com/api/whatsapp/webhook"}
               </code>
+              <p className="text-xs text-indigo-700 dark:text-indigo-400/80">Verify Token: <strong className="text-indigo-900 dark:text-indigo-300">{webhookToken}</strong></p>
             </div>
-            <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
-              Verify Token: <strong>{webhookToken}</strong>
-            </p>
-          </div>
 
-          <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
-            <button
-              type="submit"
-              disabled={saving}
-              style={{ display: "flex", alignItems: "center", gap: "6px", background: "#10b981", color: "#fff", border: "none", padding: "10px 20px", borderRadius: "6px", fontSize: "13.5px", fontWeight: 700, cursor: "pointer" }}
-            >
-              {saving ? <RefreshCw size={16} className="spin-icon" /> : <Save size={16} />}
-              <span>{saving ? "Testing & Connecting..." : "Test & Save API Credentials"}</span>
-            </button>
-          </div>
-        </form>
+            <div>
+              <button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-xl text-sm font-bold shadow-md transition-all">
+                {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
+                {saving ? "Saving..." : "Save Meta Credentials"}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
 
-      <div style={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "24px", marginTop: "24px", boxShadow: "0 4px 14px rgba(0,0,0,0.03)" }}>
-        <h2 style={{ fontSize: "18px", fontWeight: 700, margin: "0 0 4px 0", color: "#111827" }}>Meta WhatsApp Phone Registration</h2>
-        <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 20px 0" }}>Register your business phone number with Meta API. Make sure your Phone ID, WABA ID, and Access Token are filled above. Requires a 6-digit PIN.</p>
-
-        {regResult && (
-          <div style={{ background: regResult.success ? "#dcfce7" : "#fee2e2", border: `1px solid ${regResult.success ? "#86efac" : "#fca5a5"}`, color: regResult.success ? "#166534" : "#991b1b", padding: "12px 16px", borderRadius: "8px", fontSize: "13.5px", fontWeight: 600, marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
-            {regResult.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-            <span>{regResult.text}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleRegisterPhone} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      {/* Shopify Integration Card */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden mt-2">
+        <div className="border-b border-gray-100 dark:border-slate-700 p-6 flex items-center gap-3">
+          <div className="p-2 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg"><Store size={20} /></div>
           <div>
-            <label style={{ fontSize: "12.5px", fontWeight: 700, display: "block", marginBottom: "6px", color: "#374151" }}>
-              6-Digit Registration PIN <span style={{ color: "#ef4444" }}>*</span>
-            </label>
-            <input
-              type="password"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              placeholder="e.g. 123456"
-              required
-              maxLength={6}
-              pattern="\d{6}"
-              style={{ width: "100%", maxWidth: "300px", padding: "10px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "13.5px" }}
-            />
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white m-0">Shopify Integration</h2>
+            <p className="text-sm text-gray-500 m-0 mt-0.5">Sync your Shopify catalog directly into Whatmore.</p>
           </div>
+        </div>
 
-          <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
-            <button
-              type="submit"
-              disabled={registering}
-              style={{ display: "flex", alignItems: "center", gap: "6px", background: registering ? "#9ca3af" : "#2563eb", color: "#fff", border: "none", padding: "10px 20px", borderRadius: "6px", fontSize: "13.5px", fontWeight: 700, cursor: registering ? "not-allowed" : "pointer" }}
-            >
-              {registering ? <RefreshCw size={16} className="spin-icon" /> : <Send size={16} />}
-              <span>{registering ? "Registering with Meta..." : "Register Phone Number"}</span>
-            </button>
-          </div>
-        </form>
-      </div>
+        <div className="p-6">
+          {shopifyResultMsg && (
+            <div className={`mb-6 p-4 rounded-xl text-sm font-semibold flex items-center gap-2 ${shopifyResultMsg.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+              {shopifyResultMsg.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+              <span>{shopifyResultMsg.text}</span>
+            </div>
+          )}
 
-      <div style={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "24px", marginTop: "24px", boxShadow: "0 4px 14px rgba(0,0,0,0.03)" }}>
-        <h2 style={{ fontSize: "18px", fontWeight: 700, margin: "0 0 4px 0", color: "#111827" }}>Test API Connection</h2>
-        <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 20px 0" }}>Send a <code>hello_world</code> template message to verify your Meta API connection is working.</p>
+          <form onSubmit={handleSaveShopifyCredentials} className="flex flex-col gap-5">
+            <div className="grid grid-cols-2 gap-5">
+              <div>
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Shopify Store Domain</label>
+                <input type="text" value={shopifyDomain} onChange={(e) => setShopifyDomain(e.target.value)} placeholder="e.g. mystore.myshopify.com" className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                <p className="text-xs text-gray-400 mt-1">Leave blank to use the manual Catalog Maker.</p>
+              </div>
+              <div>
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Admin API Access Token</label>
+                <div className="relative">
+                  <input type={showShopifyToken ? "text" : "password"} value={shopifyToken} onChange={(e) => setShopifyToken(e.target.value)} placeholder="shpat_..." className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                  <button type="button" onClick={() => setShowShopifyToken(!showShopifyToken)} className="absolute right-3 top-3 text-gray-400 hover:text-gray-600">
+                    {showShopifyToken ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+            </div>
 
-        {testResult && (
-          <div style={{ background: testResult.success ? "#dcfce7" : "#fee2e2", border: `1px solid ${testResult.success ? "#86efac" : "#fca5a5"}`, color: testResult.success ? "#166534" : "#991b1b", padding: "12px 16px", borderRadius: "8px", fontSize: "13.5px", fontWeight: 600, marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
-            {testResult.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-            <span>{testResult.text}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleTestMessage} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div>
-            <label style={{ fontSize: "12.5px", fontWeight: 700, display: "block", marginBottom: "6px", color: "#374151" }}>
-              Test Phone Number (with Country Code)
-            </label>
-            <input
-              type="text"
-              value={testPhone}
-              onChange={(e) => setTestPhone(e.target.value)}
-              placeholder="e.g. 919876543210"
-              required
-              style={{ width: "100%", maxWidth: "300px", padding: "10px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "13.5px" }}
-            />
-          </div>
-
-          <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
-            <button
-              type="submit"
-              disabled={testing || !isConnected}
-              style={{ display: "flex", alignItems: "center", gap: "6px", background: testing || !isConnected ? "#9ca3af" : "#f59e0b", color: "#fff", border: "none", padding: "10px 20px", borderRadius: "6px", fontSize: "13.5px", fontWeight: 700, cursor: testing || !isConnected ? "not-allowed" : "pointer" }}
-            >
-              {testing ? <RefreshCw size={16} className="spin-icon" /> : <Send size={16} />}
-              <span>{testing ? "Sending..." : "Send hello_world Template"}</span>
-            </button>
-          </div>
-        </form>
+            <div>
+              <button type="submit" disabled={savingShopify} className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 text-white rounded-xl text-sm font-bold shadow-md transition-all">
+                {savingShopify ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
+                {savingShopify ? "Connecting..." : "Connect Shopify Store"}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

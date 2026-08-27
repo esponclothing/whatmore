@@ -686,6 +686,12 @@ model CompanySettings {
   nextQuotationNumber String? @default("QT-1001")
   nextInvoiceNumber   String? @default("INV-1001")
 
+  shopifyStoreDomain  String?
+  shopifyAccessToken  String?
+
+  shopifyStoreDomain  String?
+  shopifyAccessToken  String?
+
   updatedAt       DateTime @updatedAt
 }
 
@@ -1863,3 +1869,4 @@ model WhatsAppLegacyScheduledMessage {
   status          String   @default("pending") // pending, sent, failed
   createdAt       DateTime @default(now())
 }
+
