@@ -8,28 +8,60 @@ const SHOPIFY_ACCESS_TOKEN = process.env.VITE_SHOPIFY_ACCESS_TOKEN || '';
 const GROQ_API_KEY = process.env.VITE_GROQ_API_KEY || '';
 
 // Mock AI call (You can use @google/genai or fetch in real app)
-async function callAIEngine(messages: any[], model: string, jsonMode = false, maxTokens = 600) {
-  const apiKey = process.env.GROQ_API_KEY || GROQ_API_KEY;
-  if (!apiKey) throw new Error("GROQ_API_KEY is not set");
-  
-  const payload: any = {
-    model: model === 'gpt-4o' ? 'llama-3.3-70b-versatile' : model,
-    messages,
-    temperature: 0.4,
-    max_tokens: maxTokens,
+
+
+const GEMINI_MODEL_CASCADE = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'];
+
+async function callGeminiRest(apiKey, modelName, prompt, systemPrompt, maxTokens = 600) {
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
+  const body = {
+    system_instruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 }
   };
-  if (jsonMode) payload.response_format = { type: "json_object" };
-  
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
   });
-  const data = await res.json();
-  if (data?.choices?.[0]?.message?.content) {
-    return data.choices[0].message.content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || 'Gemini API error ' + res.status);
   }
-  throw new Error('AI Model failed');
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Empty response from Gemini');
+  return text.trim();
+}
+
+async function callAIEngine(messages, preferredModel, jsonMode = false, maxTokens = 600) {
+  let apiKey = process.env.GEMINI_API_KEY || '';
+  try {
+    const settings = await prisma.whatsAppSettings.findFirst();
+    if (settings?.geminiApiKey) apiKey = settings.geminiApiKey;
+  } catch (_) {}
+
+
+
+  const systemMsg = messages.find(m => m.role === 'system')?.content || '';
+  const userMsgs = messages.filter(m => m.role !== 'system').map(m => (m.role === 'user' ? 'Customer: ' : 'Agent: ') + m.content).join('\n');
+
+  const cascade = [
+    preferredModel === 'llama-3.3-70b-versatile' || preferredModel === 'llama-3.1-8b-instant' ? 'gemini-3.6-flash' : preferredModel,
+    ...GEMINI_MODEL_CASCADE.filter(m => m !== preferredModel)
+  ];
+
+  let lastError = '';
+  for (const model of cascade) {
+    try {
+      console.log('[AI] Querying Gemini model:', model);
+      return await callGeminiRest(apiKey, model, userMsgs, systemMsg, maxTokens);
+    } catch (err) {
+      lastError = err.message;
+      console.warn('[AI] Model failed (' + model + '):', err.message);
+    }
+  }
+  throw new Error('All Gemini cascade models failed. Last error: ' + lastError);
 }
 
 export async function lookupOrder(orderNumber: string, senderPhone = '', userText = '', history = '') {
@@ -351,7 +383,7 @@ ${userText}`;
     }
     
     // Background Tagging Task
-    callAIEngine([{ role: 'system', content: 'Output exactly one tag describing the customer intent: [VIP, Angry, Inquiry, Looking to Buy]' }, { role: 'user', content: userText }], "llama-3.1-8b-instant", false, 15)
+    callAIEngine([{ role: 'system', content: 'Output exactly one tag describing the customer intent: [VIP, Angry, Inquiry, Looking to Buy]' }, { role: 'user', content: userText }], preferredModel, false, 15)
       .then(async tag => {
         // Tagging logic can be attached to Customer or Conversation 
       }).catch(()=>{});
@@ -362,4 +394,5 @@ ${userText}`;
     return null;
   }
 }
+
 

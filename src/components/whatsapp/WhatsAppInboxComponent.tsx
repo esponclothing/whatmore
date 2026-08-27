@@ -81,8 +81,8 @@ const EMOJI_LIST = ["👍", "🙏", "✅", "📦", "📄", "💰", "📞", "❤�
 export default function WhatsAppInboxComponent() {
   const { conversations, setConversations, activeConvDetail, setActiveConvDetail } = useWhatsAppStore();
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
-  const [loadingConvs, setLoadingConvs] = useState<boolean>(conversations.length === 0);
-  const [loadingDetail, setLoadingDetail] = useState<boolean>(activeConvDetail === null);
+  const [loadingConvs, setLoadingConvs] = useState<boolean>(true);
+  const [loadingDetail, setLoadingDetail] = useState<boolean>(false);
 
 
   // Full Screen & Sidebar Collapse States
@@ -1663,6 +1663,10 @@ export default function WhatsAppInboxComponent() {
 function LockIcon({ size }: { size: number }) {
   return <ShieldCheck size={size} color="#f59e0b" />;
 }
+
+
+
+
 
 
 

@@ -47,13 +47,19 @@ export default function WhatsAppLogsComponent() {
         const logs = (data.executions || []).map((e: any) => ({
           id: e.id,
           phone: e.phone,
-          userMessage: e.user_message,
-          aiReply: e.ai_reply,
-          toolsCalled: e.tools_called,
+          userMessage: e.user_message || e.userMessage,
+          aiReply: e.ai_reply || e.aiReply,
+          toolsCalled: e.tools_called || e.toolsCalled || 'ai_reply',
           status: e.status,
-          errorMessage: e.error_message,
-          durationMs: e.duration_ms,
-          createdAt: e.created_at,
+          errorMessage: e.error_message || e.errorMessage,
+          durationMs: e.duration_ms ?? e.durationMs ?? 0,
+          createdAt: e.created_at || e.createdAt,
+          // UI-expected fields (aliases)
+          timestamp: e.created_at || e.createdAt,
+          customerPhone: e.phone,
+          inboundMessage: e.user_message || e.userMessage,
+          actionTaken: e.tools_called || e.toolsCalled || 'ai_reply',
+          processingTimeMs: e.duration_ms ?? e.durationMs ?? 0,
         }));
         setAiLogs(logs);
         setAiLogStats({
@@ -67,7 +73,16 @@ export default function WhatsAppLogsComponent() {
         // Fallback to server action
         const fallback = await getWhatsAppAILogsAction(logsSearch, logsStatusFilter);
         if (fallback.success) {
-          setAiLogs(fallback.logs || []);
+          const mappedFallback = (fallback.logs || []).map((e: any) => ({
+            ...e,
+            // UI aliases
+            timestamp: e.createdAt,
+            customerPhone: e.phone,
+            inboundMessage: e.userMessage,
+            actionTaken: e.toolsCalled || 'ai_reply',
+            processingTimeMs: e.durationMs ?? 0,
+          }));
+          setAiLogs(mappedFallback);
           setAiLogStats(fallback.stats || { total: 0, success: 0, error: 0, manual: 0, avgDuration: 0 });
         }
       }
@@ -121,7 +136,7 @@ export default function WhatsAppLogsComponent() {
           <div className="logs-panel-title-row">
             <Terminal size={18} className="logs-icon" />
             <h2 className="logs-title">WhatsApp Logs</h2>
-            <span className="logs-number-badge">+91 7404388242</span>
+            <span className="logs-number-badge">Live Monitoring</span>
           </div>
           <div className="logs-subtab-pills">
             <button
@@ -340,4 +355,7 @@ export default function WhatsAppLogsComponent() {
     </div>
   );
 }
+
+
+
 

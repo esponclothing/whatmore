@@ -39,3 +39,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+src/components/whatsapp/LegacyInboxComponent.tsx
+
+extracted_inbox.jsx
+*.js
+# ignore scratch scripts
+add_webhook_log.js
+extract.js
+fix_*.js
+update_*.js

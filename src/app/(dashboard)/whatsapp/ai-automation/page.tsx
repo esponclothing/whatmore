@@ -1,17 +1,19 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Bot, Save, Sparkles, AlertCircle, Database, Book, Globe, Settings2, Cpu } from "lucide-react";
+import { Bot, Save, Sparkles, AlertCircle, Database, Globe, Settings2, Cpu, KeyRound, CheckCircle2 } from "lucide-react";
 
 export default function WhatsAppAIAutomationPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [settings, setSettings] = useState({
-    aiModel: "gemini-1.5-flash",
+    aiModel: "gemini-3.6-flash",
     aiFallbackLanguage: "English",
     aiSystemPrompt: "You are a helpful and polite customer service assistant.",
     aiKnowledgeBase: "",
-    aiConfidenceThreshold: 85
+    aiConfidenceThreshold: 85,
+    geminiApiKey: ""
   });
 
   const [testMessage, setTestMessage] = useState("");
@@ -46,7 +48,8 @@ export default function WhatsAppAIAutomationPage() {
       });
       const data = await res.json();
       if (data.success) {
-        alert("Settings saved successfully!");
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
       } else {
         alert("Failed to save: " + data.error);
       }
@@ -57,18 +60,23 @@ export default function WhatsAppAIAutomationPage() {
     }
   };
 
-  // Mock test function since we don't have a specific conversation ID for testing
   const testAiPrompt = async () => {
     if (!testMessage.trim()) return;
     setTesting(true);
     setTestResponse("");
     try {
-      // In a real app, you'd send this to a dedicated /test-ai route
-      // Here we just mock the latency and show a notice.
-      setTimeout(() => {
-        setTestResponse(`[Testing Mode] Using ${settings.aiModel}. Assuming the knowledge base rules were applied to: "${testMessage}"`);
-        setTesting(false);
-      }, 1000);
+      const testRes = await fetch('/api/whatsapp/test-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: testMessage, model: settings.aiModel })
+      }).catch(() => null);
+      if (testRes?.ok) {
+        const d = await testRes.json();
+        setTestResponse(d.reply || "[No reply returned from " + settings.aiModel + "]");
+      } else {
+        setTestResponse("[Simulator] Model: " + settings.aiModel + " - Knowledge base and system rules would apply to: " + testMessage);
+      }
+      setTesting(false);
     } catch (error) {
       setTestResponse("Error testing AI.");
       setTesting(false);
@@ -78,6 +86,8 @@ export default function WhatsAppAIAutomationPage() {
   if (loading) {
     return <div style={{ padding: "40px", textAlign: "center" }}>Loading AI Settings...</div>;
   }
+
+  const hasApiKey = !!settings.geminiApiKey;
 
   return (
     <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "24px 32px", fontFamily: "Inter, sans-serif" }}>
@@ -90,32 +100,39 @@ export default function WhatsAppAIAutomationPage() {
           </h1>
           <p style={{ color: "#6b7280", margin: "4px 0 0 0", fontSize: "14px" }}>Manage how Google Gemini interacts with your customers via WhatsApp.</p>
         </div>
-        <button 
-          onClick={saveSettings}
-          disabled={saving}
-          style={{ 
-            background: saving ? "#9ca3af" : "#111827", 
-            color: "white", 
-            border: "none", 
-            padding: "8px 16px", 
-            borderRadius: "8px", 
-            fontWeight: 600,
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            cursor: saving ? "not-allowed" : "pointer",
-            transition: "all 0.2s"
-          }}
-        >
-          <Save size={16} />
-          {saving ? "Saving..." : "Save Settings"}
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          {saveSuccess && (
+            <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "#16a34a", fontWeight: 600, fontSize: "14px" }}>
+              <CheckCircle2 size={16} /> Saved!
+            </span>
+          )}
+          <button
+            onClick={saveSettings}
+            disabled={saving}
+            style={{
+              background: saving ? "#9ca3af" : "#111827",
+              color: "white",
+              border: "none",
+              padding: "8px 20px",
+              borderRadius: "8px",
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              cursor: saving ? "not-allowed" : "pointer",
+              fontSize: "14px"
+            }}
+          >
+            <Save size={16} />
+            {saving ? "Saving..." : "Save Settings"}
+          </button>
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "24px" }}>
         {/* Main Editor Section */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          
+
           {/* Card: Knowledge Base */}
           <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "24px", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
             <h2 style={{ fontSize: "16px", fontWeight: 600, margin: "0 0 4px 0", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -124,20 +141,47 @@ export default function WhatsAppAIAutomationPage() {
             <p style={{ color: "#6b7280", fontSize: "13px", marginBottom: "16px" }}>
               Provide facts, pricing, policies, and FAQs. The AI will strictly use this information to answer customer queries.
             </p>
-            <textarea 
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <span style={{ fontSize: "13px", color: "#374151", fontWeight: 500 }}>Content</span>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <label style={{ cursor: "pointer", background: "#f3f4f6", padding: "5px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, color: "#4b5563", border: "1px solid #e5e7eb", display: "flex", alignItems: "center", gap: "5px" }}>
+                  Upload PDF
+                  <input type="file" accept="application/pdf" style={{ display: "none" }} onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    try {
+                      const res = await fetch("/api/whatsapp/upload-pdf", { method: "POST", body: formData });
+                      const data = await res.json();
+                      if (data.success) {
+                        setSettings({ ...settings, aiKnowledgeBase: data.newKnowledgeBase });
+                        alert("PDF processed and added to Knowledge Base!");
+                      } else { alert("Error: " + data.error); }
+                    } catch { alert("Upload failed"); }
+                  }} />
+                </label>
+                <button onClick={async () => {
+                  const url = prompt("Enter Website URL to scrape:");
+                  if (!url) return;
+                  try {
+                    const res = await fetch("/api/whatsapp/scrape-url", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) });
+                    const data = await res.json();
+                    if (data.success) {
+                      setSettings({ ...settings, aiKnowledgeBase: data.newKnowledgeBase });
+                      alert("Website scraped and added to Knowledge Base!");
+                    } else { alert("Error: " + data.error); }
+                  } catch { alert("Scrape failed"); }
+                }} style={{ cursor: "pointer", background: "#f3f4f6", padding: "5px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, color: "#4b5563", border: "1px solid #e5e7eb" }}>
+                  Scrape URL
+                </button>
+              </div>
+            </div>
+            <textarea
               value={settings.aiKnowledgeBase}
               onChange={(e) => setSettings({...settings, aiKnowledgeBase: e.target.value})}
-              placeholder="e.g. Our return policy is 30 days. We offer free shipping on orders over $50..."
-              style={{ 
-                width: "100%", 
-                minHeight: "240px", 
-                padding: "12px", 
-                border: "1px solid #d1d5db", 
-                borderRadius: "8px",
-                fontFamily: "monospace",
-                fontSize: "13px",
-                resize: "vertical"
-              }}
+              placeholder="e.g. Our return policy is 30 days. We offer free shipping on orders over Rs.500..."
+              style={{ width: "100%", minHeight: "240px", padding: "12px", border: "1px solid #d1d5db", borderRadius: "8px", fontFamily: "monospace", fontSize: "13px", resize: "vertical" }}
             />
           </div>
 
@@ -149,20 +193,11 @@ export default function WhatsAppAIAutomationPage() {
             <p style={{ color: "#6b7280", fontSize: "13px", marginBottom: "16px" }}>
               Define how the AI should behave, its tone of voice, and strict rules it must follow.
             </p>
-            <textarea 
+            <textarea
               value={settings.aiSystemPrompt}
               onChange={(e) => setSettings({...settings, aiSystemPrompt: e.target.value})}
-              placeholder="e.g. You are Alex, a friendly sales rep. Keep answers under 2 sentences. Use emojis."
-              style={{ 
-                width: "100%", 
-                minHeight: "120px", 
-                padding: "12px", 
-                border: "1px solid #d1d5db", 
-                borderRadius: "8px",
-                fontFamily: "monospace",
-                fontSize: "13px",
-                resize: "vertical"
-              }}
+              placeholder="e.g. You are Alex, a friendly sales rep. Keep answers under 2 sentences."
+              style={{ width: "100%", minHeight: "120px", padding: "12px", border: "1px solid #d1d5db", borderRadius: "8px", fontFamily: "monospace", fontSize: "13px", resize: "vertical" }}
             />
           </div>
 
@@ -170,47 +205,65 @@ export default function WhatsAppAIAutomationPage() {
 
         {/* Sidebar Configuration Section */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          
+
           {/* Card: Model Settings */}
           <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "20px", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
             <h2 style={{ fontSize: "15px", fontWeight: 600, margin: "0 0 16px 0", display: "flex", alignItems: "center", gap: "8px" }}>
               <Cpu size={18} color="#8b5cf6" /> Model Configuration
             </h2>
-            
+
+            {/* Gemini API Key */}
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", fontWeight: 500, marginBottom: "6px" }}>
+                <KeyRound size={13} color="#6d28d9" /> Gemini API Key
+              </label>
+              <input
+                type="password"
+                value={settings.geminiApiKey || ''}
+                onChange={(e) => setSettings({...settings, geminiApiKey: e.target.value})}
+                placeholder="AIza..."
+                style={{ width: "100%", padding: "8px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "13px", fontFamily: "monospace" }}
+              />
+              <p style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
+                Get from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" style={{ color: "#6d28d9" }}>Google AI Studio</a>
+              </p>
+            </div>
+
+            {/* Model Dropdown */}
             <div style={{ marginBottom: "16px" }}>
               <label style={{ display: "block", fontSize: "13px", fontWeight: 500, marginBottom: "6px" }}>Gemini AI Model</label>
-              <select 
-                value={settings.aiModel}
+              <select
+                value={settings.aiModel || 'gemini-3.6-flash'}
                 onChange={(e) => setSettings({...settings, aiModel: e.target.value})}
                 style={{ width: "100%", padding: "8px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "14px" }}
               >
-                <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
-                <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
-                <option value="gemini-3.1-pro">Gemini 3.1 Pro</option>
-                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                <option value="gemini-3.6-flash">Gemini 3.6 Flash (Primary - Fastest)</option>
+                <option value="gemini-3.5-flash">Gemini 3.5 Flash (Fallback 1)</option>
+                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Fallback 2)</option>
               </select>
+              <p style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
+                AI tries in order: 3.6 Flash then 3.5 Flash then 3.1 Pro if rate limited.
+              </p>
             </div>
 
             <div style={{ marginBottom: "16px" }}>
               <label style={{ fontSize: "13px", fontWeight: 500, marginBottom: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
                 <Globe size={14} /> Fallback Language
               </label>
-              <input 
+              <input
                 type="text"
                 value={settings.aiFallbackLanguage}
                 onChange={(e) => setSettings({...settings, aiFallbackLanguage: e.target.value})}
                 placeholder="e.g. English, Hindi"
                 style={{ width: "100%", padding: "8px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "14px" }}
               />
-              <p style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>Language to use if user intent is unclear.</p>
             </div>
 
             <div>
               <label style={{ display: "block", fontSize: "13px", fontWeight: 500, marginBottom: "6px" }}>
                 Confidence Threshold: {settings.aiConfidenceThreshold}%
               </label>
-              <input 
+              <input
                 type="range"
                 min="50" max="99"
                 value={settings.aiConfidenceThreshold}
@@ -225,13 +278,13 @@ export default function WhatsAppAIAutomationPage() {
             <h2 style={{ fontSize: "15px", fontWeight: 600, margin: "0 0 12px 0", display: "flex", alignItems: "center", gap: "8px" }}>
               <Sparkles size={18} color="#f59e0b" /> Simulator
             </h2>
-            <textarea 
+            <textarea
               value={testMessage}
               onChange={(e) => setTestMessage(e.target.value)}
               placeholder="Simulate a customer message here..."
               style={{ width: "100%", minHeight: "80px", padding: "8px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "13px", marginBottom: "8px" }}
             />
-            <button 
+            <button
               onClick={testAiPrompt}
               disabled={testing || !testMessage.trim()}
               style={{ width: "100%", padding: "8px", background: "white", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
@@ -246,11 +299,17 @@ export default function WhatsAppAIAutomationPage() {
             )}
           </div>
 
-          {/* Setup Warning */}
-          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "12px", padding: "16px", display: "flex", gap: "12px" }}>
-            <AlertCircle size={20} color="#ef4444" style={{ flexShrink: 0 }} />
-            <div style={{ fontSize: "12.5px", color: "#991b1b" }}>
-              <strong>API Key Required:</strong> Ensure that <code style={{ background: "#fee2e2", padding: "2px 4px", borderRadius: "4px" }}>GEMINI_API_KEY</code> is set in your Vercel Environment Variables.
+          {/* Dynamic Status Card */}
+          <div style={{ background: hasApiKey ? "#f0fdf4" : "#fffbeb", border: "1px solid " + (hasApiKey ? "#bbf7d0" : "#fde68a"), borderRadius: "12px", padding: "16px", display: "flex", gap: "12px" }}>
+            {hasApiKey
+              ? <CheckCircle2 size={20} color="#16a34a" style={{ flexShrink: 0 }} />
+              : <AlertCircle size={20} color="#d97706" style={{ flexShrink: 0 }} />
+            }
+            <div style={{ fontSize: "12.5px", color: hasApiKey ? "#166534" : "#92400e" }}>
+              {hasApiKey
+                ? <><strong>Gemini API Key Set!</strong> AI is ready to auto-reply using {settings.aiModel}.</>
+                : <><strong>API Key Required:</strong> Enter your Gemini API Key above and click Save Settings.</>
+              }
             </div>
           </div>
 
@@ -259,5 +318,3 @@ export default function WhatsAppAIAutomationPage() {
     </div>
   );
 }
-
-
