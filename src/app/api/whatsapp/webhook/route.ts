@@ -72,10 +72,7 @@ export async function POST(req: NextRequest) {
       
       // Ensure we only process messages for our specific CRM phone number (7404388242)
       // because Meta Webhook sends events for ALL numbers attached to the Meta App.
-      if (metadata && metadata.display_phone_number !== '917404388242') {
-        console.log(`[WhatsApp Webhook] Ignored message for other number: ${metadata.display_phone_number}`);
-        return NextResponse.json({ status: "ignored - different phone number" });
-      }
+      // Phone filter removed
 
       const msg = value.messages[0];
 
