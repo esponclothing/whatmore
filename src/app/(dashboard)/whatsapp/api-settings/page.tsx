@@ -81,9 +81,8 @@ export default function WhatsAppAPISettingsPage() {
       getWhatsAppApiCredentialsAction(),
       getShopifyCredentialsAction(),
       getWhatsAppSettingsAction(),
-      getTeamMembersAction(),
-      getCRMCustomersAction()
-    ]).then(([resWA, resShopify, resSettings, resTeam, resCRM]) => {
+      getTeamMembersAction()
+    ]).then(([resWA, resShopify, resSettings, resTeam]) => {
       if (resWA.success && resWA.credentials) {
         setWabaId(resWA.credentials.businessAccountId || "");
         setPhoneId(resWA.credentials.phoneId || "");
@@ -110,9 +109,11 @@ export default function WhatsAppAPISettingsPage() {
       if (resTeam.success && resTeam.employees) {
         setTeamMembers(resTeam.employees);
       }
-      if (resCRM.success && resCRM.customers) {
-        setCrmContacts(resCRM.customers);
-      }
+      
+      // Load client status & SaaS agents
+      fetch('/api/whatsapp/client-status').then(r => r.json()).then(d => setClientInfo(d)).catch(() => {});
+      fetch('/api/owner/agents').then(r => r.json()).then(d => { if (d.agents) setAgents(d.agents); }).catch(() => {});
+
       setLoading(false);
     });
   };
