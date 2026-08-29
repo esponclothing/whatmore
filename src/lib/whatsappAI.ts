@@ -10,7 +10,7 @@ const GROQ_API_KEY = process.env.VITE_GROQ_API_KEY || '';
 // Mock AI call (You can use @google/genai or fetch in real app)
 
 
-const GEMINI_MODEL_CASCADE = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.5-pro', 'gemini-1.5-pro'];
+const GEMINI_MODEL_CASCADE = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-2.5-flash', 'gemini-1.5-flash'];
 
 async function callGeminiRest(apiKey, modelName, prompt, systemPrompt, maxTokens = 600) {
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
@@ -47,7 +47,7 @@ async function callAIEngine(messages, preferredModel, jsonMode = false, maxToken
   const userMsgs = messages.filter(m => m.role !== 'system').map(m => (m.role === 'user' ? 'Customer: ' : 'Agent: ') + m.content).join('\n');
 
   const cascade = [
-    (preferredModel === 'llama-3.3-70b-versatile' || preferredModel === 'llama-3.1-8b-instant' || preferredModel.startsWith('gemini-3.')) ? 'gemini-2.5-flash' : preferredModel,
+    preferredModel,
     ...GEMINI_MODEL_CASCADE.filter(m => m !== preferredModel)
   ];
 

@@ -510,10 +510,9 @@ export default function WhatsAppAPISettingsPage() {
                 onChange={(e) => setActiveModel(e.target.value)} 
                 className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
               >
-                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fastest, recommended)</option>
-                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                <option value="gemini-2.5-pro">Gemini 2.5 Pro (Highly Intelligent)</option>
-                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                <option value="gemini-3.6-flash">Gemini 3.6 Flash (Primary - Fastest)</option>
+                <option value="gemini-3.5-flash">Gemini 3.5 Flash (Fallback 1)</option>
+                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Fallback 2)</option>
               </select>
             </div>
 
