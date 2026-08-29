@@ -19,6 +19,7 @@ export default function ProductsCommercePage() {
   const [products, setProducts] = useState(MOCK_PRODUCTS);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedCollection, setSelectedCollection] = useState("all");
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   
   // Shopify Integration State
   const [isShopifyConnected, setIsShopifyConnected] = useState(false);
@@ -36,6 +37,27 @@ export default function ProductsCommercePage() {
       await fetchProducts();
     } else {
       alert("Failed to update visibility: " + res.error);
+    }
+  };
+
+  const handleToggleAllVisibility = async (variantsList: any[]) => {
+    if (variantsList.length === 0) return;
+    const anyActive = variantsList.some(v => v.status === "Active");
+    const currentMode = anyActive ? "Active" : "Inactive";
+    
+    for (const v of variantsList) {
+      if (v.dbId) {
+        await toggleProductVisibilityAction(v.dbId, currentMode);
+      }
+    }
+    await fetchProducts();
+  };
+
+  const toggleGroup = (baseName: string) => {
+    if (expandedGroups.includes(baseName)) {
+      setExpandedGroups(expandedGroups.filter(g => g !== baseName));
+    } else {
+      setExpandedGroups([...expandedGroups, baseName]);
     }
   };
 
@@ -127,8 +149,39 @@ export default function ProductsCommercePage() {
     return matchesSearch && matchesCollection;
   });
 
+  // Group products by base name
+  const groupedProducts: {
+    baseName: string;
+    image: string;
+    collection: string;
+    description: string;
+    variants: any[];
+  }[] = [];
+
+  filteredProducts.forEach(p => {
+    const parts = p.name.split(' - ');
+    const baseName = parts[0];
+    const variantTitle = parts.slice(1).join(' - ');
+
+    let group = groupedProducts.find(g => g.baseName === baseName);
+    if (!group) {
+      group = {
+        baseName,
+        image: p.image,
+        collection: p.collection,
+        description: p.description,
+        variants: []
+      };
+      groupedProducts.push(group);
+    }
+    group.variants.push({
+      ...p,
+      variantTitle: variantTitle || "Default Variant"
+    });
+  });
+
   return (
-    <div className="p-8 max-w-[1400px] mx-auto flex flex-col gap-8 w-full">
+    <div className="p-8 w-full max-w-none flex flex-col gap-6">
       <div className="flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white mb-1">Products & Pricing</h1>
@@ -219,118 +272,173 @@ export default function ProductsCommercePage() {
                 <th className="px-6 py-4 text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-              {filteredProducts.map((p) => (
-                <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors group">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gray-100 dark:bg-slate-700 rounded-lg flex items-center justify-center overflow-hidden border border-gray-200 dark:border-slate-700">
-                        {p.image ? (
-                          <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <Store size={20} className="text-gray-400" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-bold text-gray-900 dark:text-white">{p.name}</p>
-                        <div className="flex items-center gap-2 mt-0.5" style={{ flexWrap: "wrap" }}>
-                          <span className="text-xs text-gray-500 font-mono">SKU: {p.sku || "N/A"}</span>
-                          {p.description && (
-                            <span 
-                              className="text-xs text-gray-400 max-w-[250px] truncate" 
-                              title={p.description.replace(/<[^>]*>/g, '').trim()}
-                              style={{ display: "inline-block", borderLeft: "1px solid #e2e8f0", paddingLeft: "8px" }}
-                            >
-                              {p.description.replace(/<[^>]*>/g, '').trim()}
-                            </span>
-                          )}
+            <tbody className="divide-y divide-gray-200 dark:divide-slate-700 bg-white dark:bg-slate-900">
+              {groupedProducts.map((group) => {
+                const isExpanded = expandedGroups.includes(group.baseName);
+                const hasActiveVariant = group.variants.some(v => v.status === "Active");
+                const totalInventory = group.variants.reduce((sum, v) => sum + v.inventory, 0);
+                const minPrice = Math.min(...group.variants.map(v => v.price));
+                const maxPrice = Math.max(...group.variants.map(v => v.price));
+                const minCompare = Math.min(...group.variants.map(v => v.compareAt));
+                const maxCompare = Math.max(...group.variants.map(v => v.compareAt));
+                const minCost = Math.min(...group.variants.map(v => v.cost));
+                const maxCost = Math.max(...group.variants.map(v => v.cost));
+                
+                return (
+                  <React.Fragment key={group.baseName}>
+                    {/* Parent Group Row */}
+                    <tr className="bg-slate-50/60 dark:bg-slate-800/40 border-b border-gray-200 dark:border-slate-700">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => toggleGroup(group.baseName)}
+                            className="text-gray-400 hover:text-indigo-600 font-bold text-sm w-6 h-6 flex items-center justify-center bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm cursor-pointer"
+                          >
+                            {isExpanded ? "▼" : "▶"}
+                          </button>
+                          <div className="w-10 h-10 bg-gray-100 dark:bg-slate-700 rounded-lg flex items-center justify-center overflow-hidden border border-gray-200 dark:border-slate-700">
+                            {group.image ? (
+                              <img src={group.image} alt={group.baseName} className="w-full h-full object-cover" />
+                            ) : (
+                              <Store size={20} className="text-gray-400" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                              {group.baseName}
+                              <span className="text-xs bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full font-semibold border border-indigo-100 dark:border-indigo-900/30">
+                                {group.variants.length} variant{group.variants.length > 1 ? "s" : ""}
+                              </span>
+                            </p>
+                            {group.description && (
+                              <p className="text-xs text-gray-400 max-w-[380px] truncate" title={group.description.replace(/<[^>]*>/g, '').trim()}>
+                                {group.description.replace(/<[^>]*>/g, '').trim()}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${
-                      p.status === "Active" ? "bg-green-100 text-green-700" :
-                      p.status === "Low Stock" ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-700"
-                    }`}>
-                      {p.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 font-mono font-medium text-gray-700 dark:text-gray-300">
-                    {p.inventory}
-                  </td>
-                  
-                  <td className="px-6 py-4">
-                    {editingId === p.id ? (
-                       <input 
-                         type="number" 
-                         value={p.price} 
-                         onChange={(e) => handleEditChange(p.id, 'price', e.target.value)}
-                         className="w-20 px-2 py-1 border border-indigo-500 rounded text-sm outline-none"
-                       />
-                    ) : (
-                      <span className="font-semibold text-gray-900 dark:text-white" onClick={() => setEditingId(p.id)}>₹{p.price.toLocaleString()}</span>
-                    )}
-                  </td>
-                  
-                  <td className="px-6 py-4 text-gray-500 line-through">
-                    {editingId === p.id ? (
-                       <input 
-                         type="number" 
-                         value={p.compareAt} 
-                         onChange={(e) => handleEditChange(p.id, 'compareAt', e.target.value)}
-                         className="w-20 px-2 py-1 border border-gray-300 rounded text-sm outline-none line-through"
-                       />
-                    ) : (
-                      <span onClick={() => setEditingId(p.id)}>₹{p.compareAt.toLocaleString()}</span>
-                    )}
-                  </td>
-                  
-                  <td className="px-6 py-4 text-gray-500">
-                    {editingId === p.id ? (
-                       <input 
-                         type="number" 
-                         value={p.cost} 
-                         onChange={(e) => handleEditChange(p.id, 'cost', e.target.value)}
-                         className="w-20 px-2 py-1 border border-gray-300 rounded text-sm outline-none"
-                       />
-                    ) : (
-                      <span onClick={() => setEditingId(p.id)}>₹{p.cost.toLocaleString()}</span>
-                    )}
-                  </td>
-                  
-                  <td className="px-6 py-4 text-right">
-                    <span className={`font-semibold ${parseFloat(calculateMargin(p.price, p.cost)) > 40 ? 'text-green-600' : 'text-gray-600'}`}>
-                      {calculateMargin(p.price, p.cost)}
-                    </span>
-                  </td>
-                  
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {editingId === p.id ? (
-                        <button onClick={() => setEditingId(null)} className="p-1.5 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded-md">
-                          <CheckCircle2 size={16} />
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${
+                          hasActiveVariant ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                        }`}>
+                          {hasActiveVariant ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-mono font-medium text-gray-700 dark:text-gray-300">
+                        {totalInventory}
+                      </td>
+                      <td className="px-6 py-4 font-semibold text-gray-900 dark:text-white">
+                        {group.variants.length > 1 ? `₹${minPrice} - ₹${maxPrice}` : `₹${minPrice}`}
+                      </td>
+                      <td className="px-6 py-4 text-gray-400 line-through">
+                        {group.variants.length > 1 ? `₹${minCompare} - ₹${maxCompare}` : `₹${minCompare}`}
+                      </td>
+                      <td className="px-6 py-4 text-gray-400">
+                        {group.variants.length > 1 ? `₹${minCost} - ₹${maxCost}` : `₹${minCost}`}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="font-semibold text-gray-600 dark:text-gray-400">
+                          {calculateMargin(
+                            group.variants.reduce((sum, v) => sum + v.price, 0) / group.variants.length,
+                            group.variants.reduce((sum, v) => sum + v.cost, 0) / group.variants.length
+                          )}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          onClick={() => handleToggleAllVisibility(group.variants)}
+                          className="text-xs bg-white hover:bg-indigo-50 hover:text-indigo-600 text-gray-700 dark:text-gray-300 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 transition-colors font-bold shadow-sm"
+                          title="Hide or Unhide all variants in this product"
+                        >
+                          Toggle All
                         </button>
-                      ) : null}
-                      <button className="p-1.5 text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 rounded-md transition-colors" title="Send Catalog Link via WhatsApp">
-                        <MessageSquare size={16} />
-                      </button>
-                      {isShopifyConnected && (
-                         <button className="p-1.5 text-gray-500 hover:bg-emerald-50 hover:text-emerald-600 rounded-md transition-colors" title="Open in Shopify">
-                           <ExternalLink size={16} />
-                         </button>
-                      )}
-                      <button
-                        onClick={() => handleToggleVisibility(p.dbId, p.status)}
-                        className={`p-1.5 rounded-md transition-colors ${p.status === "Active" ? "text-gray-500 hover:bg-red-50 hover:text-red-600" : "text-gray-400 hover:bg-green-50 hover:text-green-600"}`}
-                        title={p.status === "Active" ? "Hide Product from AI & Catalog" : "Unhide Product"}
-                      >
-                        {p.status === "Active" ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                      </td>
+                    </tr>
+
+                    {/* Variants Child Rows */}
+                    {isExpanded && group.variants.map((v) => (
+                      <tr key={v.id} className="bg-slate-50/10 dark:bg-slate-900/30 hover:bg-indigo-50/10 dark:hover:bg-slate-800/20 border-b border-gray-100 dark:border-slate-800 transition-colors group">
+                        <td className="px-6 py-3.5 pl-14">
+                          <div className="flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div>
+                            <div>
+                              <p className="font-semibold text-gray-800 dark:text-gray-200">{v.variantTitle}</p>
+                              <p className="text-xs text-gray-400 font-mono">SKU: {v.sku || "N/A"}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-3.5">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${
+                            v.status === "Active" ? "bg-green-100 text-green-700" :
+                            v.status === "Low Stock" ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-700"
+                          }`}>
+                            {v.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3.5 font-mono text-gray-600 dark:text-gray-400">
+                          {v.inventory}
+                        </td>
+                        <td className="px-6 py-3.5">
+                          {editingId === v.id ? (
+                            <input 
+                              type="number" 
+                              value={v.price} 
+                              onChange={(e) => handleEditChange(v.id, 'price', e.target.value)}
+                              className="w-20 px-2 py-1 border border-indigo-500 rounded text-sm outline-none bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                            />
+                          ) : (
+                            <span className="text-gray-700 dark:text-gray-300 cursor-pointer hover:text-indigo-600" onClick={() => setEditingId(v.id)}>₹{v.price.toLocaleString()}</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-3.5 text-gray-400 line-through">
+                          {editingId === v.id ? (
+                            <input 
+                              type="number" 
+                              value={v.compareAt} 
+                              onChange={(e) => handleEditChange(v.id, 'compareAt', e.target.value)}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm outline-none line-through bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                            />
+                          ) : (
+                            <span className="cursor-pointer hover:text-indigo-600" onClick={() => setEditingId(v.id)}>₹{v.compareAt.toLocaleString()}</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-3.5 text-gray-400">
+                          {editingId === v.id ? (
+                            <input 
+                              type="number" 
+                              value={v.cost} 
+                              onChange={(e) => handleEditChange(v.id, 'cost', e.target.value)}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm outline-none bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                            />
+                          ) : (
+                            <span className="cursor-pointer hover:text-indigo-600" onClick={() => setEditingId(v.id)}>₹{v.cost.toLocaleString()}</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-3.5 text-right text-gray-500 font-medium">
+                          {calculateMargin(v.price, v.cost)}
+                        </td>
+                        <td className="px-6 py-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {editingId === v.id ? (
+                              <button onClick={() => setEditingId(null)} className="p-1.5 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded-md">
+                                <CheckCircle2 size={14} />
+                              </button>
+                            ) : null}
+                            <button
+                              onClick={() => handleToggleVisibility(v.dbId, v.status)}
+                              className={`p-1.5 rounded-md transition-colors ${v.status === "Active" ? "text-gray-500 hover:bg-red-50 hover:text-red-600" : "text-gray-400 hover:bg-green-50 hover:text-green-600"}`}
+                              title={v.status === "Active" ? "Hide Variant" : "Unhide Variant"}
+                            >
+                              {v.status === "Active" ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
