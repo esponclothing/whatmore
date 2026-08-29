@@ -2366,12 +2366,11 @@ export async function createProductAction(data: { name: string; sku: string; pri
   }
 }
 
-export async function toggleProductVisibilityAction(id: string, currentStatus: string) {
+export async function toggleProductVisibilityAction(id: string, targetStatus: string) {
   try {
-    const newStatus = currentStatus === "Active" ? "Inactive" : "Active";
     const product = await prisma.product.update({
       where: { id },
-      data: { status: newStatus }
+      data: { status: targetStatus }
     });
     return { success: true, product };
   } catch (e: any) {

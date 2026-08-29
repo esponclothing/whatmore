@@ -32,7 +32,8 @@ export default function ProductsCommercePage() {
 
   const handleToggleVisibility = async (dbId: string, currentStatus: string) => {
     if (!dbId) return;
-    const res = await toggleProductVisibilityAction(dbId, currentStatus);
+    const targetStatus = currentStatus === "Active" ? "Inactive" : "Active";
+    const res = await toggleProductVisibilityAction(dbId, targetStatus);
     if (res.success) {
       await fetchProducts();
     } else {
@@ -43,11 +44,11 @@ export default function ProductsCommercePage() {
   const handleToggleAllVisibility = async (variantsList: any[]) => {
     if (variantsList.length === 0) return;
     const anyActive = variantsList.some(v => v.status === "Active");
-    const currentMode = anyActive ? "Active" : "Inactive";
+    const targetStatus = anyActive ? "Inactive" : "Active";
     
     for (const v of variantsList) {
       if (v.dbId) {
-        await toggleProductVisibilityAction(v.dbId, currentMode);
+        await toggleProductVisibilityAction(v.dbId, targetStatus);
       }
     }
     await fetchProducts();
