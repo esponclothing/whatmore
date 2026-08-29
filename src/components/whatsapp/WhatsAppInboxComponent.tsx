@@ -110,6 +110,11 @@ export default function WhatsAppInboxComponent() {
   const [cannedResponses, setCannedResponses] = useState<any[]>([]);
   const [showCannedResponses, setShowCannedResponses] = useState<boolean>(false);
   
+  // Name Inline Editing State
+  const [isEditingName, setIsEditingName] = useState<boolean>(false);
+  const [tempCustomerName, setTempCustomerName] = useState<string>("");
+  const [savingName, setSavingName] = useState<boolean>(false);
+
   // Canned Responses Management State
   const [isManagingReplies, setIsManagingReplies] = useState<boolean>(false);
   const [editingReply, setEditingReply] = useState<any | null>(null);
@@ -610,7 +615,33 @@ export default function WhatsAppInboxComponent() {
   };
 
 
-    // Canned Responses CRUD / Management Handlers
+    // Inline Name Save Handler
+  const handleSaveCustomerName = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedConvId || !activeConvDetail?.customer?.id) return;
+    if (!tempCustomerName.trim()) {
+      alert("Name cannot be empty");
+      return;
+    }
+    setSavingName(true);
+    const res = await updateCRMProfileFromWhatsApp({
+      conversationId: selectedConvId,
+      customerId: activeConvDetail.customer.id,
+      contactPerson: tempCustomerName.trim()
+    });
+    if (res.success) {
+      setToastMsg("✓ Customer name updated!");
+      setIsEditingName(false);
+      await fetchConversationDetail(selectedConvId, false);
+      await fetchConversationsList(false);
+      setTimeout(() => setToastMsg(null), 3000);
+    } else {
+      alert("Error: " + (res.error || "Failed to update name"));
+    }
+    setSavingName(false);
+  };
+
+  // Canned Responses CRUD / Management Handlers
   const fetchCannedResponses = async () => {
     const res = await getWhatsAppCannedResponsesAction();
     if (res.success && res.responses) {
@@ -1059,12 +1090,85 @@ export default function WhatsAppInboxComponent() {
                   <span>{(activeConvDetail.customer?.contactPerson || "C").slice(0, 2).toUpperCase()}</span>
                 </div>
                 <div>
-                  <div className="chat-title-line">
-                    <h2 className="chat-customer-name">
-                      {activeConvDetail.customer?.contactPerson || activeConvDetail.customer?.businessName || activeConvDetail.customer?.whatsappNumber}
-                    </h2>
+                  <div className="chat-title-line" style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                    {isEditingName ? (
+                      <form onSubmit={handleSaveCustomerName} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <input
+                          type="text"
+                          value={tempCustomerName}
+                          onChange={(e) => setTempCustomerName(e.target.value)}
+                          style={{
+                            padding: "4px 8px",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            fontWeight: 600,
+                            color: "#1e293b",
+                            width: "200px"
+                          }}
+                          autoFocus
+                          required
+                          disabled={savingName}
+                        />
+                        <button
+                          type="submit"
+                          disabled={savingName}
+                          style={{
+                            background: "#10b981",
+                            border: "none",
+                            borderRadius: "4px",
+                            color: "#fff",
+                            padding: "4px 8px",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            cursor: "pointer"
+                          }}
+                        >
+                          {savingName ? "Saving..." : "Save"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingName(false)}
+                          style={{
+                            background: "#ef4444",
+                            border: "none",
+                            borderRadius: "4px",
+                            color: "#fff",
+                            padding: "4px 8px",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            cursor: "pointer"
+                          }}
+                          disabled={savingName}
+                        >
+                          Cancel
+                        </button>
+                      </form>
+                    ) : (
+                      <>
+                        <h2 className="chat-customer-name" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                          {activeConvDetail.customer?.contactPerson || activeConvDetail.customer?.businessName || activeConvDetail.customer?.whatsappNumber}
+                        </h2>
+                        <button
+                          onClick={() => {
+                            setTempCustomerName(activeConvDetail.customer?.contactPerson || "");
+                            setIsEditingName(true);
+                          }}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "2px",
+                            display: "flex",
+                            alignItems: "center"
+                          }}
+                          title="Edit Customer Name"
+                        >
+                          <Edit3 size={13} color="#4f46e5" />
+                        </button>
+                      </>
+                    )}
                     <span className="chat-wa-connected-badge">Connected</span>
-                    
                   </div>
                   <div className="chat-sub-line">
                     <span>+91 {String(activeConvDetail.customer?.mobile || activeConvDetail.customer?.whatsappNumber || "").replace(/^91/, '').replace(/^\+91/, '').trim()}</span>
