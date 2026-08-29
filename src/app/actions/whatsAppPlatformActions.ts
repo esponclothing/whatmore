@@ -1738,11 +1738,14 @@ export async function getWhatsAppSettingsAction() {
 }
 
 export async function saveWhatsAppSettingsAction(data: {
-  workingHoursStart: string;
-  workingHoursEnd: string;
-  slaWarningMinutes: number;
-  autoAssignStrategy: string;
+  workingHoursStart?: string;
+  workingHoursEnd?: string;
+  slaWarningMinutes?: number;
+  autoAssignStrategy?: string;
   aiModel?: string;
+  geminiApiKey?: string;
+  aiSystemPrompt?: string;
+  welcomeMessage?: string;
 }) {
   try {
     let settings = await prisma.whatsAppSettings.findFirst();
@@ -2375,5 +2378,56 @@ export async function toggleProductVisibilityAction(id: string, targetStatus: st
     return { success: true, product };
   } catch (e: any) {
     return { success: false, error: e.message };
+  }
+}
+
+export async function getTeamMembersAction() {
+  try {
+    const employees = await prisma.employee.findMany({
+      include: {
+        user: true
+      }
+    });
+    return { success: true, employees };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getCRMCustomersAction() {
+  try {
+    const customers = await prisma.customer.findMany({
+      orderBy: { contactPerson: 'asc' }
+    });
+    return { success: true, customers };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function createCRMCustomerAction(data: {
+  contactPerson: string;
+  mobile: string;
+  businessName?: string;
+  email?: string;
+  city?: string;
+  state?: string;
+  customerType?: string;
+}) {
+  try {
+    const customer = await prisma.customer.create({
+      data: {
+        contactPerson: data.contactPerson,
+        mobile: data.mobile,
+        businessName: data.businessName || data.contactPerson,
+        email: data.email || null,
+        city: data.city || null,
+        state: data.state || null,
+        customerType: data.customerType || "Retailer"
+      }
+    });
+    return { success: true, customer };
+  } catch (error: any) {
+    return { success: false, error: error.message };
   }
 }
