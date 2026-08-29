@@ -157,7 +157,7 @@ export default function WhatsAppFlowsPage() {
   };
 
   return (
-    <div className="whatmore-page-container">
+    <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "24px 32px", fontFamily: "Inter, sans-serif" }}>
       {/* Toast */}
       {toastMsg && (
         <div style={{
@@ -174,22 +174,26 @@ export default function WhatsAppFlowsPage() {
       )}
 
       {/* Header */}
-      <div className="whatmore-page-header">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "28px", gap: "20px" }}>
         <div>
-          <h1 className="whatmore-page-title">⚡ Interactive Meta Flows</h1>
-          <p className="whatmore-page-subtitle">Build customized form questionnaires, size calculators, surveys, and bookings that customers open directly inside their WhatsApp screen.</p>
+          <h1 style={{ fontSize: "24px", fontWeight: 800, color: "#0f172a", margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
+            ⚡ Interactive Meta Flows
+          </h1>
+          <p style={{ fontSize: "14px", color: "#64748b", marginTop: "6px", lineHeight: 1.5, maxWidth: "700px" }}>
+            Build customized form questionnaires, size calculators, surveys, and bookings that customers open directly inside their WhatsApp screen.
+          </p>
         </div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexShrink: 0 }}>
           <input
             value={testPhone}
             onChange={e => setTestPhone(e.target.value)}
             placeholder="Test Phone (91XXXXXXXXXX)"
-            style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", width: "180px" }}
+            style={{ padding: "10px 14px", border: "1px solid #cbd5e1", borderRadius: "10px", fontSize: "13px", width: "200px", outline: "none", transition: "all 0.2s" }}
           />
-          <button onClick={fetchFlows} className="btn-secondary" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <button onClick={fetchFlows} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "10px 16px", background: "white", border: "1px solid #cbd5e1", borderRadius: "10px", fontSize: "13.5px", fontWeight: 700, color: "#475569", cursor: "pointer", transition: "all 0.2s" }}>
             <RefreshCw size={14} /> Refresh
           </button>
-          <button onClick={() => { resetForm(); setShowCreateModal(true); }} className="btn-primary" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <button onClick={() => { resetForm(); setShowCreateModal(true); }} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "10px 18px", background: "#6d28d9", border: "none", borderRadius: "10px", fontSize: "13.5px", fontWeight: 700, color: "white", cursor: "pointer", boxShadow: "0 4px 12px rgba(109,40,217,0.2)", transition: "all 0.2s" }}>
             <Plus size={16} /> Create Flow
           </button>
         </div>
