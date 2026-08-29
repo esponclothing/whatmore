@@ -1495,8 +1495,24 @@ model WhatsAppCampaign {
   ordersGenerated Int      @default(0)
   revenueGenerated Float   @default(0)
   cost            Float    @default(0)
+  variablesMap    String?  // JSON string representing variable dynamic mapping rules
+  category        String?  // MARKETING, UTILITY, AUTHENTICATION
+  queues          WhatsAppCampaignQueue[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+model WhatsAppCampaignQueue {
+  id           String           @id @default(uuid())
+  campaignId   String
+  campaign     WhatsAppCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  toPhone      String
+  customerName String?
+  customerCity String?
+  status       String           @default("PENDING") // PENDING, SENT, FAILED
+  errorMsg     String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 }
 
 model WhatsAppSegment {

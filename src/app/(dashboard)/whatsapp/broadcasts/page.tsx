@@ -43,6 +43,9 @@ export default function WhatsAppBroadcastsPage() {
   const [campaignName, setCampaignName] = useState<string>("ikra july 11");
   const [selectedTemplate, setSelectedTemplate] = useState<any | null>(null);
   const [selectedSegment, setSelectedSegment] = useState<string>("ALL");
+  const [isScheduled, setIsScheduled] = useState<boolean>(false);
+  const [scheduledAt, setScheduledAt] = useState<string>("");
+  const [variableMappings, setVariableMappings] = useState<any[]>([]);
   const [flows, setFlows] = useState<any[]>([]);
   const [selectedFlow, setSelectedFlow] = useState<any | null>(null);
   const [campaignType, setCampaignType] = useState<'TEMPLATE' | 'FLOW'>('TEMPLATE');
@@ -77,17 +80,23 @@ export default function WhatsAppBroadcastsPage() {
   }, []);
 
   const handleLaunchBroadcast = async () => {
-    if (!selectedTemplate) return alert("Please select a template first.");
+    if (campaignType === 'TEMPLATE' && !selectedTemplate) return alert("Please select a template first.");
+    if (campaignType === 'FLOW' && !selectedFlow) return alert("Please select a flow first.");
     setLoading(true);
     const res = await launchWhatsAppBroadcastAction({
       name: campaignName,
-      templateName: selectedTemplate?.name || "",
-      audienceType: selectedSegment as any
+      templateName: campaignType === 'TEMPLATE' ? (selectedTemplate?.name || "") : "",
+      flowId: campaignType === 'FLOW' ? (selectedFlow?.flowId || "") : undefined,
+      languageCode: selectedTemplate?.language || "en_US",
+      audienceType: selectedSegment as any,
+      scheduledAt: isScheduled ? scheduledAt : undefined,
+      variablesMap: JSON.stringify(variableMappings),
+      category: selectedTemplate?.category || 'MARKETING'
     });
 
     if (res.success) {
       setShowWizard(false);
-      alert(`✅ Broadcast launched! Sent to ${res.sentCount} out of ${res.totalAudience} contacts.`);
+      alert(isScheduled ? `✅ Broadcast scheduled successfully!` : `✅ Broadcast launched! Sent to ${res.sentCount || 0} contacts.`);
       await fetchCampaignsAndTemplates();
     } else {
       alert("Error: " + (res.error || "Failed to launch broadcast"));
@@ -572,16 +581,55 @@ export default function WhatsAppBroadcastsPage() {
                   <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                     <h4 style={{ fontSize: "14px", fontWeight: 700, margin: 0 }}>Step 3: Map Template Variables</h4>
                     <p style={{ fontSize: "12.5px", color: "#64748b" }}>Map template placeholders to CRM customer attributes.</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", alignItems: "center", gap: "10px" }}>
-                        <span style={{ fontSize: "12px", fontWeight: 700 }}>{"{{1}}"}</span>
-                        <input type="text" value="Customer Name" disabled style={{ padding: "6px", background: "#f1f5f9", border: "1px solid #d1d5db", borderRadius: "4px" }} />
+                    
+                    {campaignType === 'FLOW' ? (
+                      <div style={{ padding: "10px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "13px", color: "#475569" }}>
+                        ⚡ Interactive Meta Flows use automated sizing/booking inputs. No static mappings required.
                       </div>
-                    </div>
+                    ) : variableMappings.length === 0 ? (
+                      <div style={{ padding: "10px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "13px", color: "#475569" }}>
+                        📄 Selected template does not require any variables.
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                        {variableMappings.map((m, idx) => (
+                          <div key={idx} style={{ display: "grid", gridTemplateColumns: "100px 1fr", alignItems: "center", gap: "10px" }}>
+                            <span style={{ fontSize: "12px", fontWeight: 700 }}>{"{{" + m.index + "}}"}</span>
+                            <select
+                              value={m.mappedTo.startsWith('static:') ? 'static' : m.mappedTo}
+                              onChange={e => {
+                                const val = e.target.value;
+                                const updated = [...variableMappings];
+                                updated[idx].mappedTo = val === 'static' ? 'static:ESPON20' : val;
+                                setVariableMappings(updated);
+                              }}
+                              style={{ padding: "6px 8px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "13px", outline: "none" }}
+                            >
+                              <option value="contactPerson">Customer Contact Name</option>
+                              <option value="city">Customer City</option>
+                              <option value="static">Static Custom Text (Coupon/Code)</option>
+                            </select>
+                            {m.mappedTo.startsWith('static:') && (
+                              <input
+                                type="text"
+                                placeholder="Enter custom text..."
+                                value={m.mappedTo.slice(7)}
+                                onChange={e => {
+                                  const updated = [...variableMappings];
+                                  updated[idx].mappedTo = 'static:' + e.target.value;
+                                  setVariableMappings(updated);
+                                }}
+                                style={{ gridColumn: "2", padding: "6px 8px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "13px", marginTop: "4px", outline: "none" }}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     <div style={{ display: "flex", justifySelf: "flex-end", gap: "10px", marginTop: "20px" }}>
-                      <button onClick={() => setCurrentStep(2)} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff" }}>Back</button>
-                      <button onClick={() => setCurrentStep(4)} style={{ padding: "8px 16px", borderRadius: "6px", background: "#10b981", color: "#fff", border: "none", fontWeight: 700 }}>Review & Schedule →</button>
+                      <button onClick={() => setCurrentStep(2)} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", cursor: "pointer" }}>Back</button>
+                      <button onClick={() => setCurrentStep(4)} style={{ padding: "8px 16px", borderRadius: "6px", background: "#10b981", color: "#fff", border: "none", fontWeight: 700, cursor: "pointer" }}>Review & Schedule →</button>
                     </div>
                   </div>
                 )}
@@ -589,21 +637,59 @@ export default function WhatsAppBroadcastsPage() {
                 {/* STEP 4: REVIEW & SCHEDULE */}
                 {currentStep === 4 && (
                   <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                    <h4 style={{ fontSize: "14px", fontWeight: 700, margin: 0 }}>Step 4: Review & Launch Broadcast</h4>
+                    <h4 style={{ fontSize: "14px", fontWeight: 700, margin: 0 }}>Step 4: Review & Schedule Broadcast</h4>
                     <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "14px", borderRadius: "8px" }}>
                        <p style={{ fontSize: "13px", margin: 0, color: "#166534" }}>
-                         Ready to broadcast <strong>"{campaignName}"</strong> using template <strong>{selectedTemplate?.name}</strong> to <strong>{segments.find(s => s.key === selectedSegment)?.count?.toLocaleString() || '?'} contacts</strong>!
+                         Ready to broadcast <strong>"{campaignName}"</strong> to <strong>{segments.find(s => s.key === selectedSegment)?.count?.toLocaleString() || '?'} contacts</strong>!
                        </p>
-                       <p style={{ fontSize: "12px", color: "#166534", margin: "6px 0 0 0" }}>This will make real Meta API calls and send actual WhatsApp template messages.</p>
-                     </div>
+                       <p style={{ fontSize: "12px", color: "#166534", margin: "6px 0 0 0" }}>This will construct queue elements and send messages via Meta Graph APIs.</p>
+                    </div>
 
-                    <button
-                      onClick={handleLaunchBroadcast}
-                      disabled={loading}
-                      style={{ padding: "12px", background: "#10b981", color: "#fff", border: "none", borderRadius: "8px", fontWeight: 800, fontSize: "14px", cursor: "pointer" }}
-                    >
-                      {loading ? "Launching Broadcast..." : "🚀 Launch WhatsApp Broadcast Now"}
-                    </button>
+                    {/* Billing Estimator Card */}
+                    <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", padding: "12px", borderRadius: "8px" }}>
+                       <span style={{ fontSize: "11px", color: "#2563eb", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "4px" }}>Estimated Meta Charges</span>
+                       <span style={{ fontSize: "14px", fontWeight: 700, color: "#1e40af" }}>
+                         ₹{((segments.find(s => s.key === selectedSegment)?.count || 0) * 0.72).toFixed(2)}
+                       </span>
+                       <span style={{ fontSize: "11.5px", color: "#3b82f6", marginLeft: "6px" }}>
+                         (based on India Marketing rates: ₹0.72/recipient)
+                       </span>
+                    </div>
+
+                    {/* Scheduler Section */}
+                    <div style={{ border: "1px solid #e2e8f0", padding: "14px", borderRadius: "10px" }}>
+                       <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
+                         <input
+                           type="checkbox"
+                           checked={isScheduled}
+                           onChange={e => setIsScheduled(e.target.checked)}
+                           style={{ width: "16px", height: "16px" }}
+                         />
+                         📅 Schedule Campaign for Later Send
+                       </label>
+                       {isScheduled && (
+                         <div style={{ marginTop: "10px" }}>
+                           <label style={{ display: "block", fontSize: "11px", color: "#64748b", marginBottom: "4px" }}>SELECT DISPATCH DATE & TIME</label>
+                           <input
+                             type="datetime-local"
+                             value={scheduledAt}
+                             onChange={e => setScheduledAt(e.target.value)}
+                             style={{ padding: "8px 10px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13px", outline: "none" }}
+                           />
+                         </div>
+                       )}
+                    </div>
+
+                    <div style={{ display: "flex", justifySelf: "flex-end", gap: "10px", marginTop: "20px" }}>
+                      <button onClick={() => setCurrentStep(3)} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", cursor: "pointer" }}>Back</button>
+                      <button
+                        onClick={handleLaunchBroadcast}
+                        disabled={loading}
+                        style={{ padding: "12px", background: isScheduled ? "#6d28d9" : "#10b981", color: "#fff", border: "none", borderRadius: "8px", fontWeight: 800, fontSize: "14px", cursor: "pointer" }}
+                      >
+                        {loading ? "Processing..." : isScheduled ? "📅 Confirm & Schedule Broadcast" : "🚀 Launch WhatsApp Broadcast Now"}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

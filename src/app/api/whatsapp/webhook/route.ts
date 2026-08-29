@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { handleIncomingAILogic } from "@/lib/whatsappAI";
 import { executeFlowEngine } from "@/lib/whatsappFlowEngine";
+import { assignWhatsAppLeadAction } from "@/app/actions/whatsAppPlatformActions";
 
 const PROCESSED_WEBHOOK_IDS = new Set<string>();
 
@@ -273,6 +274,14 @@ export async function POST(req: NextRequest) {
       });
 
       console.log(`[WhatsApp Webhook] Incoming message from +91 ${cleanPhone}: "${textContent.slice(0, 50)}"`);
+
+      // Auto-assign conversation via Round-Robin if unassigned
+      if (!conversation.assignedEmployeeId) {
+        assignWhatsAppLeadAction({
+          conversationId: conversation.id,
+          method: 'ROUND_ROBIN'
+        }).catch(e => console.error("[Webhook Round-Robin Assign] Failed:", e.message));
+      }
 
       // Feature 1: Send Web Push Notification to all subscribed agents
       sendPushNotificationToAgents(

@@ -1580,6 +1580,10 @@ export async function launchWhatsAppBroadcastAction(data: {
   templateName: string;
   languageCode?: string;
   audienceType: 'ALL' | 'HOT' | 'WARM' | 'COLD' | 'LEADS';
+  scheduledAt?: string; // ISO datetime string
+  variablesMap?: string; // JSON string of variable mapping rules
+  category?: string;     // MARKETING, UTILITY, AUTHENTICATION
+  flowId?: string;       // Dynamic Flows Campaign support!
 }) {
   try {
     const whereClause: any = { mobile: { not: null } };
@@ -1590,62 +1594,49 @@ export async function launchWhatsAppBroadcastAction(data: {
 
     const contacts = await prisma.customer.findMany({
       where: whereClause,
-      select: { id: true, mobile: true, whatsappNumber: true, contactPerson: true },
+      select: { id: true, mobile: true, whatsappNumber: true, contactPerson: true, city: true },
       take: 1000
     });
 
     const totalAudience = contacts.length;
+    const isFuture = data.scheduledAt ? new Date(data.scheduledAt).getTime() > Date.now() + 10000 : false;
+    const campaignStatus = isFuture ? 'SCHEDULED' : 'PROCESSING';
+
     const campaign = await prisma.whatsAppCampaign.create({
       data: {
         name: data.name,
         templateId: data.templateName,
-        scheduledAt: new Date(),
-        status: 'PROCESSING',
+        scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : new Date(),
+        status: campaignStatus,
         totalAudience,
+        variablesMap: data.variablesMap || '[]',
+        category: data.category || 'MARKETING',
         sentCount: 0, deliveredCount: 0, readCount: 0,
         repliedCount: 0, leadsGenerated: 0, ordersGenerated: 0,
-        revenueGenerated: 0, cost: totalAudience * 1.0
+        revenueGenerated: 0, cost: totalAudience * 0.72
       }
     });
 
-    const creds = await getMetaApiCredentials();
-    let sentCount = 0;
-
-    if (creds && creds.isConnected) {
-      for (const contact of contacts) {
-        const phone = (contact.whatsappNumber || contact.mobile || '').replace(/\D/g, '');
-        if (!phone || phone.length < 10) continue;
-        try {
-          const url = `https://graph.facebook.com/v20.0/${creds.phoneId}/messages`;
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${creds.accessToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messaging_product: "whatsapp", to: phone, type: "template",
-              template: {
-                name: data.templateName,
-                language: { code: data.languageCode || "en_US" },
-                components: contact.contactPerson ? [{ type: "body", parameters: [{ type: "text", text: contact.contactPerson }] }] : []
-              }
-            })
-          });
-          const json = await res.json();
-          if (!json.error) sentCount++;
-        } catch (_) {}
-      }
+    // Populate the queue table for all contacts
+    if (contacts.length > 0) {
+      await prisma.whatsAppCampaignQueue.createMany({
+        data: contacts.map(c => ({
+          campaignId: campaign.id,
+          toPhone: (c.whatsappNumber || c.mobile || '').replace(/\D/g, ''),
+          customerName: c.contactPerson || '',
+          customerCity: c.city || 'India',
+          status: 'PENDING'
+        })).filter(q => q.toPhone && q.toPhone.length >= 10)
+      });
     }
 
-    await prisma.whatsAppCampaign.update({
-      where: { id: campaign.id },
-      data: {
-        status: 'COMPLETED', sentCount,
-        deliveredCount: Math.floor(sentCount * 0.97),
-        readCount: Math.floor(sentCount * 0.84)
-      }
-    });
+    // If immediate, dispatch processing in the background asynchronously
+    if (!isFuture) {
+      processCampaignQueueAction(campaign.id).catch(e => console.error("Error dispatching queue:", e));
+    }
 
     revalidatePath('/whatsapp/broadcasts');
-    return { success: true, campaign, sentCount, totalAudience };
+    return { success: true, campaignId: campaign.id, scheduled: isFuture };
   } catch (e: any) {
     return { success: false, error: e.message };
   }
@@ -2646,5 +2637,116 @@ export async function sendWhatsAppFlowMessageAction(toPhone: string, flowId: str
     return { success: true, messageId: data.messages?.[0]?.id };
   } catch (e: any) {
     return { success: false, error: e.message };
+  }
+}
+
+export async function processCampaignQueueAction(campaignId: string) {
+  try {
+    const campaign = await prisma.whatsAppCampaign.findUnique({
+      where: { id: campaignId }
+    });
+    if (!campaign) return { success: false, error: "Campaign not found" };
+
+    const queueItems = await prisma.whatsAppCampaignQueue.findMany({
+      where: { campaignId, status: 'PENDING' }
+    });
+
+    if (queueItems.length === 0) {
+      await prisma.whatsAppCampaign.update({
+        where: { id: campaignId },
+        data: { status: 'COMPLETED' }
+      });
+      return { success: true, processed: 0 };
+    }
+
+    await prisma.whatsAppCampaign.update({
+      where: { id: campaignId },
+      data: { status: 'PROCESSING' }
+    });
+
+    const creds = await getMetaApiCredentials();
+    if (!creds || !creds.isConnected) {
+       await prisma.whatsAppCampaign.update({
+         where: { id: campaignId },
+         data: { status: 'FAILED' }
+       });
+       return { success: false, error: "Meta API credentials not connected" };
+    }
+
+    let sentCount = 0;
+    let failedCount = 0;
+    
+    let mappings: any[] = [];
+    try {
+      mappings = JSON.parse(campaign.variablesMap || '[]');
+    } catch (_) {}
+
+    for (const item of queueItems) {
+      try {
+        const phone = item.toPhone;
+        const parameters: any[] = [];
+        mappings.forEach((m: any) => {
+          if (m.mappedTo === 'contactPerson') {
+            parameters.push({ type: "text", text: item.customerName || 'Customer' });
+          } else if (m.mappedTo === 'city') {
+            parameters.push({ type: "text", text: item.customerCity || 'India' });
+          } else if (m.mappedTo.startsWith('static:')) {
+            parameters.push({ type: "text", text: m.mappedTo.slice(7) });
+          } else {
+            parameters.push({ type: "text", text: item.customerName || 'Customer' });
+          }
+        });
+
+        if (parameters.length === 0 && item.customerName) {
+          parameters.push({ type: "text", text: item.customerName });
+        }
+
+        const url = `https://graph.facebook.com/v20.0/${creds.phoneId}/messages`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${creds.accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messaging_product: "whatsapp", to: phone, type: "template",
+            template: {
+              name: campaign.templateId,
+              language: { code: "en_US" },
+              components: parameters.length > 0 ? [{ type: "body", parameters }] : []
+            }
+          })
+        });
+
+        const json = await res.json();
+        if (json.error) {
+          throw new Error(json.error.message);
+        }
+
+        sentCount++;
+        await prisma.whatsAppCampaignQueue.update({
+          where: { id: item.id },
+          data: { status: 'SENT' }
+        });
+      } catch (err: any) {
+        failedCount++;
+        await prisma.whatsAppCampaignQueue.update({
+          where: { id: item.id },
+          data: { status: 'FAILED', errorMsg: err.message || 'Meta API error' }
+        });
+      }
+    }
+
+    await prisma.whatsAppCampaign.update({
+      where: { id: campaignId },
+      data: {
+        status: 'COMPLETED',
+        sentCount: { increment: sentCount },
+        failedCount: { increment: failedCount }
+      }
+    });
+
+    revalidatePath('/whatsapp/broadcasts');
+    return { success: true, processed: queueItems.length, sentCount, failedCount };
+  } catch (e: any) {
+     console.error("[processCampaignQueueAction] Error:", e);
+     return { success: false, error: e.message };
   }
 }
