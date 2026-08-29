@@ -44,7 +44,7 @@ export default function OwnerLoginPage() {
 
         {/* Card */}
         <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "20px", padding: "32px", backdropFilter: "blur(20px)" }}>
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleLogin} autoComplete="off">
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#94a3b8", marginBottom: "8px", letterSpacing: "0.05em", textTransform: "uppercase" }}>
               Owner Password
             </label>
@@ -54,6 +54,8 @@ export default function OwnerLoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter owner password..."
               required
+              autoComplete="new-password"
+              autoFocus
               style={{ width: "100%", padding: "14px 16px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", color: "#f1f5f9", fontSize: "16px", outline: "none", letterSpacing: "2px", boxSizing: "border-box" }}
             />
             {error && (
