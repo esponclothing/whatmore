@@ -71,7 +71,10 @@ import {
   toggleConversationAIAction,
   createFollowUpTaskAction,
   uploadMediaToMetaAction,
-  getWhatsAppCannedResponsesAction
+  getWhatsAppCannedResponsesAction,
+  createWhatsAppCannedResponseAction,
+  updateWhatsAppCannedResponseAction,
+  deleteWhatsAppCannedResponseAction
 } from "@/app/actions/whatsAppPlatformActions";
 import { useWhatsAppStore } from "@/store/whatsappStore";
 import "./WhatsAppInbox.css";
@@ -106,6 +109,15 @@ export default function WhatsAppInboxComponent() {
   const [aiToggleLoading, setAiToggleLoading] = useState<boolean>(false);
   const [cannedResponses, setCannedResponses] = useState<any[]>([]);
   const [showCannedResponses, setShowCannedResponses] = useState<boolean>(false);
+  
+  // Canned Responses Management State
+  const [isManagingReplies, setIsManagingReplies] = useState<boolean>(false);
+  const [editingReply, setEditingReply] = useState<any | null>(null);
+  const [replySearchTerm, setReplySearchTerm] = useState("");
+  const [newReplyTitle, setNewReplyTitle] = useState("");
+  const [newReplyShortcut, setNewReplyShortcut] = useState("");
+  const [newReplyContent, setNewReplyContent] = useState("");
+  const [savingCanned, setSavingCanned] = useState(false);
   
   // Mentions Autocomplete State
   const [showMentionsMenu, setShowMentionsMenu] = useState<boolean>(false);
@@ -598,7 +610,77 @@ export default function WhatsAppInboxComponent() {
   };
 
 
-    // Handle Quick Command Shortcut Insert
+    // Canned Responses CRUD / Management Handlers
+  const fetchCannedResponses = async () => {
+    const res = await getWhatsAppCannedResponsesAction();
+    if (res.success && res.responses) {
+      setCannedResponses(res.responses);
+    }
+  };
+
+  const handleCreateOrUpdateCannedResponse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newReplyTitle.trim() || !newReplyShortcut.trim() || !newReplyContent.trim()) {
+      alert("Please fill in all fields.");
+      return;
+    }
+    setSavingCanned(true);
+    let res;
+    if (editingReply) {
+      res = await updateWhatsAppCannedResponseAction(editingReply.id, {
+        title: newReplyTitle,
+        shortcut: newReplyShortcut,
+        content: newReplyContent
+      });
+    } else {
+      res = await createWhatsAppCannedResponseAction({
+        title: newReplyTitle,
+        shortcut: newReplyShortcut,
+        content: newReplyContent
+      });
+    }
+
+    if (res.success) {
+      setToastMsg(editingReply ? "✓ Canned reply updated!" : "✓ Canned reply created!");
+      setNewReplyTitle("");
+      setNewReplyShortcut("");
+      setNewReplyContent("");
+      setEditingReply(null);
+      await fetchCannedResponses();
+      setTimeout(() => setToastMsg(null), 3000);
+    } else {
+      alert("Error: " + res.error);
+    }
+    setSavingCanned(false);
+  };
+
+  const handleDeleteCannedResponse = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this canned response?")) return;
+    const res = await deleteWhatsAppCannedResponseAction(id);
+    if (res.success) {
+      setToastMsg("✓ Canned reply deleted.");
+      await fetchCannedResponses();
+      setTimeout(() => setToastMsg(null), 3000);
+    } else {
+      alert("Error: " + res.error);
+    }
+  };
+
+  const handleEditClick = (reply: any) => {
+    setEditingReply(reply);
+    setNewReplyTitle(reply.title);
+    setNewReplyShortcut(reply.shortcut);
+    setNewReplyContent(reply.content);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingReply(null);
+    setNewReplyTitle("");
+    setNewReplyShortcut("");
+    setNewReplyContent("");
+  };
+
+  // Handle Quick Command Shortcut Insert
   const applyQuickShortcut = (text: string) => {
     setMessageInput((prev) => (prev ? `${prev} ${text}` : text));
     setShowReplyLibraryModal(false);
@@ -991,15 +1073,7 @@ export default function WhatsAppInboxComponent() {
               </div>
 
               <div className="chat-header-actions">
-                <a
-                  href={`tel:+91${activeConvDetail.customer?.mobile}`}
-                  className="chat-action-btn"
-                  title="Call Customer via Phone"
-                  style={{ textDecoration: "none" }}
-                >
-                  <Phone size={14} color="#10b981" />
-                  <span>Call</span>
-                </a>
+{/* Call button removed */}
                 <button className="chat-action-btn highlight-assign" onClick={() => setShowAssignModal(true)} title="Assign WhatsApp Lead">
                   <UserCheck size={14} />
                   <span>Assign</span>
@@ -1659,41 +1733,212 @@ export default function WhatsAppInboxComponent() {
       {/* MODALS 1, 2, 3, 4 */}
       {/* ----------------------------------------------------------------- */}
       {showReplyLibraryModal && (
-        <div className="inbox-modal-backdrop" onClick={() => setShowReplyLibraryModal(false)}>
-          <div className="inbox-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header-row">
-              <h3>WhatsApp Reply Library & Shortcuts</h3>
-              <button onClick={() => setShowReplyLibraryModal(false)}>×</button>
+        <div className="inbox-modal-backdrop" onClick={() => { setShowReplyLibraryModal(false); setIsManagingReplies(false); handleCancelEdit(); }}>
+          <div className="inbox-modal-content" onClick={(e) => e.stopPropagation()} style={{ width: "90%", maxWidth: "650px", maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
+            <div className="modal-header-row" style={{ paddingBottom: "12px", borderBottom: "1px solid #e2e8f0" }}>
+              <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b" }}>
+                {isManagingReplies ? "⚙️ Manage Quick Replies" : "📚 WhatsApp Reply Library & Shortcuts"}
+              </h3>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsManagingReplies(!isManagingReplies);
+                    handleCancelEdit();
+                  }}
+                  style={{
+                    background: "#f1f5f9",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "6px",
+                    padding: "6px 12px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    color: "#475569",
+                    cursor: "pointer"
+                  }}
+                >
+                  {isManagingReplies ? "👈 Back to List" : "⚙️ Manage Replies"}
+                </button>
+                <button onClick={() => { setShowReplyLibraryModal(false); setIsManagingReplies(false); handleCancelEdit(); }} style={{ background: "none", border: "none", fontSize: "18px", cursor: "pointer", color: "#64748b" }}>×</button>
+              </div>
             </div>
-            <div className="reply-shortcuts-list">
-              <div className="shortcut-item-card" onClick={() => applyQuickShortcut("Here is our latest 2026 Wholesale Apparel Catalog with bulk slab pricing: https://espon.in/catalog-2026.pdf. Let us know your size requirement!")}>
-                <div className="shortcut-badge">/catalog</div>
-                <div>
-                  <strong>Send Wholesale Catalog</strong>
-                  <p>Sends summer 2026 wholesale apparel catalog PDF link</p>
+
+            <div style={{ padding: "16px 0", flex: 1, overflowY: "auto" }}>
+              {!isManagingReplies ? (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Search canned replies (by title, shortcut, or content)..."
+                    value={replySearchTerm}
+                    onChange={(e) => setReplySearchTerm(e.target.value)}
+                    style={{ width: "100%", padding: "10px 14px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13.5px", marginBottom: "14px" }}
+                  />
+
+                  <div className="reply-shortcuts-list" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {cannedResponses
+                      .filter(r => 
+                        r.title.toLowerCase().includes(replySearchTerm.toLowerCase()) ||
+                        (r.shortcut || "").toLowerCase().includes(replySearchTerm.toLowerCase()) ||
+                        r.content.toLowerCase().includes(replySearchTerm.toLowerCase())
+                      )
+                      .map((r) => (
+                        <div
+                          key={r.id}
+                          className="shortcut-item-card"
+                          onClick={() => {
+                            applyQuickShortcut(r.content);
+                            setShowReplyLibraryModal(false);
+                          }}
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            padding: "12px 16px",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                            background: "#ffffff"
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = "#cbd5e1";
+                            e.currentTarget.style.background = "#f8fafc";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = "#e2e8f0";
+                            e.currentTarget.style.background = "#ffffff";
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                            <span style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a" }}>{r.title}</span>
+                            <span className="shortcut-badge" style={{ background: "#eff6ff", color: "#1d4ed8", padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 700, border: "1px solid #bfdbfe" }}>
+                              {r.shortcut}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: "12.5px", color: "#475569", margin: 0, lineHeight: 1.4 }}>{r.content}</p>
+                        </div>
+                      ))}
+
+                    {cannedResponses.filter(r => 
+                      r.title.toLowerCase().includes(replySearchTerm.toLowerCase()) ||
+                      (r.shortcut || "").toLowerCase().includes(replySearchTerm.toLowerCase()) ||
+                      r.content.toLowerCase().includes(replySearchTerm.toLowerCase())
+                    ).length === 0 && (
+                      <p style={{ textAlign: "center", fontSize: "13px", color: "#64748b", padding: "20px" }}>No canned replies found.</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                  {/* Create / Edit Form */}
+                  <form onSubmit={handleCreateOrUpdateCannedResponse} style={{ background: "#f8fafc", padding: "16px", borderRadius: "8px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <h4 style={{ fontSize: "13.5px", fontWeight: 700, color: "#334155", margin: "0 0 4px 0" }}>
+                      {editingReply ? "📝 Edit Canned Response" : "＋ Create New Canned Response"}
+                    </h4>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#64748b", marginBottom: "4px" }}>TITLE</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Greeting"
+                          value={newReplyTitle}
+                          onChange={(e) => setNewReplyTitle(e.target.value)}
+                          style={{ width: "100%", padding: "8px 12px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "13px" }}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#64748b", marginBottom: "4px" }}>SHORTCUT CODE</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. /hi"
+                          value={newReplyShortcut}
+                          onChange={(e) => setNewReplyShortcut(e.target.value)}
+                          style={{ width: "100%", padding: "8px 12px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "13px" }}
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#64748b", marginBottom: "4px" }}>REPLY BODY CONTENT</label>
+                      <textarea
+                        rows={3}
+                        placeholder="Type the message to send when shortcut is typed..."
+                        value={newReplyContent}
+                        onChange={(e) => setNewReplyContent(e.target.value)}
+                        style={{ width: "100%", padding: "8px 12px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "13px", resize: "vertical" }}
+                        required
+                      />
+                    </div>
+                    <div style={{ display: "flex", justifySelf: "end", gap: "8px", marginTop: "4px" }}>
+                      {editingReply && (
+                        <button
+                          type="button"
+                          onClick={handleCancelEdit}
+                          style={{ background: "#e2e8f0", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "12px", fontWeight: 600, color: "#475569", cursor: "pointer" }}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={savingCanned}
+                        style={{ background: "#4f46e5", border: "none", borderRadius: "6px", padding: "8px 20px", fontSize: "12px", fontWeight: 700, color: "#ffffff", cursor: "pointer" }}
+                      >
+                        {savingCanned ? "Saving..." : editingReply ? "Save Changes" : "Create Reply"}
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* List with Controls */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", margin: "10px 0 4px 0" }}>Canned Responses List ({cannedResponses.length})</h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "250px", overflowY: "auto" }}>
+                      {cannedResponses.map((cr) => (
+                        <div
+                          key={cr.id}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "start",
+                            padding: "10px 14px",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "6px",
+                            background: "#ffffff"
+                          }}
+                        >
+                          <div style={{ flex: 1, paddingRight: "12px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <strong style={{ fontSize: "13px", color: "#0f172a" }}>{cr.title}</strong>
+                              <span style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", color: "#475569", padding: "1px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: "bold" }}>
+                                {cr.shortcut}
+                              </span>
+                            </div>
+                            <p style={{ fontSize: "12px", color: "#64748b", margin: "4px 0 0 0", lineBreak: "anywhere" }}>{cr.content}</p>
+                          </div>
+                          <div style={{ display: "flex", gap: "4px" }}>
+                            <button
+                              onClick={() => handleEditClick(cr)}
+                              style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1d4ed8", padding: "4px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCannedResponse(cr.id)}
+                              style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#ef4444", padding: "4px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+
+                      {cannedResponses.length === 0 && (
+                        <p style={{ textAlign: "center", fontSize: "12.5px", color: "#64748b", padding: "10px" }}>No canned replies created yet.</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="shortcut-item-card" onClick={() => applyQuickShortcut("Our Wholesale Pricing Slabs:\n• 100 - 250 pcs: ₹290/pc\n• 251 - 500 pcs: ₹270/pc\n• 500+ pcs: ₹250/pc + Free Freight Shipping.")}>
-                <div className="shortcut-badge">/price</div>
-                <div>
-                  <strong>Standard Wholesale Tiered Price List</strong>
-                  <p>Sends 100, 250, 500+ piece wholesale slab pricing</p>
-                </div>
-              </div>
-              <div className="shortcut-item-card" onClick={() => applyQuickShortcut("Bank Details:\nAccount Name: ESPON CLOTHING PRIVATE LIMITED\nAccount No: 016805006415\nIFSC: ICIC0000168\nUPI ID: 7206066678@OKBIZAXIS")}>
-                <div className="shortcut-badge">/payment</div>
-                <div>
-                  <strong>Bank & UPI Payment Details</strong>
-                  <p>Sends Espon Clothing official bank account & UPI ID</p>
-                </div>
-              </div>
-              <div className="shortcut-item-card" onClick={() => applyQuickShortcut("Hi, following up on our previous conversation regarding your inquiry. Please let us know if you have any questions or need samples!")}>
-                <div className="shortcut-badge">/followup</div>
-                <div>
-                  <strong>Friendly 24-Hour Followup</strong>
-                  <p>Standard follow-up inquiry message</p>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>

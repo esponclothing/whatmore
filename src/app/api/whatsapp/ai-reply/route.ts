@@ -68,12 +68,16 @@ Rules:
     const ai = new GoogleGenAI({ apiKey });
     
     // Map custom UI model strings to actual Gemini model names
-    let geminiModelName = "gemini-3.6-flash";
-    if (aiModel === "gemini-3.5-flash") geminiModelName = "gemini-3.5-flash";
-    else if (aiModel === "gemini-3.1-pro" || aiModel === "gemini-3.1-pro-preview") geminiModelName = "gemini-3.1-pro-preview";
-    else if (aiModel === "gemini-2.5-flash") geminiModelName = "gemini-3.6-flash";
-    else if (aiModel === "gemini-1.5-flash") geminiModelName = "gemini-3.5-flash";
-    else geminiModelName = aiModel;
+    let geminiModelName = "gemini-2.5-flash";
+    if (aiModel.includes("pro")) {
+      geminiModelName = "gemini-2.5-pro";
+    } else if (aiModel.includes("1.5-flash")) {
+      geminiModelName = "gemini-1.5-flash";
+    } else if (aiModel.includes("1.5-pro")) {
+      geminiModelName = "gemini-1.5-pro";
+    } else {
+      geminiModelName = "gemini-2.5-flash";
+    }
 
     let responseText = "";
     let finalModelUsed = geminiModelName;
@@ -88,7 +92,7 @@ Rules:
       if (e.message?.includes("not found")) {
         console.warn(`[AI Reply] Model ${geminiModelName} not found. Trying fallback...`);
         // Fallback cascade
-        const fallbacks = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.1-pro-preview"];
+        const fallbacks = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.5-pro", "gemini-1.5-pro"];
         let success = false;
         
         for (const fallbackModel of fallbacks) {

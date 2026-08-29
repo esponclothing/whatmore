@@ -2079,5 +2079,46 @@ export async function registerWhatsAppPhoneNumberAction(pin: string) {
   }
 }
 
+// Canned Response Management Server Actions
+export async function createWhatsAppCannedResponseAction(data: { title: string; shortcut: string; content: string }) {
+  try {
+    const res = await prisma.whatsAppCannedResponse.create({
+      data: {
+        title: data.title,
+        shortcut: data.shortcut.startsWith('/') ? data.shortcut : `/${data.shortcut}`,
+        content: data.content,
+        category: "General"
+      }
+    });
+    return { success: true, response: res };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
 
+export async function updateWhatsAppCannedResponseAction(id: string, data: { title: string; shortcut: string; content: string }) {
+  try {
+    const res = await prisma.whatsAppCannedResponse.update({
+      where: { id },
+      data: {
+        title: data.title,
+        shortcut: data.shortcut.startsWith('/') ? data.shortcut : `/${data.shortcut}`,
+        content: data.content
+      }
+    });
+    return { success: true, response: res };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
 
+export async function deleteWhatsAppCannedResponseAction(id: string) {
+  try {
+    await prisma.whatsAppCannedResponse.delete({
+      where: { id }
+    });
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}

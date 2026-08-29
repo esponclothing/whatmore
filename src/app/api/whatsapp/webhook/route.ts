@@ -266,7 +266,7 @@ export async function POST(req: NextRequest) {
           let toolsCalled = "none";
 
           try {
-            aiResponse = await handleIncomingAILogic(fromPhone, textContent, historyLines);
+            aiResponse = await handleIncomingAILogic(fromPhone, textContent, historyLines, conversation.id);
             // Detect which tools were called from the response content
             const tools: string[] = [];
             if (textContent.match(/[12]\d{3}/)) tools.push("lookupOrder");
@@ -293,19 +293,7 @@ export async function POST(req: NextRequest) {
             }
           }).catch(() => {}); // Non-critical, don't fail webhook on log error
 
-          if (aiResponse) {
-            await prisma.whatsAppMessage.create({
-              data: {
-                conversationId: conversation.id,
-                senderType: "AI",
-                senderName: "AI Assistant",
-                messageType: "TEXT",
-                content: aiResponse,
-                status: "SENT",
-                sentAt: new Date()
-              }
-            });
-          }
+          // Message sent and saved inside handleIncomingAILogic via sendWhatsAppMessageAction
         }
       }
     }

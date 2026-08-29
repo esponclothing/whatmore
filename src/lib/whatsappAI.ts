@@ -10,7 +10,7 @@ const GROQ_API_KEY = process.env.VITE_GROQ_API_KEY || '';
 // Mock AI call (You can use @google/genai or fetch in real app)
 
 
-const GEMINI_MODEL_CASCADE = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'];
+const GEMINI_MODEL_CASCADE = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.5-pro', 'gemini-1.5-pro'];
 
 async function callGeminiRest(apiKey, modelName, prompt, systemPrompt, maxTokens = 600) {
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
@@ -47,7 +47,7 @@ async function callAIEngine(messages, preferredModel, jsonMode = false, maxToken
   const userMsgs = messages.filter(m => m.role !== 'system').map(m => (m.role === 'user' ? 'Customer: ' : 'Agent: ') + m.content).join('\n');
 
   const cascade = [
-    preferredModel === 'llama-3.3-70b-versatile' || preferredModel === 'llama-3.1-8b-instant' ? 'gemini-3.6-flash' : preferredModel,
+    (preferredModel === 'llama-3.3-70b-versatile' || preferredModel === 'llama-3.1-8b-instant' || preferredModel.startsWith('gemini-3.')) ? 'gemini-2.5-flash' : preferredModel,
     ...GEMINI_MODEL_CASCADE.filter(m => m !== preferredModel)
   ];
 
@@ -279,7 +279,7 @@ export async function sendWhatsAppProductCards(toPhone: string, cards: any[]) {
   }
 }
 
-export async function handleIncomingAILogic(senderPhone: string, userText: string, historyLines: string[]) {
+export async function handleIncomingAILogic(senderPhone: string, userText: string, historyLines: string[], conversationId?: string) {
   const history = historyLines.join('\n');
   let toolContext = '';
   let carouselCards: any[] = [];
@@ -366,16 +366,36 @@ ${userText}`;
        sendCarousel = true;
     }
 
-    if (aiReply) {
+    let targetConversationId = conversationId;
+    if (!targetConversationId || targetConversationId === "internal-ai-hook") {
+      const cleanPhone = senderPhone.replace(/\D/g, '');
+      const conversation = await prisma.whatsAppConversation.findFirst({
+        where: {
+          customer: {
+            OR: [
+              { whatsappNumber: { contains: cleanPhone } },
+              { mobile: { contains: cleanPhone } }
+            ]
+          }
+        }
+      });
+      if (conversation) {
+        targetConversationId = conversation.id;
+      }
+    }
+
+    if (aiReply && targetConversationId && targetConversationId !== "internal-ai-hook") {
       await sendWhatsAppMessageAction({
-        conversationId: "internal-ai-hook",
+        conversationId: targetConversationId,
         senderId: "system",
-        senderType: "AGENT", 
+        senderType: "AI", 
         messageType: "TEXT",
         content: aiReply,
         senderName: "AI Assistant",
         isInternalNote: false
-      }).catch(e => {});
+      }).catch(e => {
+        console.error("[AI System Send Error]:", e.message);
+      });
     }
 
     if (sendCarousel && carouselCards.length > 0) {
