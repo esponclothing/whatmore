@@ -384,7 +384,7 @@ export default function WhatsAppTemplatesPage() {
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"6px" }}>
                       <label style={{ fontSize:"12px", fontWeight:700, color:"#374151" }}>BODY TEXT <span style={{ color:"#ef4444" }}>*</span></label>
                       <button type="button" onClick={insertVariable} style={{ padding:"4px 10px", background:"rgba(79,70,229,0.08)", border:"1px solid rgba(79,70,229,0.2)", borderRadius:"6px", fontSize:"11px", fontWeight:700, color:"#4f46e5", cursor:"pointer" }}>
-                        + Insert Variable {{n}}
+                        + Insert Variable {"{{n}}"}
                       </button>
                     </div>
                     <textarea value={bodyText} onChange={e => setBodyText(e.target.value)} required rows={5} maxLength={META_LIMITS.BODY_MAX} placeholder="Hi {{1}}, your order {{2}} has been shipped! Track it here: {{3}}" style={{ width:"100%", padding:"10px 12px", border:`1px solid ${bodyText.length > 900 ? "#f59e0b" : "#d1d5db"}`, borderRadius:"10px", fontSize:"14px", outline:"none", resize:"vertical", boxSizing:"border-box", lineHeight:1.6 }}/>
