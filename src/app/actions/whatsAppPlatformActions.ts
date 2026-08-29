@@ -2197,6 +2197,7 @@ export async function syncShopifyProductsAction() {
           update: {
             name: sp.title,
             category: sp.product_type || "General",
+            subCategory: sp.handle,
             sellingPrice: 0,
             mrp: 0,
             purchasePrice: 0,
@@ -2209,6 +2210,7 @@ export async function syncShopifyProductsAction() {
             name: sp.title,
             sku: mainSku,
             category: sp.product_type || "General",
+            subCategory: sp.handle,
             sellingPrice: 0,
             mrp: 0,
             purchasePrice: 0,
@@ -2235,6 +2237,7 @@ export async function syncShopifyProductsAction() {
           update: {
             name: variants.length > 1 ? `${sp.title} - ${variant.title}` : sp.title,
             category: sp.product_type || "General",
+            subCategory: sp.handle,
             sellingPrice: price,
             mrp: compareAt,
             purchasePrice: cost,
@@ -2247,6 +2250,7 @@ export async function syncShopifyProductsAction() {
             name: variants.length > 1 ? `${sp.title} - ${variant.title}` : sp.title,
             sku: skuCode,
             category: sp.product_type || "General",
+            subCategory: sp.handle,
             sellingPrice: price,
             mrp: compareAt,
             purchasePrice: cost,
@@ -2299,5 +2303,18 @@ export async function createProductAction(data: { name: string; sku: string; pri
     return { success: true, product };
   } catch (error: any) {
     return { success: false, error: error.message };
+  }
+}
+
+export async function toggleProductVisibilityAction(id: string, currentStatus: string) {
+  try {
+    const newStatus = currentStatus === "Active" ? "Inactive" : "Active";
+    const product = await prisma.product.update({
+      where: { id },
+      data: { status: newStatus }
+    });
+    return { success: true, product };
+  } catch (e: any) {
+    return { success: false, error: e.message };
   }
 }

@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Search, Filter, ArrowUpRight, CheckCircle2, AlertTriangle, MessageSquare, Download, RefreshCw, Plus, Store, ExternalLink } from "lucide-react";
+import { Search, Filter, ArrowUpRight, CheckCircle2, AlertTriangle, MessageSquare, Download, RefreshCw, Plus, Store, ExternalLink, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
-import { getShopifyCredentialsAction, syncShopifyProductsAction, getProductsAction, createProductAction } from "@/app/actions/whatsAppPlatformActions";
+import { getShopifyCredentialsAction, syncShopifyProductsAction, getProductsAction, createProductAction, toggleProductVisibilityAction } from "@/app/actions/whatsAppPlatformActions";
 
 // Mock Data
 const MOCK_PRODUCTS = [
@@ -27,6 +27,16 @@ export default function ProductsCommercePage() {
   // Catalog Maker Modal State
   const [showCatalogMaker, setShowCatalogMaker] = useState(false);
   const [newProduct, setNewProduct] = useState({ name: "", sku: "", price: "", compareAt: "", cost: "", inventory: "10" });
+
+  const handleToggleVisibility = async (dbId: string, currentStatus: string) => {
+    if (!dbId) return;
+    const res = await toggleProductVisibilityAction(dbId, currentStatus);
+    if (res.success) {
+      await fetchProducts();
+    } else {
+      alert("Failed to update visibility: " + res.error);
+    }
+  };
 
   const fetchProducts = async () => {
     const res = await getProductsAction();
@@ -269,6 +279,13 @@ export default function ProductsCommercePage() {
                            <ExternalLink size={16} />
                          </button>
                       )}
+                      <button
+                        onClick={() => handleToggleVisibility(p.dbId, p.status)}
+                        className={`p-1.5 rounded-md transition-colors ${p.status === "Active" ? "text-gray-500 hover:bg-red-50 hover:text-red-600" : "text-gray-400 hover:bg-green-50 hover:text-green-600"}`}
+                        title={p.status === "Active" ? "Hide Product from AI & Catalog" : "Unhide Product"}
+                      >
+                        {p.status === "Active" ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
                     </div>
                   </td>
                 </tr>

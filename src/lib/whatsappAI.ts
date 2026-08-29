@@ -134,65 +134,97 @@ function extractProductKeyword(text: string) {
 }
 
 export async function searchProducts(userText: string) {
-  const cleanKeyword = extractProductKeyword(userText);
   const isComboSearch = /combo|trio|pack|offer|deal|discount/i.test(userText);
-
   const dbCombos = await prisma.shopifyCombo.findMany({ where: { is_active: true } });
 
-  const query = `
-    query SearchProducts($query: String!) {
-      products(first: 50, query: $query) {
-        edges {
-          node {
-            id title handle featuredImage { url }
-            variants(first: 1) { edges { node { price } } }
-          }
-        }
+  // Get active settings to find the store domain
+  let activeDomain = SHOPIFY_STORE_URL;
+  try {
+    const settings = await prisma.companySettings.findFirst();
+    if (settings && settings.shopifyStoreDomain) {
+      activeDomain = settings.shopifyStoreDomain;
+    }
+  } catch (_) {}
+
+  // Search terms
+  const terms = [];
+  if (/short/i.test(userText)) terms.push('short');
+  if (/oversize|t\-?i?shirt|shirt|tee/i.test(userText)) terms.push('shirt');
+  if (/pant|track|lower|trouser/i.test(userText)) terms.push('pant');
+  if (/watch/i.test(userText)) terms.push('watch');
+
+  let dbProducts = [];
+  try {
+    if (terms.length > 0) {
+      dbProducts = await prisma.product.findMany({
+        where: {
+          status: "Active",
+          OR: terms.map(term => ({
+            OR: [
+              { name: { contains: term, mode: 'insensitive' } },
+              { description: { contains: term, mode: 'insensitive' } },
+              { category: { contains: term, mode: 'insensitive' } }
+            ]
+          }))
+        },
+        take: 10
+      });
+    } else {
+      // General keyword fallback
+      const words = userText.split(/\s+/).filter(w => w.length > 3 && !/what|show|price|suggest|recommend|need|want|find/i.test(w));
+      if (words.length > 0) {
+        dbProducts = await prisma.product.findMany({
+          where: {
+            status: "Active",
+            OR: words.map(w => ({
+              OR: [
+                { name: { contains: w, mode: 'insensitive' } },
+                { description: { contains: w, mode: 'insensitive' } },
+                { category: { contains: w, mode: 'insensitive' } }
+              ]
+            }))
+          },
+          take: 10
+        });
+      } else {
+        // Return top products
+        dbProducts = await prisma.product.findMany({
+          where: { status: "Active" },
+          take: 10
+        });
       }
     }
-  `;
-  try {
-    const res = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2024-10/graphql.json`, {
-      method: 'POST',
-      headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, variables: { query: `status:active ${cleanKeyword}` } })
-    });
-    const data = await res.json();
-    let edges = data?.data?.products?.edges || [];
 
-    edges.sort((a: any, b: any) => {
-      const aId = String(a.node.id).replace(/\D/g, '');
-      const bId = String(b.node.id).replace(/\D/g, '');
-      const aCombo = dbCombos.find(c => String(c.product_id) === aId || (c.product_title && a.node.title.toLowerCase().includes(c.product_title.toLowerCase())));
-      const bCombo = dbCombos.find(c => String(c.product_id) === bId || (c.product_title && b.node.title.toLowerCase().includes(c.product_title.toLowerCase())));
+    // Sort by combos first
+    dbProducts.sort((a: any, b: any) => {
+      const aCombo = dbCombos.find(c => c.product_title && a.name.toLowerCase().includes(c.product_title.toLowerCase()));
+      const bCombo = dbCombos.find(c => c.product_title && b.name.toLowerCase().includes(c.product_title.toLowerCase()));
       return (bCombo ? 1 : 0) - (aCombo ? 1 : 0);
     });
 
     const productLines: string[] = [];
     const carouselCards: any[] = [];
-    
-    edges.slice(0, 10).forEach((e: any, idx: number) => {
-      const p = e.node;
-      const rawId = String(p.id).replace(/\D/g, '');
-      const singlePrice = p.variants.edges[0]?.node?.price || 'N/A';
-      
-      const matchingCombo = dbCombos.find(c => String(c.product_id) === rawId || (c.product_title && p.title.toLowerCase().includes(c.product_title.toLowerCase())));
+
+    dbProducts.forEach((p: any, idx: number) => {
+      const singlePrice = p.sellingPrice || 0;
+      const matchingCombo = dbCombos.find(c => c.product_title && p.name.toLowerCase().includes(c.product_title.toLowerCase()));
       let comboLine = '';
       let cardPrice = `₹${singlePrice}`;
-      let productUrl = `https://${SHOPIFY_STORE_URL}/products/${p.handle}`;
-      
+      const handle = p.subCategory || p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      let productUrl = `https://${activeDomain}/products/${handle}`;
+
       if (matchingCombo && Number(matchingCombo.combo_count) > 0) {
         comboLine = ` | 🔥 *COMBO OFFER:* Pack of ${matchingCombo.combo_count} @ *₹${matchingCombo.combo_price}* (Coupon: *${matchingCombo.discount_code}*)`;
         cardPrice = `COMBO: Pack of ${matchingCombo.combo_count} @ ₹${matchingCombo.combo_price}`;
-        productUrl = `https://${SHOPIFY_STORE_URL}/products/${p.handle}?discount=${matchingCombo.discount_code}`;
+        productUrl = `https://${activeDomain}/products/${handle}?discount=${matchingCombo.discount_code}`;
       }
 
       if (idx < 5) {
-        productLines.push(`Product: ${p.title} - Price: ₹${singlePrice} ${comboLine}`);
+        productLines.push(`Product: ${p.name} - Price: ₹${singlePrice} ${comboLine}`);
         carouselCards.push({
-          title: p.title.slice(0, 60),
+          title: p.name.slice(0, 60),
           price: cardPrice.slice(0, 160),
-          image_url: p.featuredImage?.url || '',
+          image_url: p.images?.[0] || '',
           url: productUrl
         });
       }
@@ -203,8 +235,10 @@ export async function searchProducts(userText: string) {
       const summaryList = dbCombos.map(c => `🔥 *${c.product_title}* — Pack of ${c.combo_count} @ *₹${c.combo_price}* (Coupon: *${c.discount_code}*)`);
       textLines = [...summaryList, '', ...productLines];
     }
+
     return { textLines, carouselCards };
   } catch (err: any) {
+    console.error("[searchProducts Error]:", err.message);
     return { error: err.message };
   }
 }
