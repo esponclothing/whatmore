@@ -305,8 +305,8 @@ export default function WhatsAppAPISettingsPage() {
               : "border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300"
           }`}
         >
-          <BookOpen size={16} />
-          <span>📒 CRM Contacts</span>
+          <Users size={16} />
+          <span>👥 Team Agents</span>
         </button>
       </div>
 
@@ -628,97 +628,154 @@ export default function WhatsAppAPISettingsPage() {
         </div>
       )}
 
-      {/* 4. CRM Contacts Tab */}
-      {activeTab === "crm-contacts" && (
+      {/* 4. Team Agents Tab */}
+      {activeTab === "agents" && (
         <div className="flex flex-col gap-6 w-full max-w-4xl">
-          {/* Add Contact Card */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">📝 Add CRM Customer</h2>
-            <p className="text-sm text-gray-500 mb-6">Create new profile contacts to automatically map WhatsApp inbox sender identities.</p>
+          {/* Client status & seat limit indicator */}
+          {clientInfo && (
+            <div className={`p-5 rounded-2xl border flex items-center gap-4 shadow-sm ${
+              clientInfo.blocked ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30' :
+              clientInfo.pastDue ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30' :
+              'bg-indigo-50/50 dark:bg-indigo-500/5 border-indigo-100 dark:border-indigo-500/15'
+            }`}>
+              <div className="text-2xl">{clientInfo.blocked ? "🔒" : clientInfo.pastDue ? "⚠️" : "✅"}</div>
+              <div className="flex-1">
+                <h4 className={`text-base font-bold mb-0.5 ${
+                  clientInfo.blocked ? 'text-red-900 dark:text-red-300' :
+                  clientInfo.pastDue ? 'text-amber-900 dark:text-amber-300' :
+                  'text-indigo-900 dark:text-indigo-300'
+                }`}>
+                  Subscription: {clientInfo.subscriptionStatus || "ACTIVE"}
+                </h4>
+                <p className="text-sm text-gray-500 dark:text-gray-400 m-0">
+                  {clientInfo.pastDue && `Renewal overdue. ${clientInfo.daysLeft} days remaining in grace period before access is suspended.`}
+                  {clientInfo.blocked && `Access is suspended. Please contact your app owner to renew your plan.`}
+                  {!clientInfo.pastDue && !clientInfo.blocked && `Plan is active. Next renewal date: ${clientInfo.currentPeriodEnd ? new Date(clientInfo.currentPeriodEnd).toLocaleDateString('en-IN') : 'Unlimited'}`}
+                </p>
+              </div>
+            </div>
+          )}
 
-            {crmResultMsg && (
-              <div className={`mb-4 p-4 rounded-xl text-sm font-semibold flex items-center gap-2 ${crmResultMsg.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+          {/* Seat limit progress indicator */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">👥 Agent Seat Usage</h3>
+            <p className="text-sm text-gray-500 mb-4">You can add team agents up to your subscription seat limit.</p>
+            
+            {clientInfo && (
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  <span>Seats Occupied</span>
+                  <span>{agents.length} / {clientInfo.maxAgents || 3} Agents</span>
+                </div>
+                <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
+                  <div 
+                    className="bg-indigo-600 h-full rounded-full transition-all duration-500" 
+                    style={{ width: `${Math.min(100, (agents.length / (clientInfo.maxAgents || 3)) * 100)}%` }}
+                  />
+                </div>
+                {agents.length >= (clientInfo.maxAgents || 3) && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 font-medium m-0 mt-1">
+                    ⚠️ Seat limit reached. Contact your app provider to upgrade your plan for more seats.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Add Agent Card */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">📝 Add Team Agent</h2>
+            <p className="text-sm text-gray-500 mb-6">Create login credentials for agents to join the workspace and handle chats.</p>
+
+            {agentResultMsg && (
+              <div className={`mb-4 p-4 rounded-xl text-sm font-semibold flex items-center gap-2 ${agentResultMsg.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
                 <CheckCircle2 size={18} />
-                <span>{crmResultMsg.text}</span>
+                <span>{agentResultMsg.text}</span>
               </div>
             )}
 
-            <form onSubmit={handleCreateCRMContact} className="grid grid-cols-3 gap-5">
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!newAgentName || !newAgentEmail || !newAgentPassword) { setAgentResultMsg({ success: false, text: "All fields are required." }); return; }
+              setSavingAgent(true);
+              try {
+                const res = await fetch('/api/owner/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newAgentName, email: newAgentEmail, password: newAgentPassword, role: newAgentRole }) });
+                const data = await res.json();
+                if (data.success) {
+                  setAgentResultMsg({ success: true, text: 'Agent added successfully!' });
+                  setNewAgentName(""); setNewAgentEmail(""); setNewAgentPassword(""); setNewAgentRole("AGENT");
+                  fetch('/api/owner/agents').then(r => r.json()).then(d => { if (d.agents) setAgents(d.agents); });
+                } else { setAgentResultMsg({ success: false, text: data.error || 'Failed to add agent.' }); }
+              } catch { setAgentResultMsg({ success: false, text: 'Connection error.' }); }
+              setSavingAgent(false);
+            }} className="grid grid-cols-2 gap-5">
               <div>
-                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Customer Name</label>
-                <input type="text" value={newContactName} onChange={(e) => setNewContactName(e.target.value)} required placeholder="e.g. Ashish Goyal" className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Agent Name</label>
+                <input type="text" value={newAgentName} onChange={(e) => setNewAgentName(e.target.value)} required placeholder="e.g. John Doe" className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
               </div>
               <div>
-                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Phone Number</label>
-                <input type="text" value={newContactPhone} onChange={(e) => setNewContactPhone(e.target.value)} required placeholder="e.g. 919876543210" className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Email Address</label>
+                <input type="email" value={newAgentEmail} onChange={(e) => setNewAgentEmail(e.target.value)} required placeholder="e.g. agent@esponsports.com" className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
               </div>
               <div>
-                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Customer Type</label>
-                <select value={newContactType} onChange={(e) => setNewContactType(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
-                  <option value="Retailer">Retailer</option>
-                  <option value="Wholesaler">Wholesaler</option>
-                  <option value="VIP">VIP Customer</option>
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Password</label>
+                <input type="password" value={newAgentPassword} onChange={(e) => setNewAgentPassword(e.target.value)} required placeholder="Set password" className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Workspace Role</label>
+                <select value={newAgentRole} onChange={(e) => setNewAgentRole(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                  <option value="AGENT">Agent (Chats only)</option>
+                  <option value="ADMIN">Admin (Settings & API)</option>
                 </select>
               </div>
-              <div className="col-span-3 flex justify-end">
-                <button type="submit" disabled={savingCRM} className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-xl text-sm font-bold shadow-md transition-all">
-                  {savingCRM ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
-                  Add CRM Customer
+              <div className="col-span-2 flex justify-end">
+                <button type="submit" disabled={savingAgent || (clientInfo && agents.length >= clientInfo.maxAgents)} className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-xl text-sm font-bold shadow-md transition-all">
+                  {savingAgent ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
+                  Add Team Agent
                 </button>
               </div>
             </form>
           </div>
 
-          {/* Contacts Directory List Card */}
+          {/* Agents List Card */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white m-0">📒 CRM Contact List</h2>
-                <p className="text-sm text-gray-500 m-0">Search customer details synced inside Whatmore database.</p>
-              </div>
-              <input 
-                type="text" 
-                value={crmSearch} 
-                onChange={(e) => setCrmSearch(e.target.value)} 
-                placeholder="Search contact person, phone..." 
-                className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-72" 
-              />
-            </div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">📒 Active Team Agents</h2>
+            <p className="text-sm text-gray-500 mb-6">List of users who can sign in and manage conversations in this workspace.</p>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm border-collapse">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-slate-700 text-gray-500 font-semibold">
-                    <th className="py-3 px-4">Contact Name</th>
-                    <th className="py-3 px-4">Mobile</th>
-                    <th className="py-3 px-4">Customer Type</th>
-                    <th className="py-3 px-4">City</th>
+                    <th className="py-3 px-4">Agent Name</th>
+                    <th className="py-3 px-4">Email</th>
+                    <th className="py-3 px-4">Role</th>
+                    <th className="py-3 px-4">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700 bg-white dark:bg-slate-900">
-                  {crmContacts
-                    .filter(c => 
-                      String(c.contactPerson || '').toLowerCase().includes(crmSearch.toLowerCase()) || 
-                      String(c.mobile || '').includes(crmSearch)
-                    )
-                    .map(c => (
-                      <tr key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/50">
-                        <td className="py-3 px-4 font-bold text-gray-900 dark:text-white">{c.contactPerson}</td>
-                        <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{c.mobile}</td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                            c.customerType === "Wholesaler" ? "bg-amber-100 text-amber-700" :
-                            c.customerType === "VIP" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
-                          }`}>
-                            {c.customerType || "Retailer"}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-gray-500">{c.city || "Not set"}</td>
-                      </tr>
-                    ))}
-                  {crmContacts.length === 0 && (
+                  {agents.map(a => (
+                    <tr key={a.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/50">
+                      <td className="py-3 px-4 font-bold text-gray-900 dark:text-white">{a.name}</td>
+                      <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{a.email}</td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                          a.role === "ADMIN" ? "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400" : "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400"
+                        }`}>
+                          {a.role}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                          a.isActive ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                        }`}>
+                          {a.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {agents.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center text-gray-400">No CRM contacts found.</td>
+                      <td colSpan={4} className="py-8 text-center text-gray-400">No agents found in this workspace.</td>
                     </tr>
                   )}
                 </tbody>
