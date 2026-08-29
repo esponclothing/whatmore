@@ -329,6 +329,100 @@ export default function WhatsAppFlowsPage() {
                     </div>
                   </div>
 
+                  {/* Visual Fields Builder */}
+                  <div style={{ border: "1px solid #e2e8f0", padding: "14px", borderRadius: "12px", background: "#f8fafc", marginTop: "10px" }}>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 800, color: "#1e293b", marginBottom: "8px", textTransform: "uppercase" }}>Form Questionnaire Fields</label>
+                    
+                    {/* Render current fields */}
+                    {formFields.length === 0 ? (
+                      <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 10px 0" }}>No fields added yet. Add custom fields below or choose a template above.</p>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px" }}>
+                        {formFields.map((f, idx) => (
+                          <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "white", padding: "8px 10px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+                            <div style={{ display: "flex", flexDirection: "column" }}>
+                              <span style={{ fontSize: "12px", fontWeight: 700, color: "#1e293b" }}>{f.label}</span>
+                              <span style={{ fontSize: "10px", color: "#64748b" }}>Type: {f.type} {f.options ? `(${f.options.join(", ")})` : ''}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setFormFields(formFields.filter((_, i) => i !== idx))}
+                              style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", padding: "2px" }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Add new field form row */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", borderTop: "1px dashed #cbd5e1", paddingTop: "10px" }}>
+                      <span style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>➕ ADD NEW QUESTION FIELD</span>
+                      <input
+                        type="text"
+                        placeholder="e.g. Enter your jersey size"
+                        id="new-field-label"
+                        style={{ padding: "6px 8px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "12.5px", outline: "none" }}
+                      />
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                        <select
+                          id="new-field-type"
+                          defaultValue="text"
+                          onChange={e => {
+                            const optEl = document.getElementById("new-field-options-row");
+                            if (optEl) {
+                              optEl.style.display = (e.target.value === 'select' || e.target.value === 'radio') ? 'block' : 'none';
+                            }
+                          }}
+                          style={{ padding: "6px 8px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "12.5px" }}
+                        >
+                          <option value="text">Text Input</option>
+                          <option value="number">Number Input</option>
+                          <option value="select">Dropdown Select</option>
+                          <option value="radio">Radio Options</option>
+                          <option value="date">Date Selector</option>
+                          <option value="textarea">Multi-line Text</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const labelEl = document.getElementById("new-field-label") as HTMLInputElement;
+                            const typeEl = document.getElementById("new-field-type") as HTMLSelectElement;
+                            const optionsEl = document.getElementById("new-field-options") as HTMLInputElement;
+                            
+                            if (labelEl && labelEl.value.trim()) {
+                              const newField: any = {
+                                label: labelEl.value.trim(),
+                                type: typeEl.value
+                              };
+                              if ((typeEl.value === 'select' || typeEl.value === 'radio') && optionsEl && optionsEl.value.trim()) {
+                                newField.options = optionsEl.value.split(",").map(s => s.trim()).filter(Boolean);
+                              }
+                              setFormFields([...formFields, newField]);
+                              labelEl.value = "";
+                              if (optionsEl) optionsEl.value = "";
+                            } else {
+                              alert("Please enter a field label first.");
+                            }
+                          }}
+                          style={{ padding: "6px", background: "#4f46e5", color: "white", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Add Field
+                        </button>
+                      </div>
+                      <div id="new-field-options-row" style={{ display: "none" }}>
+                        <label style={{ display: "block", fontSize: "10.5px", color: "#64748b", marginBottom: "2px" }}>OPTIONS (separated by commas)</label>
+                        <input
+                          type="text"
+                          id="new-field-options"
+                          placeholder="e.g. Small, Medium, Large"
+                          style={{ width: "100%", padding: "6px 8px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "12px", boxSizing: "border-box" }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   <button type="submit" disabled={saving} style={{ width: "100%", padding: "10px", background: "linear-gradient(135deg, #4f46e5, #7c3aed)", color: "white", border: "none", borderRadius: "8px", fontWeight: 700, fontSize: "14px", cursor: "pointer", marginTop: "8px" }}>
                     {saving ? "Registering..." : "⚡ Register Meta Flow Configuration"}
                   </button>
