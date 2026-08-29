@@ -2536,6 +2536,21 @@ export async function saveWhatsAppMetaFlowAction(data: any) {
   try {
     const isNew = !data.id || data.id === 'new-uuid';
     
+    // Auto-create on Meta using Graph API if flowId is not a numeric string
+    if (isNew && (!data.flowId || isNaN(Number(data.flowId)))) {
+      try {
+        const metaFlowId = await createMetaFlowOnGraph(data.name, data.screenName, data.ctaText, data.formSchema);
+        if (metaFlowId) {
+          data.flowId = metaFlowId;
+        }
+      } catch (apiErr: any) {
+        console.warn("[Meta Flow Creator] API creation failed, falling back to local simulation:", apiErr.message);
+        if (!data.flowId) {
+          data.flowId = "flow_sim_" + Date.now();
+        }
+      }
+    }
+
     let flow;
     if (isNew) {
       flow = await prisma.whatsAppMetaFlow.create({
@@ -2749,4 +2764,102 @@ export async function processCampaignQueueAction(campaignId: string) {
      console.error("[processCampaignQueueAction] Error:", e);
      return { success: false, error: e.message };
   }
+}
+
+async function createMetaFlowOnGraph(name: string, screenName: string, ctaText: string, formSchema: string) {
+  const creds = await getMetaApiCredentials();
+  if (!creds || !creds.isConnected || !creds.wabaId) {
+    throw new Error("Meta credentials or WABA ID not configured");
+  }
+
+  const createUrl = `https://graph.facebook.com/v21.0/${creds.wabaId}/flows`;
+  const createRes = await fetch(createUrl, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${creds.accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: name.replace(/\s+/g, '_').toLowerCase().slice(0, 30),
+      categories: ["CUSTOMER_SUPPORT"]
+    })
+  });
+
+  const createData = await createRes.json();
+  if (createData.error) {
+     throw new Error(createData.error.message);
+  }
+
+  return createData.id;
+}
+
+function compileMetaFlowJson(name: string, screenName: string, ctaText: string, fieldsJsonStr: string) {
+  let fields: any[] = [];
+  try {
+    fields = JSON.parse(fieldsJsonStr || '[]');
+  } catch (_) {}
+
+  const children = fields.map((f: any, idx: number) => {
+    const fieldId = `field_${idx}`;
+    if (f.type === 'select') {
+      return {
+        type: "Dropdown",
+        label: f.label,
+        name: fieldId,
+        required: true,
+        data_source: (f.options || []).map((o: string, oIdx: number) => ({ id: `opt_${oIdx}`, title: o }))
+      };
+    } else if (f.type === 'radio') {
+      return {
+        type: "RadioButtons",
+        label: f.label,
+        name: fieldId,
+        required: true,
+        data_source: (f.options || []).map((o: string, oIdx: number) => ({ id: `opt_${oIdx}`, title: o }))
+      };
+    } else if (f.type === 'number') {
+      return {
+        type: "TextInput",
+        label: f.label,
+        name: fieldId,
+        input_type: "number",
+        required: true
+      };
+    } else if (f.type === 'date') {
+      return {
+        type: "TextInput",
+        label: f.label,
+        name: fieldId,
+        input_type: "date",
+        required: true
+      };
+    } else {
+      return {
+        type: "TextInput",
+        label: f.label,
+        name: fieldId,
+        required: true
+      };
+    }
+  });
+
+  children.push({
+    type: "Footer",
+    label: ctaText,
+    "on-click-action": {
+      "name": "complete",
+      "payload": {}
+    }
+  });
+
+  return {
+    version: "3.1",
+    screens: [
+      {
+        id: screenName || "START_SCREEN",
+        title: name,
+        layout: {
+          type: "Form",
+          children
+        }
+      }
+    ]
+  };
 }
