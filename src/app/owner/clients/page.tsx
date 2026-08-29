@@ -174,7 +174,7 @@ export default function OwnerClientsPage() {
               ) : filtered.map(client => {
                 const s = STATUS_COLORS[client.subscriptionStatus] || STATUS_COLORS.TRIAL;
                 const periodEnd = client.currentPeriodEnd ? new Date(client.currentPeriodEnd).toLocaleDateString("en-IN") : "—";
-                const webhookUrl = `${webhookBase}/api/whatsapp/webhook/${client.webhookClientId}`;
+                const webhookUrl = client.customWebhookUrl || `${webhookBase}/api/whatsapp/webhook/${client.webhookClientId}`;
                 return (
                   <tr key={client.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                     <td style={{ padding: "14px 16px" }}>
@@ -192,7 +192,12 @@ export default function OwnerClientsPage() {
                     <td style={{ padding: "14px 16px", color: client.currentPeriodEnd && new Date(client.currentPeriodEnd) < new Date() ? "#ef4444" : "#94a3b8", fontSize: "13px" }}>{periodEnd}</td>
                     <td style={{ padding: "14px 16px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <code style={{ fontSize: "10px", color: "#64748b", background: "rgba(255,255,255,0.05)", padding: "3px 6px", borderRadius: "4px", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{webhookUrl}</code>
+                        <div>
+                          <code style={{ fontSize: "10px", color: "#64748b", background: "rgba(255,255,255,0.05)", padding: "3px 6px", borderRadius: "4px", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{webhookUrl}</code>
+                          {client.customWebhookUrl && (
+                            <span style={{ fontSize: "9px", color: "#475569", marginTop: "2px", display: "block" }}>📌 Custom (Meta registered)</span>
+                          )}
+                        </div>
                         <button onClick={() => { navigator.clipboard.writeText(webhookUrl); }} style={{ background: "rgba(124,58,237,0.2)", border: "none", borderRadius: "5px", color: "#a78bfa", cursor: "pointer", fontSize: "11px", padding: "3px 7px" }} title="Copy">📋</button>
                       </div>
                     </td>

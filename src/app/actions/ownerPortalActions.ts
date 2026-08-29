@@ -301,3 +301,15 @@ export async function registerWebhookForClientAction(clientId: string) {
     return { success: false, error: e.message };
   }
 }
+
+export async function setCustomWebhookUrlAction(clientId: string, customWebhookUrl: string) {
+  try {
+    const client = await prisma.whatsAppClient.update({
+      where: { id: clientId },
+      data: { customWebhookUrl: customWebhookUrl || null }
+    });
+    return { success: true, client };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}

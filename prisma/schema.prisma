@@ -1911,6 +1911,7 @@ model WhatsAppClient {
   phoneId         String?  // Phone Number ID from Meta
   metaAccessToken String?  // Permanent Access Token
   webhookVerifyToken String? // Custom webhook verify token
+  customWebhookUrl   String?  // Override webhook URL (e.g. legacy clients using default webhook)
   phoneNumber     String?  // Display phone number
 
   // Shopify credentials — set by owner or client admin
