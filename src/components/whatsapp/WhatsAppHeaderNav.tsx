@@ -46,6 +46,18 @@ export default function WhatsAppHeaderNav() {
     return pathname.startsWith(path);
   };
 
+  const [userName, setUserName] = React.useState("");
+  React.useEffect(() => {
+    try {
+      const u = document.cookie.split(";").find(c => c.trim().startsWith("wm_user="));
+      if (u) { const v = decodeURIComponent(u.split("=")[1]); setUserName(JSON.parse(v).name || ""); }
+    } catch {}
+  }, []);
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login";
+  };
+
   return (
     <header className="whatmore-header">
       <div className="whatmore-header-top">
@@ -66,6 +78,10 @@ export default function WhatsAppHeaderNav() {
           <span className="pulse-dot"></span>
           <span>WhatsApp API: {accountInfo.status}</span>
         </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginLeft: "12px" }}>
+          {userName && <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>{userName}</span>}
+          <button onClick={handleLogout} style={{ padding: "5px 12px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "#f87171", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>Sign Out</button>
+        </div>
       </div>
 
       <nav className="whatmore-nav">
