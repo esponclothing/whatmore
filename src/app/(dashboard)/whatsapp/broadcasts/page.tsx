@@ -43,6 +43,10 @@ export default function WhatsAppBroadcastsPage() {
   const [campaignName, setCampaignName] = useState<string>("ikra july 11");
   const [selectedTemplate, setSelectedTemplate] = useState<any | null>(null);
   const [selectedSegment, setSelectedSegment] = useState<string>("ALL");
+  const [flows, setFlows] = useState<any[]>([]);
+  const [selectedFlow, setSelectedFlow] = useState<any | null>(null);
+  const [campaignType, setCampaignType] = useState<'TEMPLATE' | 'FLOW'>('TEMPLATE');
+  const [flowSearch, setFlowSearch] = useState<string>("");
   const [segments, setSegments] = useState<any[]>([]);
   const [scheduleType, setScheduleType] = useState<string>("INSTANT");
   const [templateSearch, setTemplateSearch] = useState<string>("");
@@ -349,7 +353,7 @@ export default function WhatsAppBroadcastsPage() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                         <div style={{ width: "24px", height: "24px", borderRadius: "50%", background: "#10b981", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 700 }}>1</div>
-                        <h4 style={{ fontSize: "14px", fontWeight: 700, margin: 0 }}>Template - Choose an approved WhatsApp template</h4>
+                        <h4 style={{ fontSize: "14px", fontWeight: 700, margin: 0 }}>Step 1: Choose Broadcast Message Type</h4>
                       </div>
 
                       <button
@@ -361,93 +365,187 @@ export default function WhatsAppBroadcastsPage() {
                       </button>
                     </div>
 
-                    {/* Filter & Search Controls */}
-                    <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                      <div style={{ position: "relative", flex: 1 }}>
-                        <Search size={15} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#9ca3af" }} />
-                        <input
-                          type="text"
-                          placeholder="Search templates..."
-                          value={templateSearch}
-                          onChange={(e) => setTemplateSearch(e.target.value)}
-                          style={{ width: "100%", padding: "7px 10px 7px 32px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "13px" }}
-                        />
-                      </div>
-
-                      <select
-                        value={templateCategoryFilter}
-                        onChange={(e) => setTemplateCategoryFilter(e.target.value)}
-                        style={{ padding: "7px 12px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "13px" }}
+                    {/* Switcher Tab */}
+                    <div style={{ display: "flex", gap: "8px", background: "#f1f5f9", padding: "4px", borderRadius: "10px", width: "fit-content" }}>
+                      <button
+                        type="button"
+                        onClick={() => setCampaignType('TEMPLATE')}
+                        style={{
+                          padding: "6px 16px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 700,
+                          background: campaignType === 'TEMPLATE' ? 'white' : 'transparent',
+                          color: campaignType === 'TEMPLATE' ? '#0f172a' : '#64748b',
+                          boxShadow: campaignType === 'TEMPLATE' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                        }}
                       >
-                        <option value="ALL">All Categories</option>
-                        <option value="UTILITY">UTILITY</option>
-                        <option value="MARKETING">MARKETING</option>
-                        <option value="AUTHENTICATION">AUTHENTICATION</option>
-                      </select>
+                        📄 Templates
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCampaignType('FLOW')}
+                        style={{
+                          padding: "6px 16px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 700,
+                          background: campaignType === 'FLOW' ? 'white' : 'transparent',
+                          color: campaignType === 'FLOW' ? '#0f172a' : '#64748b',
+                          boxShadow: campaignType === 'FLOW' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                        }}
+                      >
+                        ⚡ Meta Flows (Forms)
+                      </button>
                     </div>
 
-                    {/* Grid of Templates & Live Preview */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-                      {/* Left: Template Cards */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "380px", overflowY: "auto" }}>
-                        {filteredTemplates.map((t) => {
-                          const isSelected = selectedTemplate?.name === t.name;
-                          return (
-                            <div
-                              key={t.name}
-                              onClick={() => setSelectedTemplate(t)}
-                              style={{
-                                padding: "12px 14px",
-                                borderRadius: "8px",
-                                border: isSelected ? "2px solid #10b981" : "1px solid #e2e8f0",
-                                background: isSelected ? "#f0fdf4" : "#ffffff",
-                                cursor: "pointer"
-                              }}
-                            >
-                              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                                <strong style={{ fontSize: "13px", color: "#0f172a" }}>{t.name}</strong>
-                                <span style={{ background: "#dcfce7", color: "#166534", fontSize: "10px", fontWeight: 700, padding: "1px 6px", borderRadius: "4px" }}>✓ APPROVED</span>
-                                <span style={{ background: "#e0e7ff", color: "#3730a3", fontSize: "10px", fontWeight: 700, padding: "1px 6px", borderRadius: "4px" }}>{t.category}</span>
-                              </div>
-                              <p style={{ fontSize: "12px", color: "#4b5563", margin: "4px 0", lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                                {t.bodyText}
-                              </p>
-                              <span style={{ fontSize: "10.5px", color: "#9ca3af" }}>en_US · Modified: 17 Jul 2026, 01:29 pm</span>
-                            </div>
-                          );
-                        })}
-                      </div>
+                    {campaignType === 'TEMPLATE' ? (
+                      <>
+                        {/* Filter & Search Controls */}
+                        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                          <div style={{ position: "relative", flex: 1 }}>
+                            <Search size={15} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#9ca3af" }} />
+                            <input
+                              type="text"
+                              placeholder="Search templates..."
+                              value={templateSearch}
+                              onChange={(e) => setTemplateSearch(e.target.value)}
+                              style={{ width: "100%", padding: "7px 10px 7px 32px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "13px" }}
+                            />
+                          </div>
 
-                      {/* Right: Phone Live Preview */}
-                      <div style={{ background: "#f8fafc", border: "1px solid #eaecf0", borderRadius: "12px", padding: "16px", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                        <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: "12px", width: "100%", display: "flex", justifyContent: "space-between" }}>
-                          <span>Template Preview</span>
-                          <span style={{ background: "#e2e8f0", color: "#334155", padding: "1px 6px", borderRadius: "4px" }}>Live View</span>
+                          <select
+                            value={templateCategoryFilter}
+                            onChange={(e) => setTemplateCategoryFilter(e.target.value)}
+                            style={{ padding: "7px 12px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "13px" }}
+                          >
+                            <option value="ALL">All Categories</option>
+                            <option value="UTILITY">UTILITY</option>
+                            <option value="MARKETING">MARKETING</option>
+                            <option value="AUTHENTICATION">AUTHENTICATION</option>
+                          </select>
                         </div>
 
-                        <div style={{ width: "240px", background: "#e5ddd5", borderRadius: "12px", padding: "12px", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
-                          <div style={{ background: "#ffffff", borderRadius: "8px", padding: "10px", fontSize: "12px", color: "#0f172a", boxShadow: "0 1px 2px rgba(0,0,0,0.08)" }}>
-                            {selectedTemplate?.headerContent && (
-                              <div style={{ fontSize: "12px", fontWeight: 700, color: "#075e54", marginBottom: "4px" }}>
-                                {selectedTemplate.headerContent}
+                        {/* Grid of Templates & Live Preview */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                          {/* Left: Template Cards */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "380px", overflowY: "auto" }}>
+                            {filteredTemplates.map((t) => {
+                              const isSelected = selectedTemplate?.name === t.name;
+                              return (
+                                <div
+                                  key={t.name}
+                                  onClick={() => setSelectedTemplate(t)}
+                                  style={{
+                                    padding: "12px 14px",
+                                    borderRadius: "8px",
+                                    border: isSelected ? "2px solid #10b981" : "1px solid #e2e8f0",
+                                    background: isSelected ? "#f0fdf4" : "#ffffff",
+                                    cursor: "pointer"
+                                  }}
+                                >
+                                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                                    <strong style={{ fontSize: "13px", color: "#0f172a" }}>{t.name}</strong>
+                                    <span style={{ background: "#dcfce7", color: "#166534", fontSize: "10px", fontWeight: 700, padding: "1px 6px", borderRadius: "4px" }}>APPROVED</span>
+                                    <span style={{ background: "#e0e7ff", color: "#3730a3", fontSize: "10px", fontWeight: 700, padding: "1px 6px", borderRadius: "4px" }}>{t.category}</span>
+                                  </div>
+                                  <p style={{ fontSize: "12px", color: "#4b5563", margin: "4px 0", lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                                    {t.bodyText}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Right: Phone Live Preview */}
+                          <div style={{ background: "#f8fafc", border: "1px solid #eaecf0", borderRadius: "12px", padding: "16px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                            <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: "12px", width: "100%", display: "flex", justifyContent: "space-between" }}>
+                              <span>Template Preview</span>
+                              <span style={{ background: "#e2e8f0", color: "#334155", padding: "1px 6px", borderRadius: "4px" }}>Live View</span>
+                            </div>
+
+                            <div style={{ width: "240px", background: "#e5ddd5", borderRadius: "12px", padding: "12px", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+                              <div style={{ background: "#ffffff", borderRadius: "8px", padding: "10px", fontSize: "12px", color: "#0f172a", boxShadow: "0 1px 2px rgba(0,0,0,0.08)" }}>
+                                {selectedTemplate?.headerContent && (
+                                  <div style={{ fontSize: "12px", fontWeight: 700, color: "#075e54", marginBottom: "4px" }}>
+                                    {selectedTemplate.headerContent}
+                                  </div>
+                                )}
+                                <p style={{ margin: 0, whiteSpace: "pre-wrap", lineHeight: 1.4 }}>
+                                  {selectedTemplate?.bodyText || "No Template Selected"}
+                                </p>
+                                {selectedTemplate?.footerText && (
+                                  <div style={{ fontSize: "10px", color: "#64748b", marginTop: "6px" }}>
+                                    {selectedTemplate.footerText}
+                                  </div>
+                                )}
                               </div>
-                            )}
-                            <p style={{ margin: 0, whiteSpace: "pre-wrap", lineHeight: 1.4 }}>
-                              {selectedTemplate?.bodyText || "No Template Selected"}
-                            </p>
-                            {selectedTemplate?.footerText && (
-                              <div style={{ fontSize: "10px", color: "#64748b", marginTop: "6px" }}>
-                                {selectedTemplate.footerText}
-                              </div>
-                            )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
+                      </>
+                    ) : (
+                      <>
+                        {/* Search Flows */}
+                        <div style={{ position: "relative" }}>
+                          <Search size={15} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#9ca3af" }} />
+                          <input
+                            type="text"
+                            placeholder="Search flows..."
+                            value={flowSearch}
+                            onChange={(e) => setFlowSearch(e.target.value)}
+                            style={{ width: "100%", padding: "7px 10px 7px 32px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "13px" }}
+                          />
+                        </div>
+
+                        {/* Grid of Flows & Preview */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                          {/* Left List */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "380px", overflowY: "auto" }}>
+                            {flows.filter(f => !flowSearch || f.name.toLowerCase().includes(flowSearch.toLowerCase())).map((f) => {
+                              const isSelected = selectedFlow?.id === f.id;
+                              return (
+                                <div
+                                  key={f.id}
+                                  onClick={() => setSelectedFlow(f)}
+                                  style={{
+                                    padding: "12px 14px",
+                                    borderRadius: "8px",
+                                    border: isSelected ? "2px solid #a78bfa" : "1px solid #e2e8f0",
+                                    background: isSelected ? "#f5f3ff" : "#ffffff",
+                                    cursor: "pointer"
+                                  }}
+                                >
+                                  <div style={{ fontWeight: 700, fontSize: "13px", color: "#0f172a", marginBottom: "4px" }}>{f.name}</div>
+                                  <p style={{ fontSize: "12px", color: "#4b5563", margin: "4px 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {f.description || "No description"}
+                                  </p>
+                                  <code style={{ fontSize: "10px", color: "#6b7280" }}>ID: {f.flowId}</code>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Right Preview */}
+                          <div style={{ background: "#f8fafc", border: "1px solid #eaecf0", borderRadius: "12px", padding: "16px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                            <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: "12px", width: "100%" }}>
+                              <span>Interactive Flow Preview</span>
+                            </div>
+
+                            <div style={{ width: "240px", background: "#e5ddd5", borderRadius: "12px", padding: "12px", boxShadow: "0 4px 12px rgba(0,0,0,0.1)", display: "flex", flexDirection: "column", gap: "4px" }}>
+                              <div style={{ background: "#ffffff", borderRadius: "8px", padding: "10px", fontSize: "12px", color: "#0f172a", boxShadow: "0 1px 2px rgba(0,0,0,0.08)" }}>
+                                <div style={{ fontSize: "12px", fontWeight: 700, color: "#075e54", marginBottom: "4px" }}>
+                                  {selectedFlow?.name || "Flow Form"}
+                                </div>
+                                <p style={{ margin: 0, whiteSpace: "pre-wrap", lineHeight: 1.4 }}>
+                                  {selectedFlow?.description || "Select a Meta Flow to view preview"}
+                                </p>
+                              </div>
+                              <div style={{ background: "white", borderRadius: "6px", padding: "6px", textAlign: "center", fontSize: "11px", fontWeight: 700, color: "#00a5f4" }}>
+                                {selectedFlow?.ctaText || "Open Form"}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
 
-                {/* STEP 2: AUDIENCE */}
                 {currentStep === 2 && (
                   <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                     <h4 style={{ fontSize: "14px", fontWeight: 700, margin: 0 }}>Step 2: Target Audience Segment</h4>

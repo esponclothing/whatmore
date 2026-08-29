@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import TemplatePickerModal from "./TemplatePickerModal";
+import FlowPickerModal from "./FlowPickerModal";
 import ProductCatalogPanel from "./ProductCatalogPanel";
 import {
   Search,
@@ -78,7 +79,8 @@ import {
   updateWhatsAppCannedResponseAction,
   deleteWhatsAppCannedResponseAction,
   sendWhatsAppTemplateAction,
-  sendProductCardAction
+  sendProductCardAction,
+  sendWhatsAppFlowMessageAction
 } from "@/app/actions/whatsAppPlatformActions";
 import { useWhatsAppStore } from "@/store/whatsappStore";
 import "./WhatsAppInbox.css";
@@ -115,7 +117,21 @@ export default function WhatsAppInboxComponent() {
   const [showCannedResponses, setShowCannedResponses] = useState<boolean>(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState<boolean>(false);
   const [showProductPanel, setShowProductPanel] = useState<boolean>(false);
+  const [showFlowPicker, setShowFlowPicker] = useState<boolean>(false);
   
+  // Check 24-hour window status
+  const checkSessionExpired = () => {
+    if (!activeConvDetail || !activeConvDetail.messages) return { expired: false, reason: "" };
+    const customerMsgs = activeConvDetail.messages.filter((m) => m.senderType === "CUSTOMER" && !m.isInternalNote);
+    if (customerMsgs.length === 0) return { expired: true, reason: "No messages received from customer yet." };
+    const lastCustomerMsg = customerMsgs[customerMsgs.length - 1];
+    const diffMs = Date.now() - new Date(lastCustomerMsg.sentAt).getTime();
+    const isExpired = diffMs > 24 * 60 * 60 * 1000;
+    const hoursLeft = Math.max(0, 24 - (diffMs / (3600 * 1000)));
+    return { expired: isExpired, hoursLeft, reason: isExpired ? "24-Hour Session Window Expired" : `${hoursLeft.toFixed(1)} hours remaining` };
+  };
+  const sessionStatus = checkSessionExpired();
+
   // Name Inline Editing State
   const [isEditingName, setIsEditingName] = useState<boolean>(false);
   const [tempCustomerName, setTempCustomerName] = useState<string>("");
@@ -1476,6 +1492,14 @@ export default function WhatsAppInboxComponent() {
                   </button>
                 </div>
               ) : (
+                <>
+                {sessionStatus.expired && !isInternalNote && (
+                  <div style={{ padding: "10px 14px", background: "#fffbeb", borderBottom: "1px solid #fef3c7", color: "#b45309", fontSize: "12.5px", fontWeight: 700, display: "flex", alignItems: "center", gap: "8px", borderRadius: "8px 8px 0 0" }}>
+                    <AlertCircle size={15} color="#d97706" />
+                    <span>24-Hour WhatsApp Session Window has expired. You can only send pre-approved template messages until the customer responds.</span>
+                    <button type="button" onClick={() => setShowTemplatePicker(true)} style={{ marginLeft: "auto", background: "#d97706", color: "white", border: "none", padding: "4px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 800, cursor: "pointer" }}>Send Template</button>
+                  </div>
+                )}
                 <form className={`chat-input-form ${isInternalNote ? "internal-mode" : ""}`} onSubmit={handleSendMessage}>
                 <button
                   type="button"
@@ -1516,6 +1540,17 @@ export default function WhatsAppInboxComponent() {
                   style={{ color: showProductPanel ? '#10b981' : '#64748b' }}
                 >
                   <ShoppingBag size={18} />
+                </button>
+
+                {/* Flow Picker Button */}
+                <button
+                  type="button"
+                  className="input-attachment-btn"
+                  title="Send Interactive Flow Form"
+                  onClick={() => setShowFlowPicker(true)}
+                  style={{ color: showFlowPicker ? '#a78bfa' : '#64748b' }}
+                >
+                  <Zap size={18} />
                 </button>
 
                 <div style={{ position: "relative" }}>
@@ -1606,10 +1641,13 @@ export default function WhatsAppInboxComponent() {
                 <textarea
                   rows={2}
                   className="chat-textarea"
+                  disabled={sessionStatus.expired && !isInternalNote}
                   placeholder={
                     isInternalNote
                       ? "Add an internal note visible only to your team..."
-                      : "Type a WhatsApp message or use shortcuts like /catalog, /price..."
+                      : sessionStatus.expired
+                        ? "⚠️ 24-Hour Session Window Expired. Select a Template or Flow to resume..."
+                        : "Type a WhatsApp message or use shortcuts like /catalog, /price..."
                   }
                   value={messageInput}
                   onChange={(e) => {
@@ -1648,12 +1686,12 @@ export default function WhatsAppInboxComponent() {
                   }}
                 />
 
-                <button type="submit" className="send-msg-btn" disabled={sendingMsg || !messageInput.trim()}>
+                <button type="submit" className="send-msg-btn" disabled={sendingMsg || (!messageInput.trim() && !isInternalNote) || (sessionStatus.expired && !isInternalNote)}>
                   {sendingMsg ? <RefreshCw size={16} className="spin-icon" /> : <Send size={16} />}
                   <span>{isInternalNote ? "Save Note" : "Send"}</span>
                 </button>
               </form>
-              )}
+              </>)}
             </div>
           </>
         )}
@@ -1665,7 +1703,7 @@ export default function WhatsAppInboxComponent() {
           onClose={() => setShowProductPanel(false)}
           recipientName={activeConvDetail.contactName || activeConvDetail.customerPhone}
           onSendProduct={async (product) => {
-            const phone = (activeConvDetail.customerPhone || activeConvDetail.phoneNumber || "").replace(/\D/g,"");
+            const phone = (activeConvDetail.customer?.whatsappNumber || activeConvDetail.customer?.mobile || "").replace(/\D/g,"");
             const res = await sendProductCardAction(phone, product);
             if (res.success) { await fetchConversationDetail(selectedConvId!, true); }
             else { setToastMsg("Product send failed: " + (res.error||"")); setTimeout(() => setToastMsg(null), 3000); }
@@ -1678,11 +1716,39 @@ export default function WhatsAppInboxComponent() {
         <TemplatePickerModal
           onClose={() => setShowTemplatePicker(false)}
           onSendTemplate={async (templateName, language, components) => {
-            const phone = (activeConvDetail?.customerPhone || activeConvDetail?.phoneNumber || "").replace(/\D/g,"");
+            const phone = (activeConvDetail?.customer?.whatsappNumber || activeConvDetail?.customer?.mobile || "").replace(/\D/g,"");
             if (!phone) return;
             const res = await sendWhatsAppTemplateAction(phone, templateName, language, components);
             if (res.success) { await fetchConversationDetail(selectedConvId!, true); }
             else { setToastMsg("Template failed: " + (res.error||"")); setTimeout(() => setToastMsg(null), 3000); }
+          }}
+        />
+      )}
+
+      {/* Flow Picker Modal */}
+      {showFlowPicker && (
+        <FlowPickerModal
+          onClose={() => setShowFlowPicker(false)}
+          onSendFlow={async (flowId) => {
+            const phone = (activeConvDetail?.customer?.whatsappNumber || activeConvDetail?.customer?.mobile || "").replace(/\D/g,"");
+            if (!phone) return;
+            const res = await sendWhatsAppFlowMessageAction(phone, flowId);
+            if (res.success) { await fetchConversationDetail(selectedConvId!, true); }
+            else { setToastMsg("Flow send failed: " + (res.error||"")); setTimeout(() => setToastMsg(null), 3000); }
+          }}
+        />
+      )}
+
+      {/* Flow Picker Modal */}
+      {showFlowPicker && (
+        <FlowPickerModal
+          onClose={() => setShowFlowPicker(false)}
+          onSendFlow={async (flowId) => {
+            const phone = (activeConvDetail?.customer?.whatsappNumber || activeConvDetail?.customer?.mobile || "").replace(/\D/g,"");
+            if (!phone) return;
+            const res = await sendWhatsAppFlowMessageAction(phone, flowId);
+            if (res.success) { await fetchConversationDetail(selectedConvId!, true); }
+            else { setToastMsg("Flow send failed: " + (res.error||"")); setTimeout(() => setToastMsg(null), 3000); }
           }}
         />
       )}

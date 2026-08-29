@@ -187,7 +187,7 @@ export default function WhatsAppTemplatesPage() {
   };
 
   return (
-    <div className="whatmore-page-container">
+    <div className="p-8 w-full max-w-none flex flex-col gap-6">
       {/* Toast */}
       {toastMsg && (
         <div style={{ position:"fixed", top:"20px", right:"20px", zIndex:9999, padding:"12px 18px", borderRadius:"10px", background: toastMsg.type === "error" ? "#ef4444" : "#10b981", color:"white", fontWeight:700, fontSize:"13px", boxShadow:"0 8px 24px rgba(0,0,0,0.15)", display:"flex", alignItems:"center", gap:"8px", maxWidth:"400px" }}>
@@ -196,19 +196,28 @@ export default function WhatsAppTemplatesPage() {
       )}
 
       {/* Header */}
-      <div className="whatmore-page-header">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-200 dark:border-slate-800">
         <div>
-          <h1 className="whatmore-page-title">📄 WhatsApp Templates</h1>
-          <p className="whatmore-page-subtitle">Create and manage Meta-approved message templates for campaigns, broadcasts, and customer outreach.</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 mb-1">📄 WhatsApp Templates</h1>
+          <p className="text-gray-500 text-sm">Create and manage Meta-approved message templates for campaigns, broadcasts, and customer outreach.</p>
         </div>
-        <div style={{ display:"flex", gap:"10px", alignItems:"center", flexWrap:"wrap" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
-            <input value={testPhone} onChange={e => setTestPhone(e.target.value)} placeholder="Test phone (91XXXXXXXXXX)" style={{ padding:"8px 12px", border:"1px solid #e2e8f0", borderRadius:"8px", fontSize:"13px", width:"200px" }} />
-          </div>
-          <button onClick={fetchTemplates} className="btn-secondary" style={{ display:"flex", alignItems:"center", gap:"6px" }}>
-            <RefreshCw size={14}/> Sync from Meta
+        <div className="flex items-center gap-3 flex-wrap">
+          <input 
+            value={testPhone} 
+            onChange={e => setTestPhone(e.target.value)} 
+            placeholder="Test phone (91XXXXXXXXXX)" 
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-48"
+          />
+          <button 
+            onClick={fetchTemplates} 
+            className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition flex items-center gap-2"
+          >
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Sync from Meta
           </button>
-          <button onClick={() => { resetForm(); setShowCreateModal(true); }} className="btn-primary" style={{ display:"flex", alignItems:"center", gap:"6px" }}>
+          <button 
+            onClick={() => { resetForm(); setShowCreateModal(true); }} 
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2"
+          >
             <Plus size={16}/> New Template
           </button>
         </div>

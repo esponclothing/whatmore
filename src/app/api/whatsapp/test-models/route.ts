@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
     // Candidate model names to test
     const models = [
-      'gemini-2.5-flash',
+      'gemini-2.0-flash',
       'gemini-2.0-flash',
       'gemini-1.5-flash',
       'gemini-1.5-pro',

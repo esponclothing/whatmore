@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
     const history = recentMessages.reverse().map(m => `${m.senderType}: ${m.content}`).join('\n');
 
-    let systemPrompt = `You are a helpful e-commerce AI assistant for 11FIT. Read the following WhatsApp conversation history and generate 3 short, natural, distinct quick reply suggestions that the customer support agent could tap to send next. Return ONLY a JSON array of strings, e.g. ["Hello, how can I help?", "Your order is shipped.", "Here is the payment link."].`;
+    let systemPrompt = `You are a helpful e-commerce AI assistant for the brand. Read the following WhatsApp conversation history and generate 3 short, natural, distinct quick reply suggestions that the customer support agent could tap to send next. Return ONLY a JSON array of strings, e.g. ["Hello, how can I help?", "Your order is shipped.", "Here is the payment link."].`;
 
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',

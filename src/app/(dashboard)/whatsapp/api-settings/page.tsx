@@ -45,7 +45,7 @@ export default function WhatsAppAPISettingsPage() {
   // Gemini AI Tab States
   const [geminiKey, setGeminiKey] = useState("");
   const [welcomeMsg, setWelcomeMsg] = useState("");
-  const [activeModel, setActiveModel] = useState("gemini-2.5-flash");
+  const [activeModel, setActiveModel] = useState("gemini-2.0-flash");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [savingAI, setSavingAI] = useState(false);
   const [aiResultMsg, setAiResultMsg] = useState<{ success: boolean; text: string } | null>(null);
@@ -99,7 +99,7 @@ export default function WhatsAppAPISettingsPage() {
       if (resSettings.success && resSettings.settings) {
         setGeminiKey(resSettings.settings.geminiApiKey || "");
         setWelcomeMsg(resSettings.settings.welcomeMessage || "Welcome! How can we help you today?");
-        setActiveModel(resSettings.settings.aiModel || "gemini-2.5-flash");
+        setActiveModel(resSettings.settings.aiModel || "gemini-2.0-flash");
         setSystemPrompt(resSettings.settings.aiSystemPrompt || "");
         setWorkingHoursStart(resSettings.settings.workingHoursStart || "09:00");
         setWorkingHoursEnd(resSettings.settings.workingHoursEnd || "19:00");
@@ -510,8 +510,8 @@ export default function WhatsAppAPISettingsPage() {
                 onChange={(e) => setActiveModel(e.target.value)} 
                 className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
               >
-                <option value="gemini-3.6-flash">Gemini 3.6 Flash (Primary - Fastest)</option>
-                <option value="gemini-3.5-flash">Gemini 3.5 Flash (Fallback 1)</option>
+                <option value="gemini-2.0-flash">Gemini 3.6 Flash (Primary - Fastest)</option>
+                <option value="gemini-2.0-flash">Gemini 3.5 Flash (Fallback 1)</option>
                 <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Fallback 2)</option>
               </select>
             </div>

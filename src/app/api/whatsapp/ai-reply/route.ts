@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const aiKnowledgeBase = settings?.aiKnowledgeBase || "";
     const aiSystemPrompt = settings?.aiSystemPrompt || "You are a helpful customer service assistant for our business.";
     const fallbackLanguage = settings?.aiFallbackLanguage || "English";
-    const aiModel = settings?.aiModel || "gemini-3.6-flash"; // gemini-1.5-flash, gemini-1.5-pro, gemini-2.5-flash
+    const aiModel = settings?.aiModel || "gemini-3.6-flash"; // gemini-1.5-flash, gemini-1.5-pro, gemini-2.0-flash
 
     // 2. Fetch the conversation and its messages
     const conversation = await prisma.whatsAppConversation.findUnique({
@@ -68,15 +68,15 @@ Rules:
     const ai = new GoogleGenAI({ apiKey });
     
     // Map custom UI model strings to actual Gemini model names
-    let geminiModelName = "gemini-2.5-flash";
+    let geminiModelName = "gemini-2.0-flash";
     if (aiModel.includes("pro")) {
-      geminiModelName = "gemini-2.5-pro";
+      geminiModelName = "gemini-1.5-pro";
     } else if (aiModel.includes("1.5-flash")) {
       geminiModelName = "gemini-1.5-flash";
     } else if (aiModel.includes("1.5-pro")) {
       geminiModelName = "gemini-1.5-pro";
     } else {
-      geminiModelName = "gemini-2.5-flash";
+      geminiModelName = "gemini-2.0-flash";
     }
 
     let responseText = "";
@@ -92,7 +92,7 @@ Rules:
       if (e.message?.includes("not found")) {
         console.warn(`[AI Reply] Model ${geminiModelName} not found. Trying fallback...`);
         // Fallback cascade
-        const fallbacks = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.5-pro", "gemini-1.5-pro"];
+        const fallbacks = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-pro"];
         let success = false;
         
         for (const fallbackModel of fallbacks) {

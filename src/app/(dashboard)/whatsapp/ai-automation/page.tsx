@@ -8,7 +8,7 @@ export default function WhatsAppAIAutomationPage() {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [settings, setSettings] = useState({
-    aiModel: "gemini-3.6-flash",
+    aiModel: "gemini-2.0-flash",
     aiFallbackLanguage: "English",
     aiSystemPrompt: "You are a helpful and polite customer service assistant.",
     aiKnowledgeBase: "",
@@ -233,12 +233,12 @@ export default function WhatsAppAIAutomationPage() {
             <div style={{ marginBottom: "16px" }}>
               <label style={{ display: "block", fontSize: "13px", fontWeight: 500, marginBottom: "6px" }}>Gemini AI Model</label>
               <select
-                value={settings.aiModel || 'gemini-3.6-flash'}
+                value={settings.aiModel || 'gemini-2.0-flash'}
                 onChange={(e) => setSettings({...settings, aiModel: e.target.value})}
                 style={{ width: "100%", padding: "8px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "14px" }}
               >
-                <option value="gemini-3.6-flash">Gemini 3.6 Flash (Primary - Fastest)</option>
-                <option value="gemini-3.5-flash">Gemini 3.5 Flash (Fallback 1)</option>
+                <option value="gemini-2.0-flash">Gemini 3.6 Flash (Primary - Fastest)</option>
+                <option value="gemini-2.0-flash">Gemini 3.5 Flash (Fallback 1)</option>
                 <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Fallback 2)</option>
               </select>
               <p style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>

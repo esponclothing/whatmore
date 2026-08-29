@@ -2501,3 +2501,120 @@ export async function sendProductCardAction(
     return { success: false, error: e.message };
   }
 }
+
+export async function getWhatsAppMetaFlows() {
+  try {
+    const flows = await prisma.whatsAppMetaFlow.findMany({ orderBy: { createdAt: 'desc' } });
+    return { success: true, flows };
+  } catch (e: any) {
+    return { success: false, error: e.message, flows: [] };
+  }
+}
+
+export async function saveWhatsAppMetaFlowAction(data: any) {
+  try {
+    const isNew = !data.id || data.id === 'new-uuid';
+    
+    let flow;
+    if (isNew) {
+      flow = await prisma.whatsAppMetaFlow.create({
+        data: {
+          name: data.name,
+          flowId: data.flowId,
+          description: data.description,
+          screenName: data.screenName || 'SCREEN_NAME',
+          ctaText: data.ctaText || 'Open Form',
+          formSchema: data.formSchema || '[]'
+        }
+      });
+    } else {
+      flow = await prisma.whatsAppMetaFlow.update({
+        where: { id: data.id },
+        data: {
+          name: data.name,
+          flowId: data.flowId,
+          description: data.description,
+          screenName: data.screenName || 'SCREEN_NAME',
+          ctaText: data.ctaText || 'Open Form',
+          formSchema: data.formSchema || '[]'
+        }
+      });
+    }
+    revalidatePath('/whatsapp/flows');
+    return { success: true, flow };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function deleteWhatsAppMetaFlowAction(id: string) {
+  try {
+    await prisma.whatsAppMetaFlow.delete({ where: { id } });
+    revalidatePath('/whatsapp/flows');
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function sendWhatsAppFlowMessageAction(toPhone: string, flowId: string) {
+  try {
+    const creds = await getMetaApiCredentials();
+    const cleanPhone = toPhone.replace(/\D/g, "");
+    if (!creds?.isConnected) return { success: false, error: "WhatsApp API not connected." };
+
+    const flowConfig = await prisma.whatsAppMetaFlow.findFirst({
+      where: { flowId: flowId }
+    });
+
+    if (!flowConfig) return { success: false, error: "Flow configuration not found." };
+
+    const payload = {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: cleanPhone,
+      type: "interactive",
+      interactive: {
+        type: "flow",
+        header: {
+          type: "text",
+          text: flowConfig.name
+        },
+        body: {
+          text: flowConfig.description || "Please fill out the form."
+        },
+        footer: {
+          text: "Powered by Whatmore"
+        },
+        action: {
+          name: "flow",
+          parameters: {
+            flow_message_version: "3",
+            flow_token: `token_${Date.now()}`,
+            flow_id: flowConfig.flowId,
+            flow_cta: flowConfig.ctaText,
+            flow_action: "navigate",
+            flow_action_payload: {
+              screen: flowConfig.screenName
+            }
+          }
+        }
+      }
+    };
+
+    const res = await fetch(`https://graph.facebook.com/v21.0/${creds.phoneId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${creds.accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    return { success: true, messageId: data.messages?.[0]?.id };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}

@@ -1949,3 +1949,15 @@ model WhatsAppAgentUser {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 }
+
+model WhatsAppMetaFlow {
+  id          String   @id @default(uuid())
+  name        String
+  flowId      String
+  description String?
+  screenName  String   @default("SCREEN_NAME")
+  ctaText     String   @default("Open Form")
+  formSchema  String   @default("[]") // JSON string of fields
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

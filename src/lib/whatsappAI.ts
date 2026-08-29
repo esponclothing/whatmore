@@ -10,7 +10,7 @@ const GROQ_API_KEY = process.env.VITE_GROQ_API_KEY || '';
 // Mock AI call (You can use @google/genai or fetch in real app)
 
 
-const GEMINI_MODEL_CASCADE = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+const GEMINI_MODEL_CASCADE = ['gemini-2.0-flash', 'gemini-2.0-flash', 'gemini-3.1-pro-preview', 'gemini-2.0-flash', 'gemini-1.5-flash'];
 
 async function callGeminiRest(apiKey, modelName, prompt, systemPrompt, maxTokens = 600) {
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
@@ -293,7 +293,7 @@ export function recommendSize(userText: string) {
     else if (kg <= 95) { teeSize = 'XL (Extra Large)'; teeChest = '48"'; bottomSize = 'XL or XXL (33-35" waist)'; }
     else { teeSize = 'XXL (Double XL)'; teeChest = '50"'; bottomSize = 'XXL (35-37" waist)'; }
 
-    return `[11FIT SIZE RECOMMENDATION FOR WEIGHT ~${kg} KG]:\n` +
+    return `[${brandName.toUpperCase()} SIZE RECOMMENDATION FOR WEIGHT ~${kg} KG]:\n` +
       `👕 Oversized T-Shirts: Recommended Size **${teeSize}** (Chest ${teeChest} | Premium Boxy Fit)\n` +
       `🩳 Shorts & Track Pants: Recommended Size **${bottomSize}**\n` +
       `💡 Note: Our tees already have a stylish drop-shoulder oversized streetwear cut — no need to size up!`;
@@ -305,11 +305,11 @@ export function recommendSize(userText: string) {
     else if (waist >= 33) bottomSize = 'XL (Extra Large - 32-34")';
     else if (waist >= 31) bottomSize = 'L (Large - 30-32")';
 
-    return `[11FIT SIZE RECOMMENDATION FOR ~${waist}" WAIST]:\n` +
+    return `[${brandName.toUpperCase()} SIZE RECOMMENDATION FOR ~${waist}" WAIST]:\n` +
       `🩳 Recommended Bottom Size: **${bottomSize}**\n` +
       `👕 For Oversized Tees: Choose based on chest/weight (M for 65-75kg, L for 75-85kg).`;
   }
-  return `[11FIT GENERAL SIZE & FIT GUIDE]:\n` +
+  return `[${brandName.toUpperCase()} GENERAL SIZE & FIT GUIDE]:\n` +
     `👕 Oversized T-Shirts:\n` +
     `   • S: Chest 42" (~50-63 kg)\n   • M: Chest 44" (~63-73 kg)\n   • L: Chest 46" (~74-84 kg)\n   • XL: Chest 48" (~85-95 kg)\n   • XXL: Chest 50" (~96-110 kg)\n` +
     `🩳 Shorts/Tracks: M (28-30"), L (30-32"), XL (32-34"), XXL (34-36"+)`;
@@ -351,6 +351,11 @@ export async function sendWhatsAppProductCards(toPhone: string, cards: any[]) {
 }
 
 export async function handleIncomingAILogic(senderPhone: string, userText: string, historyLines: string[], conversationId?: string) {
+  let brandName = "Espon Sports";
+  try {
+    const settings = await prisma.companySettings.findFirst();
+    if (settings?.companyName) brandName = settings.companyName;
+  } catch (_) {}
   const history = historyLines.join('\n');
   let toolContext = '';
   let carouselCards: any[] = [];
@@ -390,7 +395,7 @@ export async function handleIncomingAILogic(senderPhone: string, userText: strin
 
   const legacySettings = await prisma.whatsAppLegacySetting.findFirst();
 
-  const systemPrompt = `Tum "11FIT AI Stylist & Sales Assistant" ho!
+  const systemPrompt = `Tum "${brandName} AI Stylist & Sales Assistant" ho!
 === 🗣️ DYNAMIC LANGUAGE & TONE MIRRORING ===
 ${legacySettings?.inst_language || `- AUTOMATIC LANGUAGE SWITCHING: Customer jis language mein message kare, ussi language mein reply karo!
 - SHORT & CRISP REPLIES: Max 2-4 lines. Never write long essays.`}
@@ -405,7 +410,7 @@ Customer ka Current WhatsApp Number: ${senderPhone}
 === 🔐 SECURITY & 10-DIGIT VERIFICATION FLOW ===
 ${legacySettings?.inst_order_security || `- ALWAYS verify 10-digit number before giving order details!`}
 
-=== 📏 11FIT AI SIZE & FIT ADVISOR RULE ===
+=== 📏 Size & Fit Advisor Rule ===
 ${legacySettings?.inst_size_advisor || `- Oversized tees have drop shoulder fit, take normal size.`}
 
 === 📚 KNOWLEDGE BASE ===
