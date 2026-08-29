@@ -19,6 +19,8 @@ export default function OwnerLoginPage() {
         body: JSON.stringify({ password })
       });
       if (res.ok) {
+        // Backup flag in sessionStorage in case cookie SameSite causes issues
+        sessionStorage.setItem("owner_authed", "1");
         router.push("/owner");
       } else {
         setError("Invalid password. Access denied.");

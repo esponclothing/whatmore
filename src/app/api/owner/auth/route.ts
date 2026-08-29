@@ -12,13 +12,13 @@ export async function POST(req: NextRequest) {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     maxAge: 60 * 60 * 24 * 7, // 7 days
-    path: "/owner"
+    path: "/" // Must be "/" so cookie is sent to ALL paths including /api/owner/verify
   });
   return res;
 }
 
 export async function DELETE(req: NextRequest) {
   const res = NextResponse.json({ success: true });
-  res.cookies.delete("owner_token");
+  res.cookies.set("owner_token", "", { maxAge: 0, path: "/" });
   return res;
 }

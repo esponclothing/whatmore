@@ -36,10 +36,15 @@ export default function OwnerClientsPage() {
   const [showEditMeta, setShowEditMeta] = useState(false);
 
   useEffect(() => {
-    fetch("/api/owner/verify").then(r => {
-      if (!r.ok) router.push("/owner/login");
-      else load();
-    }).catch(() => router.push("/owner/login"));
+    const authed = sessionStorage.getItem("owner_authed");
+    if (authed === "1") {
+      load();
+    } else {
+      fetch("/api/owner/verify").then(r => {
+        if (!r.ok) router.push("/owner/login");
+        else { sessionStorage.setItem("owner_authed", "1"); load(); }
+      }).catch(() => router.push("/owner/login"));
+    }
   }, []);
 
   const load = async () => {

@@ -10,11 +10,16 @@ export default function OwnerDashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Client-side auth guard
-    fetch("/api/owner/verify").then(r => {
-      if (!r.ok) router.push("/owner/login");
-      else loadStats();
-    }).catch(() => router.push("/owner/login"));
+    // Client-side auth guard — check sessionStorage first (fast), then cookie
+    const authed = sessionStorage.getItem("owner_authed");
+    if (authed === "1") {
+      loadStats();
+    } else {
+      fetch("/api/owner/verify").then(r => {
+        if (!r.ok) router.push("/owner/login");
+        else { sessionStorage.setItem("owner_authed", "1"); loadStats(); }
+      }).catch(() => router.push("/owner/login"));
+    }
   }, []);
 
   const loadStats = async () => {
@@ -25,6 +30,7 @@ export default function OwnerDashboardPage() {
   };
 
   const handleLogout = async () => {
+    sessionStorage.removeItem("owner_authed");
     await fetch("/api/owner/auth", { method: "DELETE" });
     router.push("/owner/login");
   };
