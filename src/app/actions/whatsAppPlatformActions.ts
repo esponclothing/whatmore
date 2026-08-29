@@ -2154,3 +2154,150 @@ export async function deleteWhatsAppCannedResponseAction(id: string) {
     return { success: false, error: e.message };
   }
 }
+
+// Shopify Product Synchronization and Database CRUD Server Actions
+export async function syncShopifyProductsAction() {
+  try {
+    const settings = await prisma.companySettings.findFirst();
+    if (!settings || !settings.shopifyStoreDomain || !settings.shopifyAccessToken) {
+      return { success: false, error: "Shopify store is not connected. Please save credentials first." };
+    }
+
+    const domain = settings.shopifyStoreDomain;
+    const token = settings.shopifyAccessToken;
+
+    const url = `https://${domain}/admin/api/2024-01/products.json?limit=50`;
+    console.log(`[Shopify Sync] Fetching products from: ${url}`);
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-Shopify-Access-Token': token,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      return { success: false, error: `Shopify API returned status ${response.status}` };
+    }
+
+    const data = await response.json();
+    const shopifyProducts = data.products || [];
+
+    let createdCount = 0;
+
+    for (const sp of shopifyProducts) {
+      const variants = sp.variants || [];
+      const imageUrls = (sp.images || []).map((img: any) => img.src);
+
+      if (variants.length === 0) {
+        const mainSku = `SP-${sp.id}`;
+        await prisma.product.upsert({
+          where: { sku: mainSku },
+          update: {
+            name: sp.title,
+            category: sp.product_type || "General",
+            sellingPrice: 0,
+            mrp: 0,
+            purchasePrice: 0,
+            stockQuantity: 0,
+            status: sp.status === "active" ? "Active" : "Inactive",
+            description: sp.body_html || "",
+            images: imageUrls
+          },
+          create: {
+            name: sp.title,
+            sku: mainSku,
+            category: sp.product_type || "General",
+            sellingPrice: 0,
+            mrp: 0,
+            purchasePrice: 0,
+            stockQuantity: 0,
+            status: sp.status === "active" ? "Active" : "Inactive",
+            description: sp.body_html || "",
+            images: imageUrls
+          }
+        });
+        createdCount++;
+        continue;
+      }
+
+      for (const variant of variants) {
+        const skuCode = variant.sku ? String(variant.sku).trim() : `SP-${sp.id}-${variant.id}`;
+        
+        const price = parseFloat(variant.price || "0");
+        const compareAt = parseFloat(variant.compare_at_price || variant.price || "0");
+        const cost = parseFloat(variant.cost || variant.price_cost || "0");
+        const inventory = variant.inventory_quantity || 0;
+
+        await prisma.product.upsert({
+          where: { sku: skuCode },
+          update: {
+            name: variants.length > 1 ? `${sp.title} - ${variant.title}` : sp.title,
+            category: sp.product_type || "General",
+            sellingPrice: price,
+            mrp: compareAt,
+            purchasePrice: cost,
+            stockQuantity: inventory,
+            status: sp.status === "active" ? "Active" : "Inactive",
+            description: sp.body_html || "",
+            images: imageUrls
+          },
+          create: {
+            name: variants.length > 1 ? `${sp.title} - ${variant.title}` : sp.title,
+            sku: skuCode,
+            category: sp.product_type || "General",
+            sellingPrice: price,
+            mrp: compareAt,
+            purchasePrice: cost,
+            stockQuantity: inventory,
+            status: sp.status === "active" ? "Active" : "Inactive",
+            description: sp.body_html || "",
+            images: imageUrls
+          }
+        });
+        createdCount++;
+      }
+    }
+
+    return { 
+      success: true, 
+      message: `✓ Successfully synced ${createdCount} products/variants from Shopify!`,
+      count: createdCount 
+    };
+  } catch (error: any) {
+    console.error("[Shopify Sync Error]:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getProductsAction() {
+  try {
+    const products = await prisma.product.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    return { success: true, products };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function createProductAction(data: { name: string; sku: string; price: number; compareAt: number; cost: number; inventory: number }) {
+  try {
+    const product = await prisma.product.create({
+      data: {
+        name: data.name,
+        sku: data.sku,
+        sellingPrice: data.price,
+        mrp: data.compareAt,
+        purchasePrice: data.cost,
+        stockQuantity: data.inventory,
+        category: "General",
+        status: "Active"
+      }
+    });
+    return { success: true, product };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

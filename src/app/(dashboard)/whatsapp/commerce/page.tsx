@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Search, Filter, ArrowUpRight, CheckCircle2, AlertTriangle, MessageSquare, Download, RefreshCw, Plus, Store, ExternalLink } from "lucide-react";
 import Link from "next/link";
-import { getShopifyCredentialsAction } from "@/app/actions/whatsAppPlatformActions";
+import { getShopifyCredentialsAction, syncShopifyProductsAction, getProductsAction, createProductAction } from "@/app/actions/whatsAppPlatformActions";
 
 // Mock Data
 const MOCK_PRODUCTS = [
@@ -28,6 +28,24 @@ export default function ProductsCommercePage() {
   const [showCatalogMaker, setShowCatalogMaker] = useState(false);
   const [newProduct, setNewProduct] = useState({ name: "", sku: "", price: "", compareAt: "", cost: "", inventory: "10" });
 
+  const fetchProducts = async () => {
+    const res = await getProductsAction();
+    if (res.success && res.products && res.products.length > 0) {
+      const mapped = res.products.map((p: any, idx: number) => ({
+        id: idx + 1,
+        dbId: p.id,
+        name: p.name,
+        sku: p.sku || "",
+        price: p.sellingPrice || 0,
+        compareAt: p.mrp || 0,
+        cost: p.purchasePrice || 0,
+        inventory: p.stockQuantity || 0,
+        status: p.status || "Active"
+      }));
+      setProducts(mapped);
+    }
+  };
+
   useEffect(() => {
     getShopifyCredentialsAction().then((res) => {
       if (res.success && res.credentials?.shopifyAccessToken) {
@@ -35,6 +53,7 @@ export default function ProductsCommercePage() {
         setShopifyDomain(res.credentials.shopifyStoreDomain || "Connected Store");
       }
     });
+    fetchProducts();
   }, []);
 
   const handleEditChange = (id: number, field: string, value: string) => {
@@ -46,29 +65,35 @@ export default function ProductsCommercePage() {
     return (((price - cost) / price) * 100).toFixed(1) + "%";
   };
   
-  const handleFetchShopify = () => {
+  const handleFetchShopify = async () => {
     setIsFetchingShopify(true);
-    setTimeout(() => {
-      setIsFetchingShopify(false);
-      alert("Shopify Catalog synced successfully!");
-    }, 1500);
+    const res = await syncShopifyProductsAction();
+    if (res.success) {
+      alert(res.message);
+      await fetchProducts();
+    } else {
+      alert("Shopify Sync Failed: " + res.error);
+    }
+    setIsFetchingShopify(false);
   };
   
-  const handleSaveCatalogProduct = (e: React.FormEvent) => {
+  const handleSaveCatalogProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newId = products.length + 1;
-    setProducts([{ 
-      id: newId, 
-      name: newProduct.name, 
-      sku: newProduct.sku, 
-      price: Number(newProduct.price), 
-      compareAt: Number(newProduct.compareAt), 
-      cost: Number(newProduct.cost), 
-      inventory: Number(newProduct.inventory), 
-      status: "Active" 
-    }, ...products]);
-    setShowCatalogMaker(false);
-    setNewProduct({ name: "", sku: "", price: "", compareAt: "", cost: "", inventory: "10" });
+    const res = await createProductAction({
+      name: newProduct.name,
+      sku: newProduct.sku,
+      price: Number(newProduct.price) || 0,
+      compareAt: Number(newProduct.compareAt) || 0,
+      cost: Number(newProduct.cost) || 0,
+      inventory: Number(newProduct.inventory) || 0
+    });
+    if (res.success) {
+      await fetchProducts();
+      setShowCatalogMaker(false);
+      setNewProduct({ name: "", sku: "", price: "", compareAt: "", cost: "", inventory: "10" });
+    } else {
+      alert("Failed to save product: " + res.error);
+    }
   };
 
   return (
