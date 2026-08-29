@@ -393,12 +393,18 @@ export async function handleIncomingAILogic(senderPhone: string, userText: strin
     toolContext += `\n${sizeInfo}`;
   }
 
-  const legacySettings = await prisma.whatsAppLegacySetting.findFirst();
+    const settings = await prisma.whatsAppSettings.findFirst();
+  const systemRules = settings?.aiSystemPrompt || "You are a helpful and polite customer service representative.";
+  const knowledgeBase = settings?.aiKnowledgeBase || "";
 
   const systemPrompt = `Tum "${brandName} AI Stylist & Sales Assistant" ho!
+
+=== 🤖 AI PERSONA & SYSTEM RULES (Strict guidelines you MUST follow) ===
+${systemRules}
+
 === 🗣️ DYNAMIC LANGUAGE & TONE MIRRORING ===
-${legacySettings?.inst_language || `- AUTOMATIC LANGUAGE SWITCHING: Customer jis language mein message kare, ussi language mein reply karo!
-- SHORT & CRISP REPLIES: Max 2-4 lines. Never write long essays.`}
+- AUTOMATIC LANGUAGE SWITCHING: Customer jis language mein message kare, ussi language mein reply karo!
+- SHORT & CRISP REPLIES: Max 2-4 lines. Never write long essays.
 
 === 🔐 CUSTOMER LIVE WHATSAPP NUMBER ===
 Customer ka Current WhatsApp Number: ${senderPhone}
@@ -407,16 +413,8 @@ Customer ka Current WhatsApp Number: ${senderPhone}
 - KABHI BHI "[SHOPIFY ORDER RESULT...]" ya koi JSON bracket text customer ko MAT bhejna.
 - Agar products mile hain, toh exactly yeh tag end mein lagao: [SEND_PRODUCT_CAROUSEL].
 
-=== 🔐 SECURITY & 10-DIGIT VERIFICATION FLOW ===
-${legacySettings?.inst_order_security || `- ALWAYS verify 10-digit number before giving order details!`}
-
-=== 📏 Size & Fit Advisor Rule ===
-${legacySettings?.inst_size_advisor || `- Oversized tees have drop shoulder fit, take normal size.`}
-
-=== 📚 KNOWLEDGE BASE ===
-${legacySettings?.inst_brand_policies || ''}
-${legacySettings?.knowledge_base || ''}
-${legacySettings?.inst_custom || ''}
+=== 📚 BUSINESS KNOWLEDGE BASE ===
+${knowledgeBase}
 
 RECENT CONVERSATION HISTORY:
 ${history}
