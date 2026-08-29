@@ -1880,3 +1880,71 @@ model WhatsAppWebhookLog {
   errorMessage String?
   createdAt    DateTime @default(now())
 }
+
+
+// ---------------------------------------------------------
+// SaaS Multi-Tenant: WhatsApp Clients (Tenants) & Payments
+// ---------------------------------------------------------
+model WhatsAppClient {
+  id               String   @id @default(uuid())
+  businessName     String
+  contactEmail     String
+  contactPhone     String?
+  ownerWhatsApp    String?  // Owner's WA number for blocked clients to reach
+  webhookClientId  String   @unique @default(uuid()) // Used in webhook URL
+  adminEmail       String?  // Login email of the client's admin user
+  adminPassword    String?  // Hashed password set by owner on onboard
+
+  subscriptionPlan   String   @default("STARTER") // TRIAL, STARTER, GROWTH, ENTERPRISE, CUSTOM
+  monthlyFee         Float    @default(999)
+  subscriptionStatus String   @default("TRIAL")   // TRIAL, ACTIVE, PAST_DUE, BLOCKED
+  currentPeriodStart DateTime @default(now())
+  currentPeriodEnd   DateTime @default(now())
+  gracePeriodDays    Int      @default(7)
+
+  maxAgents       Int      @default(3)
+  isActive        Boolean  @default(true)
+  notes           String?
+
+  // Meta (WhatsApp Business) API credentials — set by owner or client admin
+  wabaId          String?  // WhatsApp Business Account ID
+  phoneId         String?  // Phone Number ID from Meta
+  metaAccessToken String?  // Permanent Access Token
+  webhookVerifyToken String? // Custom webhook verify token
+  phoneNumber     String?  // Display phone number
+
+  // Shopify credentials — set by owner or client admin
+  shopifyDomain   String?
+  shopifyToken    String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  payments        WhatsAppClientPayment[]
+  agents          WhatsAppAgentUser[]
+}
+
+model WhatsAppClientPayment {
+  id           String          @id @default(uuid())
+  clientId     String
+  client       WhatsAppClient  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  amount       Float
+  periodStart  DateTime
+  periodEnd    DateTime
+  notes        String?
+  markedByOwner Boolean        @default(true)
+  createdAt    DateTime        @default(now())
+}
+
+model WhatsAppAgentUser {
+  id          String          @id @default(uuid())
+  clientId    String
+  client      WhatsAppClient  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name        String
+  email       String          @unique
+  password    String
+  role        String          @default("AGENT") // ADMIN, AGENT
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}

@@ -11,9 +11,7 @@ import {
   registerWhatsAppPhoneNumberAction,
   getWhatsAppSettingsAction,
   saveWhatsAppSettingsAction,
-  getTeamMembersAction,
-  getCRMCustomersAction,
-  createCRMCustomerAction
+  getTeamMembersAction
 } from "@/app/actions/whatsAppPlatformActions";
 
 export default function WhatsAppAPISettingsPage() {
@@ -61,14 +59,15 @@ export default function WhatsAppAPISettingsPage() {
   const [slaResultMsg, setSlaResultMsg] = useState<{ success: boolean; text: string } | null>(null);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
 
-  // CRM Contacts States
-  const [crmContacts, setCrmContacts] = useState<any[]>([]);
-  const [crmSearch, setCrmSearch] = useState("");
-  const [newContactName, setNewContactName] = useState("");
-  const [newContactPhone, setNewContactPhone] = useState("");
-  const [newContactType, setNewContactType] = useState("Retailer");
-  const [savingCRM, setSavingCRM] = useState(false);
-  const [crmResultMsg, setCrmResultMsg] = useState<{ success: boolean; text: string } | null>(null);
+  // Agent Management States
+  const [newAgentName, setNewAgentName] = useState("");
+  const [newAgentEmail, setNewAgentEmail] = useState("");
+  const [newAgentPassword, setNewAgentPassword] = useState("");
+  const [newAgentRole, setNewAgentRole] = useState("AGENT");
+  const [savingAgent, setSavingAgent] = useState(false);
+  const [agentResultMsg, setAgentResultMsg] = useState<{ success: boolean; text: string } | null>(null);
+  const [clientInfo, setClientInfo] = useState<any>(null);
+  const [agents, setAgents] = useState<any[]>([]);
 
   // Facebook Register state
   const [registering, setRegistering] = useState(false);
@@ -298,9 +297,9 @@ export default function WhatsAppAPISettingsPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab("crm-contacts")}
+          onClick={() => setActiveTab("agents")}
           className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${
-            activeTab === "crm-contacts" 
+            activeTab === "agents" 
               ? "border-indigo-600 text-indigo-600" 
               : "border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300"
           }`}
