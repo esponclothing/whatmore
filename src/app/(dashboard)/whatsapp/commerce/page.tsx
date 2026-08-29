@@ -40,7 +40,9 @@ export default function ProductsCommercePage() {
         compareAt: p.mrp || 0,
         cost: p.purchasePrice || 0,
         inventory: p.stockQuantity || 0,
-        status: p.status || "Active"
+        status: p.status || "Active",
+        image: p.images?.[0] || "",
+        description: p.description || ""
       }));
       setProducts(mapped);
     }
@@ -171,12 +173,27 @@ export default function ProductsCommercePage() {
                 <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors group">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gray-100 dark:bg-slate-700 rounded-lg flex items-center justify-center">
-                        <Store size={20} className="text-gray-400" />
+                      <div className="w-10 h-10 bg-gray-100 dark:bg-slate-700 rounded-lg flex items-center justify-center overflow-hidden border border-gray-200 dark:border-slate-700">
+                        {p.image ? (
+                          <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Store size={20} className="text-gray-400" />
+                        )}
                       </div>
                       <div>
                         <p className="font-bold text-gray-900 dark:text-white">{p.name}</p>
-                        <p className="text-xs text-gray-500">{p.sku}</p>
+                        <div className="flex items-center gap-2 mt-0.5" style={{ flexWrap: "wrap" }}>
+                          <span className="text-xs text-gray-500 font-mono">SKU: {p.sku || "N/A"}</span>
+                          {p.description && (
+                            <span 
+                              className="text-xs text-gray-400 max-w-[250px] truncate" 
+                              title={p.description.replace(/<[^>]*>/g, '').trim()}
+                              style={{ display: "inline-block", borderLeft: "1px solid #e2e8f0", paddingLeft: "8px" }}
+                            >
+                              {p.description.replace(/<[^>]*>/g, '').trim()}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </td>
