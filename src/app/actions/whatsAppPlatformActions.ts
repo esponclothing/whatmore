@@ -1942,27 +1942,59 @@ export async function getShopifyCredentialsAction() {
 
 export async function saveShopifyCredentialsAction(data: { storeDomain: string; accessToken: string }) {
   try {
+    const domain = data.storeDomain.trim();
+    const token = data.accessToken.trim();
+
+    if (!domain || !token) {
+      return { success: false, error: 'Store domain and access token cannot be empty.' };
+    }
+
+    // Test connection first
+    const testUrl = `https://${domain}/admin/api/2024-01/shop.json`;
+    const response = await fetch(testUrl, {
+      method: 'GET',
+      headers: {
+        'X-Shopify-Access-Token': token,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      let errorMsg = `Shopify API returned ${response.status}`;
+      try {
+        const errJson = await response.json();
+        if (errJson.errors) {
+          errorMsg += `: ${JSON.stringify(errJson.errors)}`;
+        }
+      } catch (_) {}
+      return {
+        success: false,
+        error: `Shopify Connection Failed: ${errorMsg}. Please verify domain and token.`
+      };
+    }
+
+    // Save to database only if connected
     let settings = await prisma.companySettings.findFirst();
     if (settings) {
       await prisma.companySettings.update({
         where: { id: settings.id },
         data: {
-          shopifyStoreDomain: data.storeDomain,
-          shopifyAccessToken: data.accessToken
+          shopifyStoreDomain: domain,
+          shopifyAccessToken: token
         }
       });
     } else {
       await prisma.companySettings.create({
         data: {
           id: 'default',
-          shopifyStoreDomain: data.storeDomain,
-          shopifyAccessToken: data.accessToken
+          shopifyStoreDomain: domain,
+          shopifyAccessToken: token
         }
       });
     }
-    return { success: true, message: 'Shopify credentials saved securely.' };
+    return { success: true, message: '✓ Shopify connection test successful! Credentials saved securely.' };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: `Connection Error: ${error.message}. Please verify the Shopify domain.` };
   }
 }
 
