@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { handleIncomingAILogic } from "@/lib/whatsappAI";
-import { executeFlowEngine } from "@/lib/flowEngine";
+import { executeFlowEngine } from "@/lib/whatsappFlowEngine";
 
 const PROCESSED_WEBHOOK_IDS = new Set<string>();
 
@@ -132,6 +132,19 @@ export async function POST(req: NextRequest) {
         textContent = msg[msg.type].caption;
       } else if (msg.type === "template") {
         textContent = "[Template Message]";
+      } else if (msg.type === "interactive" && msg.interactive?.type === "nfm_reply") {
+        const flowReply = msg.interactive.nfm_reply;
+        let summary = "📋 Form Submitted:\n";
+        try {
+          const answers = JSON.parse(flowReply.response_json || "{}");
+          Object.entries(answers).forEach(([key, val]) => {
+            const cleanKey = key.replace(/_/g, " ").toUpperCase();
+            summary += `• ${cleanKey}: ${val}\n`;
+          });
+        } catch (_) {
+          summary += `Raw response: ${flowReply.response_json}`;
+        }
+        textContent = summary.trim();
       }
 
       // Feature: Intercept `buy_` buttons
@@ -192,6 +205,29 @@ export async function POST(req: NextRequest) {
       });
 
       const messageTimestamp = new Date(parseInt(msg.timestamp) * 1000 || Date.now());
+      
+      // Log Meta Flow submissions in database
+      if (msg.type === "interactive" && msg.interactive?.type === "nfm_reply") {
+        try {
+          const flowReply = msg.interactive.nfm_reply;
+          let formRecord = await prisma.whatsAppForm.findFirst({ where: { name: "Meta Flow Form" } });
+          if (!formRecord) {
+            formRecord = await prisma.whatsAppForm.create({
+              data: { name: "Meta Flow Form", fields: "[]" }
+            });
+          }
+          await prisma.whatsAppFormSubmission.create({
+            data: {
+              formId: formRecord.id,
+              conversationId: conversation.id,
+              customerId: customer.id,
+              dataJson: flowReply.response_json || "{}"
+            }
+          });
+        } catch (err) {
+          console.error("Failed to log form submission in webhook:", err);
+        }
+      }
 
       if (!conversation) {
         conversation = await prisma.whatsAppConversation.create({
@@ -248,7 +284,7 @@ export async function POST(req: NextRequest) {
       // Feature 2: Chatbot Flow Engine — check if a flow should intercept
       const isTextMessage = msg.type === "text" || msg.type === "interactive";
       if (isTextMessage) {
-        const flowHandled = await executeFlowEngine(fromPhone, textContent);
+        const flowHandled = await executeFlowEngine(fromPhone, textContent, conversation.id);
 
         if (!flowHandled && conversation.aiHandled) {
           // Feature 7: AI + Logging

@@ -1017,6 +1017,8 @@ export default function WhatsAppInboxComponent() {
             </div>
           ) : (
             conversations.map((conv) => {
+              const lastCustMsg = conv.messages?.[0];
+              const isExpired = lastCustMsg ? (Date.now() - new Date(lastCustMsg.sentAt).getTime() > 24 * 60 * 60 * 1000) : false;
               const isSelected = conv.id === selectedConvId;
               const cust = conv.customer;
               const isUnread = conv.unreadCount > 0;
@@ -1064,6 +1066,11 @@ export default function WhatsAppInboxComponent() {
                           <span className="badge-human-pill">Human</span>
                         )}
                         {conv.priority === "HIGH" && <span className="badge-priority-high">HIGH</span>}
+                        {isExpired && (
+                          <span style={{ fontSize: "9px", padding: "1px 5px", borderRadius: "4px", background: "#fee2e2", color: "#ef4444", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "2px", border: "1px solid rgba(239,68,68,0.2)" }}>
+                            🔒 Expired
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}

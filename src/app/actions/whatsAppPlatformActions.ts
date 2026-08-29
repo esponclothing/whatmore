@@ -36,6 +36,7 @@ export async function getMetaApiCredentials() {
 // ---------------------------------------------------------
 
 import { getServerSession } from "next-auth";
+import { cookies } from "next/headers";
 import { authOptions } from "@/lib/auth";
 
 export interface ConversationFilterOptions {
@@ -53,17 +54,42 @@ export interface ConversationFilterOptions {
 export async function getWhatsAppConversations(filters: ConversationFilterOptions = {}) {
   // await ensureSeeded();
   try {
+    let userRole = 'SALES';
+    let userEmail = null;
+    let userId = null;
+
+    // A. Try NextAuth session
     const session = await getServerSession(authOptions);
-    const userRole = (session?.user as any)?.role || 'SALES';
-    const userId = (session?.user as any)?.id;
+    if (session?.user) {
+      userRole = (session.user as any).role || 'SALES';
+      userEmail = session.user.email;
+      userId = (session.user as any).id;
+    } else {
+      // B. Fallback to custom cookie-based session (app uses wm_user cookie)
+      try {
+        const userCookie = cookies().get("wm_user")?.value;
+        if (userCookie) {
+          const parsed = JSON.parse(userCookie);
+          userRole = parsed.role || 'SALES';
+          userEmail = parsed.email;
+        }
+      } catch (_) {}
+    }
+
+    if (!userId && userEmail) {
+      const dbUser = await prisma.user.findUnique({ where: { email: userEmail } });
+      if (dbUser) userId = dbUser.id;
+    }
+
     const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN' || userRole === 'MANAGER';
 
     let currentEmployee = null;
     if (userId) {
       currentEmployee = await prisma.employee.findUnique({ where: { userId } });
+    } else if (userEmail) {
+      currentEmployee = await prisma.employee.findFirst({ where: { user: { email: userEmail } } });
     }
-
-    const where: any = {};
+  const where: any = {};
 
     if (filters.search && filters.search.trim()) {
       const q = filters.search.trim();
@@ -95,19 +121,17 @@ export async function getWhatsAppConversations(filters: ConversationFilterOption
     // Only Admin/SuperAdmin/Manager can see all chats. Salespersons can ONLY see their assigned chats!
     if (!isAdmin) {
       let empId = currentEmployee?.id;
-      if (!empId && session?.user?.email) {
-        const empByEmail = await prisma.employee.findFirst({ where: { user: { email: session.user.email } } });
+      if (!empId && userEmail) {
+        const empByEmail = await prisma.employee.findFirst({ where: { user: { email: userEmail } } });
         if (empByEmail) empId = empByEmail.id;
       }
 
       if (empId) {
         where.assignedEmployeeId = empId;
       } else {
-        // Fallback: If no employee record found for sales user, return empty list
         where.assignedEmployeeId = "00000000-0000-0000-0000-000000000000";
       }
     } else {
-      // Admin / Super Admin / Manager View: Can see all chats, or filter by team member or tab
       if (filters.tab === 'unassigned') {
         // UNASSIGNED TAB MUST ALWAYS RETURN ONLY UNASSIGNED CHATS (assignedEmployeeId IS NULL)
         where.assignedEmployeeId = null;
@@ -151,6 +175,7 @@ export async function getWhatsAppConversations(filters: ConversationFilterOption
             user: { select: { name: true, email: true } }
           }
         },
+        
         account: {
           select: {
             id: true,
@@ -158,6 +183,11 @@ export async function getWhatsAppConversations(filters: ConversationFilterOption
             phoneNumber: true,
             status: true
           }
+        },
+        messages: {
+          where: { senderType: 'CUSTOMER' },
+          orderBy: { sentAt: 'desc' },
+          take: 1
         }
       },
       orderBy: {
