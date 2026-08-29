@@ -146,52 +146,89 @@ export async function searchProducts(userText: string) {
     }
   } catch (_) {}
 
-  // Search terms
-  const terms = [];
-  if (/short/i.test(userText)) terms.push('short');
-  if (/oversize|t\-?i?shirt|shirt|tee/i.test(userText)) terms.push('shirt');
-  if (/pant|track|lower|trouser/i.test(userText)) terms.push('pant');
-  if (/watch/i.test(userText)) terms.push('watch');
+  // 1. Fetch all unique collection titles from database
+  let matchedCollection = "";
+  try {
+    const activeProducts = await prisma.product.findMany({
+      where: { status: "Active" },
+      select: { fabric: true }
+    });
+    const allCollections = Array.from(
+      new Set(
+        activeProducts
+          .map(p => p.fabric)
+          .flatMap(f => String(f || '').split(',').map(s => s.trim()))
+          .filter(Boolean)
+      )
+    );
+
+    // Look for exact/partial collection name matches in the userText
+    for (const col of allCollections) {
+      if (col.length > 2 && new RegExp(`\\b${col}\\b|\\b${col.replace(/\\s+/g, '')}\\b`, 'i').test(userText)) {
+        matchedCollection = col;
+        break;
+      }
+    }
+  } catch (_) {}
 
   let dbProducts = [];
   try {
-    if (terms.length > 0) {
+    if (matchedCollection) {
+      console.log(`[AI Sync Search] User requested collection: ${matchedCollection}`);
       dbProducts = await prisma.product.findMany({
         where: {
           status: "Active",
-          OR: terms.map(term => ({
-            OR: [
-              { name: { contains: term, mode: 'insensitive' } },
-              { description: { contains: term, mode: 'insensitive' } },
-              { category: { contains: term, mode: 'insensitive' } }
-            ]
-          }))
+          fabric: { contains: matchedCollection, mode: 'insensitive' }
         },
         take: 10
       });
     } else {
-      // General keyword fallback
-      const words = userText.split(/\s+/).filter(w => w.length > 3 && !/what|show|price|suggest|recommend|need|want|find/i.test(w));
-      if (words.length > 0) {
+      // Search terms fallback (Shirts, Pants, etc.)
+      const terms = [];
+      if (/short/i.test(userText)) terms.push('short');
+      if (/oversize|t\-?i?shirt|shirt|tee/i.test(userText)) terms.push('shirt');
+      if (/pant|track|lower|trouser/i.test(userText)) terms.push('pant');
+      if (/watch/i.test(userText)) terms.push('watch');
+
+      if (terms.length > 0) {
         dbProducts = await prisma.product.findMany({
           where: {
             status: "Active",
-            OR: words.map(w => ({
+            OR: terms.map(term => ({
               OR: [
-                { name: { contains: w, mode: 'insensitive' } },
-                { description: { contains: w, mode: 'insensitive' } },
-                { category: { contains: w, mode: 'insensitive' } }
+                { name: { contains: term, mode: 'insensitive' } },
+                { description: { contains: term, mode: 'insensitive' } },
+                { category: { contains: term, mode: 'insensitive' } }
               ]
             }))
           },
           take: 10
         });
       } else {
-        // Return top products
-        dbProducts = await prisma.product.findMany({
-          where: { status: "Active" },
-          take: 10
-        });
+        // General keyword matching
+        const words = userText.split(/\s+/).filter(w => w.length > 3 && !/what|show|price|suggest|recommend|need|want|find/i.test(w));
+        if (words.length > 0) {
+          dbProducts = await prisma.product.findMany({
+            where: {
+              status: "Active",
+              OR: words.map(w => ({
+                OR: [
+                  { name: { contains: w, mode: 'insensitive' } },
+                  { description: { contains: w, mode: 'insensitive' } },
+                  { category: { contains: w, mode: 'insensitive' } },
+                  { fabric: { contains: w, mode: 'insensitive' } }
+                ]
+              }))
+            },
+            take: 10
+          });
+        } else {
+          // Return top active products
+          dbProducts = await prisma.product.findMany({
+            where: { status: "Active" },
+            take: 10
+          });
+        }
       }
     }
 
