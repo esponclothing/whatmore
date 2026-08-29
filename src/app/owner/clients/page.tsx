@@ -35,7 +35,12 @@ export default function OwnerClientsPage() {
   const [showMetaFields, setShowMetaFields] = useState(false);
   const [showEditMeta, setShowEditMeta] = useState(false);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    fetch("/api/owner/verify").then(r => {
+      if (!r.ok) router.push("/owner/login");
+      else load();
+    }).catch(() => router.push("/owner/login"));
+  }, []);
 
   const load = async () => {
     setLoading(true);

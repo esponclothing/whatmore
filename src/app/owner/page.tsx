@@ -10,7 +10,11 @@ export default function OwnerDashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    loadStats();
+    // Client-side auth guard
+    fetch("/api/owner/verify").then(r => {
+      if (!r.ok) router.push("/owner/login");
+      else loadStats();
+    }).catch(() => router.push("/owner/login"));
   }, []);
 
   const loadStats = async () => {

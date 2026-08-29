@@ -10,15 +10,9 @@ export const metadata = {
 };
 
 export default function OwnerLayout({ children }: { children: React.ReactNode }) {
-  const cookieStore = cookies();
-  const token = cookieStore.get("owner_token")?.value;
-  const pathname = ""; // layout doesn't have access to pathname
-  // Skip auth check for login page (handled by login page itself)
   return (
-    <html lang="en">
-      <body style={{ margin: 0, fontFamily: "Inter, sans-serif", background: "#0a0a0f", color: "#e2e8f0", minHeight: "100vh" }}>
-        {children}
-      </body>
-    </html>
+    <div style={{ margin: 0, fontFamily: "Inter, -apple-system, sans-serif", background: "#0a0a0f", color: "#e2e8f0", minHeight: "100vh" }}>
+      {children}
+    </div>
   );
 }
