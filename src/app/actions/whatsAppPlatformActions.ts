@@ -2431,3 +2431,73 @@ export async function createCRMCustomerAction(data: {
     return { success: false, error: error.message };
   }
 }
+
+export async function deleteWhatsAppTemplateAction(templateName: string) {
+  try {
+    const creds = await getMetaApiCredentials();
+    if (creds?.isConnected && creds.businessAccountId) {
+      await fetch(
+        `https://graph.facebook.com/v21.0/${creds.businessAccountId}/message_templates?name=${encodeURIComponent(templateName)}&access_token=${creds.accessToken}`,
+        { method: 'DELETE' }
+      );
+    }
+    await prisma.whatsAppTemplate.deleteMany({ where: { name: templateName } });
+    revalidatePath('/whatsapp/templates');
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function sendProductCardAction(
+  toPhone: string,
+  product: { title: string; price: string; image: string; url: string; description?: string }
+) {
+  try {
+    const creds = await getMetaApiCredentials();
+    const cleanPhone = toPhone.replace(/\D/g, '');
+    if (!creds?.isConnected) return { success: false, error: 'WhatsApp API not connected.' };
+
+    // Send product image first (if available)
+    if (product.image) {
+      const imagePayload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: cleanPhone,
+        type: 'image',
+        image: {
+          link: product.image,
+          caption: `${product.title} — ₹${parseFloat(product.price).toLocaleString('en-IN')}`
+        }
+      };
+      await fetch(`https://graph.facebook.com/v21.0/${creds.phoneId}/messages`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${creds.accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(imagePayload)
+      });
+    }
+
+    // Send rich text message with product link
+    const desc = product.description ? `\n${product.description.slice(0, 200)}` : '';
+    const messageText = `🛍️ *${product.title}*\n💰 Price: ₹${parseFloat(product.price).toLocaleString('en-IN')}${desc}\n\n🔗 ${product.url}`;
+
+    const textPayload = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: cleanPhone,
+      type: 'text',
+      text: { body: messageText, preview_url: true }
+    };
+    const res = await fetch(`https://graph.facebook.com/v21.0/${creds.phoneId}/messages`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${creds.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(textPayload)
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+
+    return { success: true, messageId: data.messages?.[0]?.id };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}

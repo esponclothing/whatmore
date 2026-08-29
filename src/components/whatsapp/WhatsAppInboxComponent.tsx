@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import TemplatePickerModal from "./TemplatePickerModal";
+import ProductCatalogPanel from "./ProductCatalogPanel";
 import {
   Search,
   Filter,
@@ -74,7 +76,9 @@ import {
   getWhatsAppCannedResponsesAction,
   createWhatsAppCannedResponseAction,
   updateWhatsAppCannedResponseAction,
-  deleteWhatsAppCannedResponseAction
+  deleteWhatsAppCannedResponseAction,
+  sendWhatsAppTemplateAction,
+  sendProductCardAction
 } from "@/app/actions/whatsAppPlatformActions";
 import { useWhatsAppStore } from "@/store/whatsappStore";
 import "./WhatsAppInbox.css";
@@ -109,6 +113,8 @@ export default function WhatsAppInboxComponent() {
   const [aiToggleLoading, setAiToggleLoading] = useState<boolean>(false);
   const [cannedResponses, setCannedResponses] = useState<any[]>([]);
   const [showCannedResponses, setShowCannedResponses] = useState<boolean>(false);
+  const [showTemplatePicker, setShowTemplatePicker] = useState<boolean>(false);
+  const [showProductPanel, setShowProductPanel] = useState<boolean>(false);
   
   // Name Inline Editing State
   const [isEditingName, setIsEditingName] = useState<boolean>(false);
@@ -1490,6 +1496,28 @@ export default function WhatsAppInboxComponent() {
                   <Mic size={18} />
                 </button>
 
+                {/* Template Picker Button */}
+                <button
+                  type="button"
+                  className="input-attachment-btn"
+                  title="Send Template Message"
+                  onClick={() => setShowTemplatePicker(true)}
+                  style={{ color: showTemplatePicker ? '#4f46e5' : '#64748b' }}
+                >
+                  <FileCode size={18} />
+                </button>
+
+                {/* Product Catalog Button */}
+                <button
+                  type="button"
+                  className="input-attachment-btn"
+                  title="Send Product from Catalog"
+                  onClick={() => setShowProductPanel(v => !v)}
+                  style={{ color: showProductPanel ? '#10b981' : '#64748b' }}
+                >
+                  <ShoppingBag size={18} />
+                </button>
+
                 <div style={{ position: "relative" }}>
                   <button
                     type="button"
@@ -1630,6 +1658,34 @@ export default function WhatsAppInboxComponent() {
           </>
         )}
       </div>
+
+      {/* Product Catalog Panel */}
+      {showProductPanel && activeConvDetail && (
+        <ProductCatalogPanel
+          onClose={() => setShowProductPanel(false)}
+          recipientName={activeConvDetail.contactName || activeConvDetail.customerPhone}
+          onSendProduct={async (product) => {
+            const phone = (activeConvDetail.customerPhone || activeConvDetail.phoneNumber || "").replace(/\D/g,"");
+            const res = await sendProductCardAction(phone, product);
+            if (res.success) { await fetchConversationDetail(selectedConvId!, true); }
+            else { setToastMsg("Product send failed: " + (res.error||"")); setTimeout(() => setToastMsg(null), 3000); }
+          }}
+        />
+      )}
+
+      {/* Template Picker Modal */}
+      {showTemplatePicker && (
+        <TemplatePickerModal
+          onClose={() => setShowTemplatePicker(false)}
+          onSendTemplate={async (templateName, language, components) => {
+            const phone = (activeConvDetail?.customerPhone || activeConvDetail?.phoneNumber || "").replace(/\D/g,"");
+            if (!phone) return;
+            const res = await sendWhatsAppTemplateAction(phone, templateName, language, components);
+            if (res.success) { await fetchConversationDetail(selectedConvId!, true); }
+            else { setToastMsg("Template failed: " + (res.error||"")); setTimeout(() => setToastMsg(null), 3000); }
+          }}
+        />
+      )}
 
       {/* ----------------------------------------------------------------- */}
       {/* RIGHT COLUMN: CRM 360° CUSTOMER PROFILE PANEL */}
