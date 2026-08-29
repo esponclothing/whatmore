@@ -1240,16 +1240,17 @@ export default function WhatsAppInboxComponent() {
                         </div>
                       )}
 
-                      {/* Unsupported Message Renderer */}
-                      {msg.messageType === "UNSUPPORTED" && (
-                        <div style={{ padding: "8px 12px", background: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1", fontSize: "11.5px", color: "#64748b", display: "flex", alignItems: "center", gap: "6px", margin: "4px 0" }}>
-                          <span>📎 Received unsupported attachment (e.g. Location, Contact card, or Poll)</span>
-                        </div>
-                      )}
-
-                      {/* Standard Text Renderer */}
-                      {msg.messageType !== "DOCUMENT" && msg.messageType !== "IMAGE" && msg.messageType !== "VIDEO" && msg.messageType !== "AUDIO" && msg.messageType !== "UNSUPPORTED" && msg.messageType !== "PAYMENT_LINK" && (
-                        <p className="message-text-content" style={msg.isInternalNote ? { color: '#713f12' } : {}}>{msg.content}</p>
+                      {/* Standard Text & Unsupported Format Renderer */}
+                      {msg.messageType !== "DOCUMENT" && msg.messageType !== "IMAGE" && msg.messageType !== "VIDEO" && msg.messageType !== "AUDIO" && msg.messageType !== "PAYMENT_LINK" && (
+                        <p className="message-text-content" style={msg.isInternalNote ? { color: '#713f12' } : {}}>
+                          {msg.messageType === "UNSUPPORTED" ? (
+                            <span style={{ fontStyle: "italic", color: "#64748b", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                              📎 [Unsupported message format (e.g. Sticker, Location, or Poll)]
+                            </span>
+                          ) : (
+                            msg.content
+                          )}
+                        </p>
                       )}
 
                       {msg.status === "FAILED" && (
