@@ -2166,57 +2166,112 @@ export async function syncShopifyProductsAction() {
     const domain = settings.shopifyStoreDomain;
     const token = settings.shopifyAccessToken;
 
-    const url = `https://${domain}/admin/api/2024-01/products.json?limit=50`;
-    console.log(`[Shopify Sync] Fetching products from: ${url}`);
+    const gqlQuery = `
+      query SyncProducts {
+        products(first: 50) {
+          edges {
+            node {
+              id
+              title
+              handle
+              bodyHtml
+              productType
+              status
+              images(first: 5) {
+                edges {
+                  node {
+                    url
+                  }
+                }
+              }
+              collections(first: 5) {
+                edges {
+                  node {
+                    title
+                  }
+                }
+              }
+              variants(first: 20) {
+                edges {
+                  node {
+                    id
+                    title
+                    sku
+                    price
+                    compareAtPrice
+                    inventoryQuantity
+                    inventoryItem {
+                      unitCost {
+                        amount
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
 
-    const response = await fetch(url, {
-      method: 'GET',
+    console.log(`[Shopify Sync GQL] Syncing products and collections from: ${domain}`);
+
+    const response = await fetch(`https://${domain}/admin/api/2024-01/graphql.json`, {
+      method: 'POST',
       headers: {
         'X-Shopify-Access-Token': token,
         'Content-Type': 'application/json'
-      }
+      },
+      body: JSON.stringify({ query: gqlQuery })
     });
 
     if (!response.ok) {
-      return { success: false, error: `Shopify API returned status ${response.status}` };
+      return { success: false, error: `Shopify GraphQL API returned status ${response.status}` };
     }
 
-    const data = await response.json();
-    const shopifyProducts = data.products || [];
+    const resData = await response.json();
+    if (resData.errors) {
+      return { success: false, error: resData.errors[0]?.message || 'GraphQL query execution failed' };
+    }
 
+    const shopifyProducts = resData.data?.products?.edges || [];
     let createdCount = 0;
 
-    for (const sp of shopifyProducts) {
-      const variants = sp.variants || [];
-      const imageUrls = (sp.images || []).map((img: any) => img.src);
+    for (const edge of shopifyProducts) {
+      const sp = edge.node;
+      const variants = sp.variants?.edges || [];
+      const imageUrls = (sp.images?.edges || []).map((img: any) => img.node.url);
+      const collectionTitles = (sp.collections?.edges || []).map((c: any) => c.node.title).join(', ');
 
       if (variants.length === 0) {
-        const mainSku = `SP-${sp.id}`;
+        const mainSku = `SP-${sp.id.replace(/\D/g, '')}`;
         await prisma.product.upsert({
           where: { sku: mainSku },
           update: {
             name: sp.title,
-            category: sp.product_type || "General",
+            category: sp.productType || "General",
             subCategory: sp.handle,
+            fabric: collectionTitles || "General",
             sellingPrice: 0,
             mrp: 0,
             purchasePrice: 0,
             stockQuantity: 0,
-            status: sp.status === "active" ? "Active" : "Inactive",
-            description: sp.body_html || "",
+            status: sp.status === "ACTIVE" ? "Active" : "Inactive",
+            description: sp.bodyHtml || "",
             images: imageUrls
           },
           create: {
             name: sp.title,
             sku: mainSku,
-            category: sp.product_type || "General",
+            category: sp.productType || "General",
             subCategory: sp.handle,
+            fabric: collectionTitles || "General",
             sellingPrice: 0,
             mrp: 0,
             purchasePrice: 0,
             stockQuantity: 0,
-            status: sp.status === "active" ? "Active" : "Inactive",
-            description: sp.body_html || "",
+            status: sp.status === "ACTIVE" ? "Active" : "Inactive",
+            description: sp.bodyHtml || "",
             images: imageUrls
           }
         });
@@ -2224,39 +2279,44 @@ export async function syncShopifyProductsAction() {
         continue;
       }
 
-      for (const variant of variants) {
-        const skuCode = variant.sku ? String(variant.sku).trim() : `SP-${sp.id}-${variant.id}`;
+      for (const vEdge of variants) {
+        const variant = vEdge.node;
+        const rawVarId = variant.id.replace(/\D/g, '');
+        const rawProdId = sp.id.replace(/\D/g, '');
+        const skuCode = variant.sku ? String(variant.sku).trim() : `SP-${rawProdId}-${rawVarId}`;
         
         const price = parseFloat(variant.price || "0");
-        const compareAt = parseFloat(variant.compare_at_price || variant.price || "0");
-        const cost = parseFloat(variant.cost || variant.price_cost || "0");
-        const inventory = variant.inventory_quantity || 0;
+        const compareAt = parseFloat(variant.compareAtPrice || variant.price || "0");
+        const cost = parseFloat(variant.inventoryItem?.unitCost?.amount || "0");
+        const inventory = variant.inventoryQuantity || 0;
 
         await prisma.product.upsert({
           where: { sku: skuCode },
           update: {
             name: variants.length > 1 ? `${sp.title} - ${variant.title}` : sp.title,
-            category: sp.product_type || "General",
+            category: sp.productType || "General",
             subCategory: sp.handle,
+            fabric: collectionTitles || "General",
             sellingPrice: price,
             mrp: compareAt,
             purchasePrice: cost,
             stockQuantity: inventory,
-            status: sp.status === "active" ? "Active" : "Inactive",
-            description: sp.body_html || "",
+            status: sp.status === "ACTIVE" ? "Active" : "Inactive",
+            description: sp.bodyHtml || "",
             images: imageUrls
           },
           create: {
             name: variants.length > 1 ? `${sp.title} - ${variant.title}` : sp.title,
             sku: skuCode,
-            category: sp.product_type || "General",
+            category: sp.productType || "General",
             subCategory: sp.handle,
+            fabric: collectionTitles || "General",
             sellingPrice: price,
             mrp: compareAt,
             purchasePrice: cost,
             stockQuantity: inventory,
-            status: sp.status === "active" ? "Active" : "Inactive",
-            description: sp.body_html || "",
+            status: sp.status === "ACTIVE" ? "Active" : "Inactive",
+            description: sp.bodyHtml || "",
             images: imageUrls
           }
         });
@@ -2266,7 +2326,7 @@ export async function syncShopifyProductsAction() {
 
     return { 
       success: true, 
-      message: `✓ Successfully synced ${createdCount} products/variants from Shopify!`,
+      message: `✓ Successfully synced ${createdCount} products/variants and linked collections from Shopify!`,
       count: createdCount 
     };
   } catch (error: any) {

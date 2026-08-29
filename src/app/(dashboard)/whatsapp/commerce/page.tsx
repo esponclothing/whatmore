@@ -18,6 +18,7 @@ export default function ProductsCommercePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [products, setProducts] = useState(MOCK_PRODUCTS);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [selectedCollection, setSelectedCollection] = useState("all");
   
   // Shopify Integration State
   const [isShopifyConnected, setIsShopifyConnected] = useState(false);
@@ -52,7 +53,8 @@ export default function ProductsCommercePage() {
         inventory: p.stockQuantity || 0,
         status: p.status || "Active",
         image: p.images?.[0] || "",
-        description: p.description || ""
+        description: p.description || "",
+        collection: p.fabric || "General"
       }));
       setProducts(mapped);
     }
@@ -108,6 +110,23 @@ export default function ProductsCommercePage() {
     }
   };
 
+  const allCollections = Array.from(
+    new Set(
+      products
+        .map(p => p.collection)
+        .flatMap(c => String(c || '').split(',').map(s => s.trim()))
+        .filter(Boolean)
+    )
+  );
+
+  const filteredProducts = products.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      p.sku.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCollection = selectedCollection === "all" || 
+      String(p.collection || '').split(',').map(s => s.trim().toLowerCase()).includes(selectedCollection.toLowerCase());
+    return matchesSearch && matchesCollection;
+  });
+
   return (
     <div className="p-8 max-w-[1400px] mx-auto flex flex-col gap-8 w-full">
       <div className="flex justify-between items-end">
@@ -157,6 +176,28 @@ export default function ProductsCommercePage() {
               className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
             />
           </div>
+          <div style={{ marginLeft: "12px" }}>
+            <select
+              value={selectedCollection}
+              onChange={(e) => setSelectedCollection(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                backgroundColor: "#ffffff",
+                border: "1px solid #cbd5e1",
+                borderRadius: "8px",
+                fontSize: "13px",
+                color: "#1e293b",
+                fontWeight: 600,
+                outline: "none",
+                cursor: "pointer"
+              }}
+            >
+              <option value="all">📁 All Collections ({allCollections.length})</option>
+              {allCollections.map(col => (
+                <option key={col} value={col}>{col}</option>
+              ))}
+            </select>
+          </div>
           <div className="flex gap-2">
             <button className="p-2 text-gray-500 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg transition-colors"><Filter size={18} /></button>
             <button className="p-2 text-gray-500 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg transition-colors"><Download size={18} /></button>
@@ -179,7 +220,7 @@ export default function ProductsCommercePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-              {products.map((p) => (
+              {filteredProducts.map((p) => (
                 <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors group">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
