@@ -8,7 +8,7 @@ const SHOPIFY_ACCESS_TOKEN = process.env.VITE_SHOPIFY_ACCESS_TOKEN || '';
 
 // Mock AI call (You can use @google/genai or fetch in real app)
 
-const GEMINI_MODEL_CASCADE = ['gemini-3.6-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+const GEMINI_MODEL_CASCADE = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-flash-latest'];
 
 async function callGeminiRest(apiKey, modelName, prompt, systemPrompt, maxTokens = 600) {
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
