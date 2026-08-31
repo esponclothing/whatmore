@@ -1090,6 +1090,11 @@ export default function WhatsAppInboxComponent() {
                         <span className={`stage-tag ${conv.leadStatus?.toLowerCase().replace(/\s+/g, '-')}`}>
                           {conv.leadStatus || "New Lead"}
                         </span>
+                        {conv.assignedEmployee?.user?.name && (
+                          <span style={{ fontSize: "9px", padding: "1px 5px", borderRadius: "4px", background: "#f3f4f6", color: "#4b5563", fontWeight: 700, display: "inline-flex", alignItems: "center", border: "1px solid #d1d5db" }}>
+                            Assigned: {conv.assignedEmployee.user.name}
+                          </span>
+                        )}
                         {conv.aiHandled ? (
                           <span className="badge-ai-pill">
                             <Bot size={10} /> AI
@@ -1241,7 +1246,7 @@ export default function WhatsAppInboxComponent() {
 {/* Call button removed */}
                 <button className="chat-action-btn highlight-assign" onClick={() => setShowAssignModal(true)} title="Assign WhatsApp Lead">
                   <UserCheck size={14} />
-                  <span>Assign</span>
+                  <span>{activeConvDetail.assignedEmployee?.user?.name ? `Assign (${activeConvDetail.assignedEmployee.user.name})` : "Assign"}</span>
                 </button>
                 <button className="chat-action-btn" onClick={() => setShowQuoteModal(true)} title="Create Quotation">
                   <FileText size={14} />
@@ -2338,20 +2343,20 @@ export default function WhatsAppInboxComponent() {
                     </div>
 
                     <button
-                      disabled={assigningLead}
+                      disabled={assigningLead || emp.id === activeConvDetail?.assignedEmployee?.id}
                       onClick={() => handleAssignLead(emp.id, "MANUAL")}
                       style={{
-                        background: "#f3f4f6",
+                        background: emp.id === activeConvDetail?.assignedEmployee?.id ? "#e5e7eb" : "#f3f4f6",
                         border: "1px solid #d1d5db",
-                        color: "#374151",
+                        color: emp.id === activeConvDetail?.assignedEmployee?.id ? "#9ca3af" : "#374151",
                         padding: "6px 12px",
                         borderRadius: "4px",
                         fontSize: "12px",
                         fontWeight: 600,
-                        cursor: "pointer"
+                        cursor: emp.id === activeConvDetail?.assignedEmployee?.id ? "not-allowed" : "pointer"
                       }}
                     >
-                      Assign Rep
+                      {emp.id === activeConvDetail?.assignedEmployee?.id ? "Assigned" : "Assign Rep"}
                     </button>
                   </div>
                 ))}

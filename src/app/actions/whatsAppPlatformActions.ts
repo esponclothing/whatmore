@@ -52,6 +52,8 @@ export interface ConversationFilterOptions {
 }
 
 export async function getWhatsAppConversations(filters: ConversationFilterOptions = {}) {
+  const { unstable_noStore: noStore } = require("next/cache");
+  noStore();
   // await ensureSeeded();
   try {
     let userRole = 'SALES';
@@ -67,7 +69,7 @@ export async function getWhatsAppConversations(filters: ConversationFilterOption
     } else {
       // B. Fallback to custom cookie-based session (app uses wm_user cookie)
       try {
-        const userCookie = cookies().get("wm_user")?.value;
+        const userCookie = (await cookies()).get("wm_user")?.value;
         if (userCookie) {
           const parsed = JSON.parse(userCookie);
           userRole = parsed.role || 'SALES';
