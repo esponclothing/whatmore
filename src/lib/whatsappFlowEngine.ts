@@ -381,12 +381,40 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
               orderBy: { updatedAt: 'desc' } 
             });
             if (conv) {
-              if (node.agentId) {
+              if (node.assignmentMode === 'DIRECT' && node.agentId) {
                 await prisma.whatsAppConversation.update({ where: { id: conv.id }, data: { assignedEmployeeId: node.agentId, status: 'OPEN' } });
               } else {
-                const activeAgents = await prisma.employee.findMany({ where: { employmentStatus: 'Active' }, take: 1 });
+                let agentQuery: any = { employmentStatus: 'Active', chatAvailable: { not: false } };
+                
+                if (node.roundRobinTarget === 'TEAM' && node.teamId) {
+                  agentQuery.teamId = node.teamId;
+                } else if (node.roundRobinTarget === 'AGENTS' && Array.isArray(node.agentIds) && node.agentIds.length > 0) {
+                  agentQuery.id = { in: node.agentIds };
+                }
+
+                const activeAgents = await prisma.employee.findMany({ 
+                  where: agentQuery,
+                  include: {
+                    _count: {
+                      select: {
+                        whatsAppConversations: {
+                          where: { status: 'OPEN' }
+                        }
+                      }
+                    }
+                  }
+                });
+
                 if (activeAgents.length > 0) {
-                  await prisma.whatsAppConversation.update({ where: { id: conv.id }, data: { assignedEmployeeId: activeAgents[0].id, status: 'OPEN' } });
+                  activeAgents.sort((a: any, b: any) => a._count.whatsAppConversations - b._count.whatsAppConversations);
+                  const selectedAgent = activeAgents[0];
+                  await prisma.whatsAppConversation.update({ 
+                    where: { id: conv.id }, 
+                    data: { assignedEmployeeId: selectedAgent.id, status: 'OPEN' } 
+                  });
+                  console.log(`[Round Robin] Assigned chat ${conv.id} to agent ${selectedAgent.id} (Load: ${selectedAgent._count.whatsAppConversations})`);
+                } else {
+                  console.log(`[Round Robin] No available agents found for criteria:`, agentQuery);
                 }
               }
             }

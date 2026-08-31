@@ -66,6 +66,7 @@ import {
   duplicateWhatsAppChatbotFlowAction,
   toggleWhatsAppChatbotFlowStatusAction,
   getAllEmployeesAndTeams,
+  getTeamsWithMembersAction,
   getProductsAction
 } from "@/app/actions/whatsAppPlatformActions";
 import "@/components/whatsapp/ChatbotBuilder.css";
@@ -400,6 +401,7 @@ export default function WhatsAppChatbotBuilderPage() {
 
   // Live Data for Dropdowns
   const [availableAgents, setAvailableAgents] = useState<any[]>([]);
+  const [availableTeams, setAvailableTeams] = useState<any[]>([]);
   const [availableTags, setAvailableTags] = useState<any[]>([]);
   const [availableCollections, setAvailableCollections] = useState<string[]>([]);
 
@@ -742,6 +744,9 @@ export default function WhatsAppChatbotBuilderPage() {
     try {
       const agentsRes = await getAllEmployeesAndTeams();
       if (agentsRes.success && agentsRes.employees) setAvailableAgents(agentsRes.employees);
+
+      const teamsRes = await getTeamsWithMembersAction();
+      if (teamsRes.success && teamsRes.teams) setAvailableTeams(teamsRes.teams);
 
       const tagsRes = await fetch('/api/whatsapp/tags');
       const tagsData = await tagsRes.json();
@@ -2288,6 +2293,30 @@ export default function WhatsAppChatbotBuilderPage() {
                         }
                         style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", resize: "none" }}
                       />
+                      <div style={{ marginTop: '8px' }}>
+                        <label style={{ fontSize: "10px", fontWeight: 700, color: "#64748b" }}>Insert Variable</label>
+                        <select 
+                          style={{ width: "100%", padding: "4px 8px", fontSize: "11px", border: "1px dashed #cbd5e1", borderRadius: "6px", marginTop: "2px", background: "#f8fafc" }}
+                          value=""
+                          onChange={(e) => {
+                             if (!e.target.value) return;
+                             const varTag = `{{${e.target.value}}}`;
+                             setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, text: (n.text || '') + varTag } : n)));
+                          }}
+                        >
+                           <option value="">-- Select Variable --</option>
+                           <option value="name">Customer Name</option>
+                           <option value="businessName">Business Name</option>
+                           <option value="mobile">Mobile Number</option>
+                           <option value="whatsappNumber">WhatsApp Number</option>
+                           <option value="email">Email</option>
+                           <option value="city">City</option>
+                           <option value="state">State</option>
+                           <option value="tags">Tags</option>
+                           <option value="leadStage">Lead Stage</option>
+                           <option value="customerType">Customer Type</option>
+                        </select>
+                      </div>
                     </div>
                   )}
 
@@ -2713,21 +2742,97 @@ export default function WhatsAppChatbotBuilderPage() {
                     )}
 
                     {((selectedNode.type || "").toUpperCase() === "CRM_ROUNDROBIN" || (selectedNode.type || "").toUpperCase() === "START") && (
-                      <div>
-                        <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Assign To Agent</label>
-                        <select
-                          value={selectedNode.agentId || ""}
-                          onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, agentId: e.target.value } : n)))}
-                          style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
-                        >
-                          <option value="">Auto (Round Robin)</option>
-                          {availableAgents.map((ag: any) => (
-                            <option key={ag.id} value={ag.id}>{ag.user?.name || "Agent"}</option>
-                          ))}
-                        </select>
-                        <span style={{ fontSize: "10px", color: "#64748b", marginTop: "4px", display: "block" }}>
-                          Leave as "Auto" to cycle leads among all active agents.
-                        </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div>
+                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Assignment Mode</label>
+                          <select
+                            value={selectedNode.assignmentMode || "ROUND_ROBIN"}
+                            onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, assignmentMode: e.target.value } : n)))}
+                            style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                          >
+                            <option value="DIRECT">Direct Assign (1 Agent)</option>
+                            <option value="ROUND_ROBIN">Auto (Round Robin)</option>
+                          </select>
+                        </div>
+                        
+                        {selectedNode.assignmentMode === "DIRECT" && (
+                          <div>
+                            <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Assign To Agent</label>
+                            <select
+                              value={selectedNode.agentId || ""}
+                              onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, agentId: e.target.value } : n)))}
+                              style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                            >
+                              <option value="">Select an agent</option>
+                              {availableAgents.map((ag: any) => (
+                                <option key={ag.id} value={ag.id}>{ag.user?.name || "Agent"}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {selectedNode.assignmentMode !== "DIRECT" && (
+                          <>
+                            <div>
+                              <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Round Robin Target</label>
+                              <select
+                                value={selectedNode.roundRobinTarget || "TEAM"}
+                                onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, roundRobinTarget: e.target.value, teamId: "", agentIds: [] } : n)))}
+                                style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                              >
+                                <option value="TEAM">Specific Team</option>
+                                <option value="AGENTS">Multiple Agents</option>
+                              </select>
+                            </div>
+                            
+                            {(!selectedNode.roundRobinTarget || selectedNode.roundRobinTarget === "TEAM") && (
+                              <div>
+                                <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Select Team</label>
+                                <select
+                                  value={selectedNode.teamId || ""}
+                                  onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, teamId: e.target.value } : n)))}
+                                  style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                                >
+                                  <option value="">Any Active Agent (Global)</option>
+                                  {availableTeams.map((team: any) => (
+                                    <option key={team.id} value={team.id}>{team.name} ({team.members?.length || 0} agents)</option>
+                                  ))}
+                                </select>
+                                <span style={{ fontSize: "10px", color: "#64748b", marginTop: "4px", display: "block" }}>
+                                  Chats will be routed to active, available agents in this team.
+                                </span>
+                              </div>
+                            )}
+
+                            {selectedNode.roundRobinTarget === "AGENTS" && (
+                              <div>
+                                <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Select Multiple Agents</label>
+                                <div style={{ maxHeight: "150px", overflowY: "auto", border: "1px solid #cbd5e1", borderRadius: "6px", padding: "6px", marginTop: "4px", background: "#f8fafc", display: "flex", flexDirection: "column", gap: "6px" }}>
+                                  {availableAgents.map((ag: any) => {
+                                    const isSelected = (selectedNode.agentIds || []).includes(ag.id);
+                                    return (
+                                      <label key={ag.id} style={{ fontSize: "12px", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
+                                        <input 
+                                          type="checkbox" 
+                                          checked={isSelected}
+                                          onChange={(e) => {
+                                            const checked = e.target.checked;
+                                            setNodes(prev => prev.map(n => {
+                                              if (n.id !== selectedNode.id) return n;
+                                              const existing = n.agentIds || [];
+                                              return { ...n, agentIds: checked ? [...existing, ag.id] : existing.filter((id: string) => id !== ag.id) };
+                                            }));
+                                          }}
+                                        />
+                                        <span>{ag.user?.name || "Agent"} <span style={{opacity: 0.5}}>- {ag.team?.name || 'No team'}</span></span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
                     )}
                   </>
