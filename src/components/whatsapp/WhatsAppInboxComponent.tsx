@@ -299,16 +299,12 @@ export default function WhatsAppInboxComponent() {
 
         // Apply Tab Filter (All, Assigned, Unassigned)
         let filtered = mapped;
-        if (role === 'AGENT') {
-          filtered = mapped.filter((c) => String(c._raw.assignedEmployeeId) === String(empId));
-        } else {
-          if (activeNavTab === 'assigned_to_me' || activeNavTab === 'assigned') {
-            filtered = mapped.filter((c) => c._raw.assignedEmployeeId !== null);
-          } else if (activeNavTab === 'unassigned') {
-            filtered = mapped.filter((c) => c._raw.assignedEmployeeId === null);
-          }
+        
+        if (activeNavTab === 'assigned_to_me' || activeNavTab === 'assigned') {
+          filtered = mapped.filter((c) => c._raw.assignedEmployeeId !== null);
+        } else if (activeNavTab === 'unassigned') {
+          filtered = mapped.filter((c) => c._raw.assignedEmployeeId === null);
         }
-
         // Apply Lead Status Filter
         if (leadStatusFilter) {
           filtered = filtered.filter((c) => c.leadStatus === leadStatusFilter);
@@ -952,6 +948,7 @@ export default function WhatsAppInboxComponent() {
                 </div>
 
                 {/* Folder Tabs */}
+                {currentUserRole !== 'AGENT' && (
                 <div className="left-folder-tabs" style={{ margin: 0 }}>
                   <button
                     className={`folder-tab ${activeNavTab === "all" ? "active" : ""}`}
@@ -978,6 +975,7 @@ export default function WhatsAppInboxComponent() {
                     <span>Unassigned</span>
                   </button>
                 </div>
+                )}
               </div>
 
 
@@ -1002,6 +1000,7 @@ export default function WhatsAppInboxComponent() {
                   <option value="Negotiation">Negotiation</option>
                   <option value="Order Confirmed">Order Confirmed</option>
                 </select>
+                {currentUserRole !== 'AGENT' && (
                 <select
                   className="filter-select"
                   value={filterEmployeeId}
@@ -1014,6 +1013,7 @@ export default function WhatsAppInboxComponent() {
                     </option>
                   ))}
                 </select>
+                )}
               </div>
               )}
             </>

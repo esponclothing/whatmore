@@ -26,7 +26,37 @@ export async function GET(req: NextRequest) {
           mediaUrl: null
         }
       }).catch(err => console.error("[Auto-Delete Media Old 30 Days Error]:", err));
+      // Filtering logic based on cookies
+      const cookieStore = require("next/headers").cookies;
+      const wmUser = (await cookieStore()).get("wm_user")?.value;
+      let userRole = "SALES";
+      let userEmail = "";
+      if (wmUser) {
+        try {
+          const parsed = JSON.parse(wmUser);
+          userRole = parsed.role || "SALES";
+          userEmail = parsed.email || "";
+        } catch (e) {}
+      }
+
+      const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN' || userRole === 'MANAGER';
+      const where: any = {};
+
+      if (!isAdmin) {
+        if (userEmail) {
+          const emp = await prisma.employee.findFirst({ where: { user: { email: userEmail } } });
+          if (emp) {
+            where.assignedEmployeeId = emp.id;
+          } else {
+            where.assignedEmployeeId = "00000000-0000-0000-0000-000000000000";
+          }
+        } else {
+          where.assignedEmployeeId = "00000000-0000-0000-0000-000000000000";
+        }
+      }
+
       const conversations = await prisma.whatsAppConversation.findMany({
+        where,
         include: {
           customer: {
             select: {
@@ -52,6 +82,12 @@ export async function GET(req: NextRequest) {
               messageType: true,
             },
           },
+          assignedEmployee: {
+            select: {
+              id: true,
+              user: { select: { name: true, email: true } }
+            }
+          }
         },
         orderBy: { lastMessageAt: "desc" },
         take: 100,
@@ -84,6 +120,7 @@ export async function GET(req: NextRequest) {
           unreadCount: conv.unreadCount,
           customerId: conv.customerId,
           assignedEmployeeId: conv.assignedEmployeeId,
+          assignedEmployee: conv.assignedEmployee,
         };
       });
 
