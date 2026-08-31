@@ -1812,13 +1812,26 @@ export default function WhatsAppChatbotBuilderPage() {
                       </div>
                     )}
 
-                    {node.type.startsWith("CRM_") && (
+                    {(node.type === "CRM_CONTACT" || node.type === "CRM_LEAD") && (
                       <div style={{ background: "#e0e7ff", border: "1px solid #c7d2fe", color: "#3730a3", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, marginBottom: "6px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                           <UserCheck size={13} />
                           <span>Stage: {node.leadStage || 'Qualified'}</span>
                         </div>
                         {node.priority && <span style={{ fontSize: "10px", opacity: 0.8 }}>Priority: {node.priority}</span>}
+                      </div>
+                    )}
+
+                    {(node.type === "CRM_ROUNDROBIN" || node.type === "START") && (
+                      <div style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", color: "#5b21b6", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, marginBottom: "6px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <Shuffle size={13} />
+                          <span>Assign: {
+                            node.agentId 
+                              ? (availableAgents.find((a: any) => a.id === node.agentId)?.user?.name || 'Agent')
+                              : 'Auto (Round Robin)'
+                          }</span>
+                        </div>
                       </div>
                     )}
 
