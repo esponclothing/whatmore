@@ -1931,17 +1931,33 @@ export default function WhatsAppChatbotBuilderPage() {
                   />
                 </div>
 
-                <div>
-                  <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Message / Description</label>
-                  <textarea
-                    rows={3}
-                    value={selectedNode.text || ""}
-                    onChange={(e) =>
-                      setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, text: e.target.value } : n)))
-                    }
-                    style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", resize: "none" }}
-                  />
-                </div>
+                {selectedNode.type === "TRIGGER" ? (
+                    <div>
+                      <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Trigger Keywords (Comma Separated)</label>
+                      <textarea
+                        rows={3}
+                        value={triggerKeyword}
+                        onChange={(e) => {
+                          setTriggerKeyword(e.target.value.toUpperCase());
+                          setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, text: `Incoming Message matches: ${e.target.value.toUpperCase()}` } : n)));
+                        }}
+                        style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", resize: "none" }}
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Message / Description</label>
+                      <textarea
+                        rows={3}
+                        value={selectedNode.text || ""}
+                        onChange={(e) =>
+                          setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, text: e.target.value } : n)))
+                        }
+                        style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", resize: "none" }}
+                      />
+                    </div>
+                  )}
+
                 {(selectedNode.type || "").toUpperCase() === "CATALOG" && (
                   <div>
                     <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Select Product Collection</label>
