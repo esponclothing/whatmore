@@ -456,16 +456,22 @@ export default function WhatsAppChatbotBuilderPage() {
   const getPortCoords = (portId: string, fallback: { x: number; y: number }) => {
     if (typeof window === "undefined") return fallback;
     const el = document.getElementById(portId);
-    const canvas = document.querySelector(".infinite-canvas-wrapper");
-    if (!el || !canvas) return fallback;
+    if (!el) return fallback;
 
-    const rectPort = el.getBoundingClientRect();
-    const rectCanvas = canvas.getBoundingClientRect();
+    let x = el.offsetWidth / 2;
+    let y = el.offsetHeight / 2;
+    let current: HTMLElement | null = el;
 
-    return {
-      x: (rectPort.left + rectPort.width / 2 - rectCanvas.left - pan.x) / zoom,
-      y: (rectPort.top + rectPort.height / 2 - rectCanvas.top - pan.y) / zoom
-    };
+    while (current && !current.classList.contains("canvas-pan-zoom-container")) {
+      x += current.offsetLeft;
+      y += current.offsetTop;
+      current = current.offsetParent as HTMLElement;
+    }
+
+    // If we broke out without reaching the container, return fallback
+    if (!current) return fallback;
+
+    return { x, y };
   };
 
   // Simulator Modal State
