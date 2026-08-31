@@ -5,7 +5,6 @@ const prisma = new PrismaClient();
 
 const SHOPIFY_STORE_URL = process.env.VITE_SHOPIFY_STORE_URL || 'i2tu0d-jc.myshopify.com';
 const SHOPIFY_ACCESS_TOKEN = process.env.VITE_SHOPIFY_ACCESS_TOKEN || '';
-const GROQ_API_KEY = process.env.VITE_GROQ_API_KEY || '';
 
 // Mock AI call (You can use @google/genai or fetch in real app)
 
@@ -435,7 +434,7 @@ ${userText}`;
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userText }
       ],
-      "llama-3.3-70b-versatile", false, 2000
+      "gemini-2.0-flash", false, 2000
     );
 
     let sendCarousel = carouselCards.length > 0;
