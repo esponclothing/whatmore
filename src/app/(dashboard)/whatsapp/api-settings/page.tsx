@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store, MessageSquare, Users, Bot, Layers, BookOpen, Edit3, X } from "lucide-react";
+import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store, MessageSquare, Users, Bot, Layers, BookOpen, Edit3, X, Plus, Trash2, UserCheck, UserX, Shield } from "lucide-react";
 import { 
   getWhatsAppApiCredentialsAction, 
   saveWhatsAppApiCredentialsAction, 
@@ -11,7 +11,14 @@ import {
   registerWhatsAppPhoneNumberAction,
   getWhatsAppSettingsAction,
   saveWhatsAppSettingsAction,
-  getTeamMembersAction
+  getTeamMembersAction,
+  getTeamsWithMembersAction,
+  createTeamAction,
+  deleteTeamAction,
+  addAgentToTeamAction,
+  removeAgentFromTeamAction,
+  toggleAgentChatAvailabilityAction,
+  getAllAgentsAction
 } from "@/app/actions/whatsAppPlatformActions";
 
 export default function WhatsAppAPISettingsPage() {
@@ -50,14 +57,14 @@ export default function WhatsAppAPISettingsPage() {
   const [savingAI, setSavingAI] = useState(false);
   const [aiResultMsg, setAiResultMsg] = useState<{ success: boolean; text: string } | null>(null);
 
-  // Team & SLA States
-  const [workingHoursStart, setWorkingHoursStart] = useState("09:00");
-  const [workingHoursEnd, setWorkingHoursEnd] = useState("19:00");
-  const [slaMinutes, setSlaMinutes] = useState(15);
-  const [autoAssignStrategy, setAutoAssignStrategy] = useState("ROUND_ROBIN");
-  const [savingSLA, setSavingSLA] = useState(false);
-  const [slaResultMsg, setSlaResultMsg] = useState<{ success: boolean; text: string } | null>(null);
-  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  // Teams State
+  const [teams, setTeams] = useState<any[]>([]);
+  const [allAgents, setAllAgents] = useState<any[]>([]);
+  const [newTeamName, setNewTeamName] = useState("");
+  const [newTeamDesc, setNewTeamDesc] = useState("");
+  const [creatingTeam, setCreatingTeam] = useState(false);
+  const [teamMsg, setTeamMsg] = useState<{ success: boolean; text: string } | null>(null);
+  const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
 
   // Agent Management States
   const [newAgentName, setNewAgentName] = useState("");
@@ -95,8 +102,9 @@ export default function WhatsAppAPISettingsPage() {
       getWhatsAppApiCredentialsAction(),
       getShopifyCredentialsAction(),
       getWhatsAppSettingsAction(),
-      getTeamMembersAction()
-    ]).then(([resWA, resShopify, resSettings, resTeam]) => {
+      getTeamsWithMembersAction(),
+      getAllAgentsAction()
+    ]).then(([resWA, resShopify, resSettings, resTeams, resAgents]) => {
       if (resWA.success && resWA.credentials) {
         setWabaId(resWA.credentials.businessAccountId || "");
         setPhoneId(resWA.credentials.phoneId || "");
@@ -115,14 +123,9 @@ export default function WhatsAppAPISettingsPage() {
         setWelcomeMsg(resSettings.settings.welcomeMessage || "Welcome! How can we help you today?");
         setActiveModel(resSettings.settings.aiModel || "gemini-2.0-flash");
         setSystemPrompt(resSettings.settings.aiSystemPrompt || "");
-        setWorkingHoursStart(resSettings.settings.workingHoursStart || "09:00");
-        setWorkingHoursEnd(resSettings.settings.workingHoursEnd || "19:00");
-        setSlaMinutes(resSettings.settings.slaWarningMinutes || 15);
-        setAutoAssignStrategy(resSettings.settings.autoAssignStrategy || "ROUND_ROBIN");
       }
-      if (resTeam.success && resTeam.employees) {
-        setTeamMembers(resTeam.employees);
-      }
+      if (resTeams.success && resTeams.teams) setTeams(resTeams.teams);
+      if (resAgents.success && resAgents.employees) setAllAgents(resAgents.employees);
       
       // Load client status & SaaS agents
       fetch('/api/whatsapp/client-status').then(r => r.json()).then(d => setClientInfo(d)).catch(() => {});
@@ -131,6 +134,50 @@ export default function WhatsAppAPISettingsPage() {
       setLoading(false);
     });
   };
+
+  const reloadTeams = async () => {
+    const [resTeams, resAgents] = await Promise.all([getTeamsWithMembersAction(), getAllAgentsAction()]);
+    if (resTeams.success && resTeams.teams) setTeams(resTeams.teams);
+    if (resAgents.success && resAgents.employees) setAllAgents(resAgents.employees);
+  };
+
+  const handleCreateTeam = async () => {
+    if (!newTeamName.trim()) return;
+    setCreatingTeam(true);
+    const res = await createTeamAction(newTeamName.trim(), newTeamDesc.trim() || undefined);
+    if (res.success) {
+      setNewTeamName(""); setNewTeamDesc("");
+      setTeamMsg({ success: true, text: `✓ Team "${res.team?.name}" created!` });
+      await reloadTeams();
+    } else {
+      setTeamMsg({ success: false, text: res.error || "Failed to create team" });
+    }
+    setCreatingTeam(false);
+    setTimeout(() => setTeamMsg(null), 3000);
+  };
+
+  const handleDeleteTeam = async (teamId: string, teamName: string) => {
+    if (!confirm(`Delete team "${teamName}"? All agents will be unassigned.`)) return;
+    const res = await deleteTeamAction(teamId);
+    if (res.success) { setTeamMsg({ success: true, text: "Team deleted." }); await reloadTeams(); }
+    else setTeamMsg({ success: false, text: res.error || "Failed" });
+    setTimeout(() => setTeamMsg(null), 3000);
+  };
+
+  const handleToggleAgentInTeam = async (employeeId: string, currentTeamId: string | null, targetTeamId: string) => {
+    if (currentTeamId === targetTeamId) {
+      await removeAgentFromTeamAction(employeeId);
+    } else {
+      await addAgentToTeamAction(employeeId, targetTeamId);
+    }
+    await reloadTeams();
+  };
+
+  const handleToggleChatAvailable = async (employeeId: string, current: boolean) => {
+    await toggleAgentChatAvailabilityAction(employeeId, !current);
+    await reloadTeams();
+  };
+
 
   const handleSaveCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -406,7 +453,7 @@ export default function WhatsAppAPISettingsPage() {
           }`}
         >
           <Users size={16} />
-          <span>👥 Team & SLA</span>
+          <span>👥 Teams</span>
         </button>
 
         <button
@@ -649,96 +696,153 @@ export default function WhatsAppAPISettingsPage() {
         </div>
       )}
 
-      {/* 3. Team & SLA Tab */}
+      {/* 3. Teams Tab */}
       {activeTab === "team-sla" && (
         <div className="flex flex-col gap-6 w-full max-w-4xl">
-          {/* SLA Settings Card */}
+
+          {/* Notification bar */}
+          {teamMsg && (
+            <div className={`p-4 rounded-xl text-sm font-semibold flex items-center gap-2 ${teamMsg.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+              <CheckCircle2 size={16} /><span>{teamMsg.text}</span>
+            </div>
+          )}
+
+          {/* Create New Team */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">⏰ Work Hours & SLA Targets</h2>
-            <p className="text-sm text-gray-500 mb-6">Configure SLA breach thresholds, assignment strategies, and working hours.</p>
-
-            {slaResultMsg && (
-              <div className={`mb-4 p-4 rounded-xl text-sm font-semibold flex items-center gap-2 ${slaResultMsg.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                <CheckCircle2 size={18} />
-                <span>{slaResultMsg.text}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveSLASettings} className="flex flex-col gap-5">
-              <div className="grid grid-cols-2 gap-5">
-                <div>
-                  <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Working Hours Start</label>
-                  <input type="time" value={workingHoursStart} onChange={(e) => setWorkingHoursStart(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                </div>
-                <div>
-                  <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Working Hours End</label>
-                  <input type="time" value={workingHoursEnd} onChange={(e) => setWorkingHoursEnd(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-5">
-                <div>
-                  <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">SLA Response Threshold (Minutes)</label>
-                  <input type="number" value={slaMinutes} onChange={(e) => setSlaMinutes(parseInt(e.target.value))} className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                </div>
-                <div>
-                  <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Auto Assignment Strategy</label>
-                  <select value={autoAssignStrategy} onChange={(e) => setAutoAssignStrategy(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
-                    <option value="ROUND_ROBIN">Round Robin (Equal distribution among active reps)</option>
-                    <option value="LEAST_ASSIGNED">Least Assigned (Assign to agent with fewest open chats)</option>
-                    <option value="MANUAL">Manual Routing (Self-assign in inbox)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <button type="submit" disabled={savingSLA} className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-xl text-sm font-bold shadow-md transition-all">
-                  {savingSLA ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
-                  {savingSLA ? "Saving..." : "Save SLA Configuration"}
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* Team Members List Card */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">👥 Team Directory</h2>
-            <p className="text-sm text-gray-500 mb-6">Manage organization agents and reps assigned to WhatsApp ticket routing.</p>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-200 dark:border-slate-700 text-gray-500 font-semibold">
-                    <th className="py-3 px-4">Name</th>
-                    <th className="py-3 px-4">Email</th>
-                    <th className="py-3 px-4">Designation</th>
-                    <th className="py-3 px-4">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-slate-700 bg-white dark:bg-slate-900">
-                  {teamMembers.map(m => (
-                    <tr key={m.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/50">
-                      <td className="py-3 px-4 font-bold text-gray-900 dark:text-white">{m.user?.name || "Agent"}</td>
-                      <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{m.user?.email || "N/A"}</td>
-                      <td className="py-3 px-4 text-gray-500">{m.designation || "Support Rep"}</td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${m.employmentStatus === "Active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                          {m.employmentStatus}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {teamMembers.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="py-8 text-center text-gray-400">No agents registered yet.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+              <Plus size={18} className="text-indigo-500" /> Create New Team
+            </h2>
+            <p className="text-sm text-gray-500 mb-5">Teams group agents for Round Robin chat assignment in the chatbot builder.</p>
+            <div className="flex gap-3 flex-wrap">
+              <input
+                type="text"
+                placeholder="Team name (e.g. Sales, Support)"
+                value={newTeamName}
+                onChange={e => setNewTeamName(e.target.value)}
+                className="flex-1 min-w-[180px] px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                onKeyDown={e => e.key === 'Enter' && handleCreateTeam()}
+              />
+              <input
+                type="text"
+                placeholder="Description (optional)"
+                value={newTeamDesc}
+                onChange={e => setNewTeamDesc(e.target.value)}
+                className="flex-1 min-w-[200px] px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+              <button
+                onClick={handleCreateTeam}
+                disabled={creatingTeam || !newTeamName.trim()}
+                className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white rounded-xl text-sm font-bold shadow-sm transition-all"
+              >
+                {creatingTeam ? <RefreshCw size={15} className="animate-spin" /> : <Plus size={15} />}
+                Create Team
+              </button>
             </div>
           </div>
+
+          {/* Teams List */}
+          {teams.length === 0 ? (
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-200 dark:border-slate-700 p-12 text-center text-gray-400">
+              <Users size={36} className="mx-auto mb-3 opacity-30" />
+              <p className="text-sm font-medium">No teams yet. Create your first team above.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {teams.map(team => (
+                <div key={team.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
+                  {/* Team Header */}
+                  <div className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50/50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => setExpandedTeam(expandedTeam === team.id ? null : team.id)}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center">
+                        <Shield size={16} className="text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-gray-900 dark:text-white text-sm">{team.name}</h3>
+                        {team.description && <p className="text-xs text-gray-400">{team.description}</p>}
+                      </div>
+                      <span className="ml-2 px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 text-xs font-bold">{team.members?.length || 0} agents</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={e => { e.stopPropagation(); handleDeleteTeam(team.id, team.name); }}
+                        className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                      <span className="text-gray-400 text-xs">{expandedTeam === team.id ? '▲' : '▼'}</span>
+                    </div>
+                  </div>
+
+                  {/* Expanded: Agent List */}
+                  {expandedTeam === team.id && (
+                    <div className="border-t border-gray-100 dark:border-slate-700 px-6 py-4">
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Select agents for this team</p>
+                      <div className="flex flex-col gap-2">
+                        {allAgents.map(agent => {
+                          const isInThisTeam = agent.teamId === team.id;
+                          return (
+                            <div key={agent.id} className={`flex items-center justify-between px-4 py-2.5 rounded-xl border transition-all ${isInThisTeam ? 'border-indigo-200 bg-indigo-50/50 dark:border-indigo-500/30 dark:bg-indigo-500/5' : 'border-gray-100 dark:border-slate-700 hover:border-gray-200'}`}>
+                              <div className="flex items-center gap-3">
+                                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isInThisTeam ? 'bg-indigo-500 text-white' : 'bg-gray-200 dark:bg-slate-600 text-gray-600 dark:text-gray-300'}`}>
+                                  {(agent.user?.name || 'A').charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{agent.user?.name || 'Agent'}</p>
+                                  <p className="text-xs text-gray-400">{agent.user?.email}</p>
+                                </div>
+                                {agent.teamId && agent.teamId !== team.id && (
+                                  <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">In: {teams.find(t => t.id === agent.teamId)?.name}</span>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => handleToggleAgentInTeam(agent.id, agent.teamId, team.id)}
+                                className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${isInThisTeam ? 'bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                              >
+                                {isInThisTeam ? 'Remove' : 'Add to Team'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                        {allAgents.length === 0 && <p className="text-sm text-gray-400 text-center py-4">No agents found. Add agents in the Team Agents tab first.</p>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Agent Chat Availability */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+              <UserCheck size={18} className="text-green-500" /> Agent Chat Availability
+            </h2>
+            <p className="text-sm text-gray-500 mb-5">Temporarily mark agents as unavailable for chat assignment without changing their employment status.</p>
+            <div className="flex flex-col gap-3">
+              {allAgents.map(agent => (
+                <div key={agent.id} className="flex items-center justify-between px-4 py-3 rounded-xl border border-gray-100 dark:border-slate-700 hover:bg-gray-50/50 dark:hover:bg-slate-700/30">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2.5 h-2.5 rounded-full ${agent.chatAvailable !== false ? 'bg-green-400' : 'bg-gray-300'}`} />
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{agent.user?.name || 'Agent'}</p>
+                      <p className="text-xs text-gray-400">{agent.team ? `Team: ${agent.team.name}` : 'No team assigned'}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleToggleChatAvailable(agent.id, agent.chatAvailable !== false)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${agent.chatAvailable !== false ? 'bg-green-500' : 'bg-gray-300 dark:bg-slate-600'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${agent.chatAvailable !== false ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+              ))}
+              {allAgents.length === 0 && <p className="text-sm text-gray-400 text-center py-4">No agents found.</p>}
+            </div>
+          </div>
+
         </div>
       )}
+
 
       {/* 4. Team Agents Tab */}
       {activeTab === "agents" && (

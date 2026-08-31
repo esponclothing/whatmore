@@ -2859,3 +2859,85 @@ function compileMetaFlowJson(name: string, screenName: string, ctaText: string, 
     ]
   };
 }
+
+// =============================================================
+// TEAM MANAGEMENT ACTIONS
+// =============================================================
+
+export async function getTeamsWithMembersAction() {
+  try {
+    const teams = await prisma.team.findMany({
+      include: {
+        members: {
+          include: { user: { select: { name: true, email: true } } }
+        }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+    return { success: true, teams };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function createTeamAction(name: string, description?: string) {
+  try {
+    const team = await prisma.team.create({ data: { name, description } });
+    return { success: true, team };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function deleteTeamAction(teamId: string) {
+  try {
+    // Unassign all members first
+    await prisma.employee.updateMany({ where: { teamId }, data: { teamId: null } });
+    await prisma.team.delete({ where: { id: teamId } });
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function addAgentToTeamAction(employeeId: string, teamId: string) {
+  try {
+    await prisma.employee.update({ where: { id: employeeId }, data: { teamId } });
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function removeAgentFromTeamAction(employeeId: string) {
+  try {
+    await prisma.employee.update({ where: { id: employeeId }, data: { teamId: null } });
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function toggleAgentChatAvailabilityAction(employeeId: string, available: boolean) {
+  try {
+    await prisma.employee.update({ where: { id: employeeId }, data: { chatAvailable: available } });
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function getAllAgentsAction() {
+  try {
+    const employees = await prisma.employee.findMany({
+      include: {
+        user: { select: { name: true, email: true } },
+        team: { select: { id: true, name: true } }
+      },
+      orderBy: { user: { name: 'asc' } }
+    });
+    return { success: true, employees };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}

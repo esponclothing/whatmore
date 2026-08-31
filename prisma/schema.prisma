@@ -195,6 +195,7 @@ model Employee {
   department      String?
   designation     String?
   employmentStatus String  @default("Active")
+  chatAvailable    Boolean @default(true)  // Temporary toggle for chat assignment only
   salary          Float?
   target          Float?
   bankDetails     String?
