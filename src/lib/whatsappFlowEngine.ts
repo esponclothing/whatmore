@@ -17,7 +17,7 @@ function interpolate(str: string, vars: Record<string, string>) {
 }
 
 // Dispatch a single flow node as a WhatsApp message
-async function dispatchNode(toPhone: string, node: any, vars: Record<string, string>) {
+async function dispatchNode(toPhone: string, node: any, vars: Record<string, string>, conversationId?: string) {
   const inter = (s: string) => interpolate(s, vars);
   const type = (node.type || '').toUpperCase();
 
@@ -28,6 +28,15 @@ async function dispatchNode(toPhone: string, node: any, vars: Record<string, str
     const url = `https://graph.facebook.com/v20.0/${creds.phoneId}/messages`;
     const headers = { 'Authorization': `Bearer ${creds.token}`, 'Content-Type': 'application/json' };
     let payload: any = { messaging_product: 'whatsapp', recipient_type: 'individual', to: toPhone };
+
+    let resolvedConvId = conversationId;
+    if (!resolvedConvId) {
+      const conv = await prisma.whatsAppConversation.findFirst({
+        where: { customer: { mobile: { contains: toPhone } } },
+        orderBy: { updatedAt: 'desc' }
+      });
+      if (conv) resolvedConvId = conv.id;
+    }
 
     if (type === 'TEXT' || type === 'START' || type === 'TRIGGER') {
       if (!node.text) return; // Skip if no text
@@ -105,7 +114,23 @@ async function dispatchNode(toPhone: string, node: any, vars: Record<string, str
       
       // Dispatch introductory text first
       const introPayload = { ...payload, type: 'text', text: { body: inter(node.text || "Here are our products:") } };
-      await fetch(url, { method: 'POST', headers, body: JSON.stringify(introPayload) });
+      const introRes = await fetch(url, { method: 'POST', headers, body: JSON.stringify(introPayload) });
+      const introData = await introRes.json().catch(() => ({}));
+      
+      if (introRes.ok && resolvedConvId) {
+        await prisma.whatsAppMessage.create({
+          data: {
+            conversationId: resolvedConvId,
+            senderType: 'BOT',
+            senderName: 'Chatbot',
+            messageType: 'TEXT',
+            content: inter(node.text || "Here are our products:"),
+            status: 'SENT',
+            metaMessageId: introData?.messages?.[0]?.id || null,
+            sentAt: new Date()
+          }
+        });
+      }
 
       // Dispatch up to 3 images
       for (const p of products) {
@@ -118,15 +143,56 @@ async function dispatchNode(toPhone: string, node: any, vars: Record<string, str
                caption: `${p.name} - ₹${p.sellingPrice}`
              }
           };
-          await fetch(url, { method: 'POST', headers, body: JSON.stringify(pPayload) });
+          const pRes = await fetch(url, { method: 'POST', headers, body: JSON.stringify(pPayload) });
+          const pData = await pRes.json().catch(() => ({}));
+          if (pRes.ok && resolvedConvId) {
+            await prisma.whatsAppMessage.create({
+              data: {
+                conversationId: resolvedConvId,
+                senderType: 'BOT',
+                senderName: 'Chatbot',
+                messageType: 'IMAGE',
+                content: `${p.name} - ₹${p.sellingPrice}`,
+                mediaUrl: p.images[0],
+                status: 'SENT',
+                metaMessageId: pData?.messages?.[0]?.id || null,
+                sentAt: new Date()
+              }
+            });
+          }
         } else {
           const pPayload = {
              messaging_product: 'whatsapp', recipient_type: 'individual', to: toPhone,
              type: 'text',
              text: { body: `${p.name} - ₹${p.sellingPrice}` }
           };
-          await fetch(url, { method: 'POST', headers, body: JSON.stringify(pPayload) });
+          const pRes = await fetch(url, { method: 'POST', headers, body: JSON.stringify(pPayload) });
+          const pData = await pRes.json().catch(() => ({}));
+          if (pRes.ok && resolvedConvId) {
+            await prisma.whatsAppMessage.create({
+              data: {
+                conversationId: resolvedConvId,
+                senderType: 'BOT',
+                senderName: 'Chatbot',
+                messageType: 'TEXT',
+                content: `${p.name} - ₹${p.sellingPrice}`,
+                status: 'SENT',
+                metaMessageId: pData?.messages?.[0]?.id || null,
+                sentAt: new Date()
+              }
+            });
+          }
         }
+      }
+
+      if (resolvedConvId) {
+        await prisma.whatsAppConversation.update({
+          where: { id: resolvedConvId },
+          data: {
+            lastMessageText: 'Products Catalog Sent',
+            lastMessageAt: new Date()
+          }
+        });
       }
       return; // Handled
 
@@ -139,7 +205,64 @@ async function dispatchNode(toPhone: string, node: any, vars: Record<string, str
       return; // Logic node, nothing to dispatch
     }
 
-    await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
+    const response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
+    const responseData = await response.json().catch(() => ({}));
+    const wasSuccess = response.ok;
+    const metaMessageId = responseData?.messages?.[0]?.id || null;
+
+    if (wasSuccess && resolvedConvId) {
+      let textToSend = '';
+      let mType = 'TEXT';
+      let mediaUrlVal: string | null = null;
+
+      if (type === 'TEXT' || type === 'START' || type === 'TRIGGER') {
+        textToSend = inter(node.text || '');
+        mType = 'TEXT';
+      } else if (type === 'IMAGE') {
+        textToSend = inter(node.caption || node.text || '');
+        mType = 'IMAGE';
+        mediaUrlVal = inter(node.imageUrl || '');
+      } else if (type === 'VIDEO') {
+        textToSend = inter(node.caption || node.text || '');
+        mType = 'VIDEO';
+        mediaUrlVal = inter(node.videoUrl || '');
+      } else if (type === 'DOCUMENT') {
+        textToSend = inter(node.fileName || '');
+        mType = 'DOCUMENT';
+        mediaUrlVal = inter(node.docUrl || '');
+      } else if (type === 'CHOICE' || type === 'BUTTONS' || type === 'LIST_MENU') {
+        const choices = node.choices || [];
+        textToSend = inter(node.text || 'Please select an option:');
+        mType = choices.length <= 3 ? 'BUTTONS' : 'LIST';
+        if (node.imageUrl) {
+          mediaUrlVal = inter(node.imageUrl);
+        }
+      }
+
+      if (textToSend || mediaUrlVal) {
+        await prisma.whatsAppMessage.create({
+          data: {
+            conversationId: resolvedConvId,
+            senderType: 'BOT',
+            senderName: 'Chatbot',
+            messageType: mType,
+            content: textToSend,
+            mediaUrl: mediaUrlVal,
+            status: 'SENT',
+            metaMessageId,
+            sentAt: new Date()
+          }
+        });
+
+        await prisma.whatsAppConversation.update({
+          where: { id: resolvedConvId },
+          data: {
+            lastMessageText: textToSend || 'Interactive Message',
+            lastMessageAt: new Date()
+          }
+        });
+      }
+    }
   } catch (e: any) {
     console.error(`[Flow Engine] Dispatch error for node ${node.id}:`, e.message);
   }
@@ -155,14 +278,14 @@ async function getCreds() {
 }
 
 // Run nodes sequentially until a pause point or end
-async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, string>, toPhone: string) {
+async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, string>, toPhone: string, conversationId?: string) {
   let nextNodeId: string | null = startNodeId;
 
   while (nextNodeId) {
     const node = nodes.find((n: any) => n.id === nextNodeId);
     if (!node) break;
 
-    await dispatchNode(toPhone, node, vars);
+    await dispatchNode(toPhone, node, vars, conversationId);
 
     const type = (node.type || '').toUpperCase();
 
@@ -286,7 +409,7 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
         return true; 
       }
 
-      const result = await runNodes(nodes, nextNodeId, vars, senderPhone);
+      const result = await runNodes(nodes, nextNodeId, vars, senderPhone, conversationId);
 
       if (result.status === 'ended') {
         await prisma.whatsAppFlowState.delete({ where: { phone: senderPhone } });
@@ -330,7 +453,7 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
           create: { phone: senderPhone, flowId: flowRecord.id, currentNodeId: nextNodeId, variables: '{}' }
         });
 
-        const result = await runNodes(nodes, nextNodeId, {}, senderPhone);
+        const result = await runNodes(nodes, nextNodeId, {}, senderPhone, conversationId);
 
         if (result.status === 'ended') {
           await prisma.whatsAppFlowState.deleteMany({ where: { phone: senderPhone } });

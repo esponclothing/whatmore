@@ -907,6 +907,28 @@ export default function WhatsAppChatbotBuilderPage() {
 
   const handleToggleActiveStatus = async (flowId: string, currentStatus: boolean) => {
     const newStatus = !currentStatus;
+    // If activating a flow, validate its configurations first
+    if (newStatus) {
+      const flowToToggle = savedFlows.find((f) => f.id === flowId);
+      if (flowToToggle) {
+        let flowNodes: any[] = [];
+        try { flowNodes = JSON.parse(flowToToggle.nodesJson); } catch (_) {}
+        const triggerNode = flowNodes.find((n: any) => (n.type || '').toUpperCase() === "TRIGGER");
+        const hasTrigger = !!triggerNode;
+        const hasKeyword = !!flowToToggle.triggerKeyword?.trim();
+        const isTriggerConnected = !!triggerNode?.outputPort;
+
+        if (!hasTrigger || !hasKeyword || !isTriggerConnected) {
+          let error = "Cannot activate this chatbot: ";
+          if (!hasTrigger) error += "No trigger block found. ";
+          else if (!hasKeyword) error += "Trigger keywords are empty. ";
+          else if (!isTriggerConnected) error += "Trigger block is not connected to any starting block. ";
+          alert(error + "\nPlease open and edit this flow to configure it before publishing.");
+          return;
+        }
+      }
+    }
+
     const res = await toggleWhatsAppChatbotFlowStatusAction(flowId, newStatus);
     if (res.success) {
       if (flowId === currentFlowId) {
@@ -918,22 +940,52 @@ export default function WhatsAppChatbotBuilderPage() {
     }
   };
 
-  const handlePublishFlow = async () => {
+  const validateWorkflow = () => {
+    const triggerNode = nodes.find((n) => (n.type || '').toUpperCase() === "TRIGGER");
+    if (!triggerNode) {
+      return { isValid: false, error: "Workflow lacks a Flow Trigger block. Please add a Flow Trigger block to start the chat." };
+    }
+    if (!triggerKeyword || !triggerKeyword.trim()) {
+      return { isValid: false, error: "Flow Trigger keywords cannot be empty. Please configure keywords in the trigger block." };
+    }
+    if (!triggerNode.outputPort) {
+      return { isValid: false, error: "Flow Trigger block is not connected to any starting block. Please drag a line from the trigger output dot." };
+    }
+    return { isValid: true };
+  };
+
+  const handleSaveFlowWithStatus = async (wantsPublish: boolean) => {
     setIsSaving(true);
+    let targetActive = wantsPublish;
+
+    // Validate if the user is trying to publish
+    if (wantsPublish) {
+      const validation = validateWorkflow();
+      if (!validation.isValid) {
+        targetActive = false;
+        alert(`Cannot Publish Live: ${validation.error}\n\nSaving your chatbot as a DRAFT instead.`);
+      }
+    }
+
     const res = await saveWhatsAppChatbotFlowAction({
       id: currentFlowId || undefined,
       name: flowName,
       triggerKeyword: triggerKeyword,
       nodesJson: JSON.stringify(nodes),
-      isActive: isBotActive
+      isActive: targetActive
     });
+
     if (res.success && res.flow) {
       setCurrentFlowId(res.flow.id);
-      setToastMsg("✓ Chatbot Flow successfully saved & published to WhatsApp database!");
-      // Update last saved Shopify states
+      setIsBotActive(targetActive);
+      if (targetActive) {
+        setToastMsg("✓ Chatbot Flow successfully saved & Published live!");
+      } else {
+        setToastMsg("✓ Chatbot Flow saved successfully as a DRAFT.");
+      }
       setLastSavedFlowName(flowName);
       setLastSavedTriggerKeyword(triggerKeyword);
-      setLastSavedIsBotActive(isBotActive);
+      setLastSavedIsBotActive(targetActive);
       setLastSavedNodesJson(JSON.stringify(nodes));
       await fetchFlows();
     } else {
@@ -1498,7 +1550,7 @@ export default function WhatsAppChatbotBuilderPage() {
             </button>
             <button 
               className="studio-btn primary" 
-              onClick={handlePublishFlow} 
+              onClick={() => handleSaveFlowWithStatus(isBotActive)} 
               disabled={isSaving}
               style={{ padding: "7px 20px", cursor: "pointer", borderRadius: "8px", fontSize: "12.5px" }}
             >
@@ -1589,8 +1641,21 @@ export default function WhatsAppChatbotBuilderPage() {
             <Play size={14} /> Preview & Test
           </button>
 
-          <button className="studio-btn primary" onClick={handlePublishFlow} disabled={isSaving || nodes.length === 0}>
-            <CheckCircle2 size={14} /> {isSaving ? "Saving..." : "Save Bot Flow"}
+          <button 
+            className="studio-btn" 
+            style={{ background: "#64748b", color: "#fff", display: "flex", alignItems: "center", gap: "6px" }} 
+            onClick={() => handleSaveFlowWithStatus(false)} 
+            disabled={isSaving || nodes.length === 0}
+          >
+            <FileText size={14} /> Save as Draft
+          </button>
+
+          <button 
+            className="studio-btn primary" 
+            onClick={() => handleSaveFlowWithStatus(true)} 
+            disabled={isSaving || nodes.length === 0}
+          >
+            <CheckCircle2 size={14} /> Publish Flow
           </button>
         </div>
       </div>
@@ -1917,6 +1982,7 @@ export default function WhatsAppChatbotBuilderPage() {
                               <input
                                 type="text"
                                 value={c.text}
+                                maxLength={20}
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => handleUpdateOptionText(node.id, c.id, e.target.value)}
@@ -2627,7 +2693,9 @@ export default function WhatsAppChatbotBuilderPage() {
                 {/* Choice Option List */}
                 {selectedNode.choices && (
                   <div>
-                    <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Option Links</label>
+                    <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>
+                      Option Links <span style={{ color: "#64748b", fontWeight: 500 }}>(Max 20 chars each)</span>
+                    </label>
                     <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "6px" }}>
                       {selectedNode.choices.map((c: any, index: number) => (
                         <div key={c.id} style={{ display: "flex", alignItems: "center", gap: "6px", background: "#f8fafc", padding: "6px 8px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
@@ -2635,6 +2703,7 @@ export default function WhatsAppChatbotBuilderPage() {
                           <input
                             type="text"
                             value={c.text}
+                            maxLength={20}
                             onChange={(e) => handleUpdateOptionText(selectedNode.id, c.id, e.target.value)}
                             style={{ flex: 1, padding: "5px 7px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "4px", background: "#ffffff" }}
                           />
