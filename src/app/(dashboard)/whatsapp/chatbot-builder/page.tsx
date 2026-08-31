@@ -940,6 +940,31 @@ export default function WhatsAppChatbotBuilderPage() {
     }
   };
 
+  const handleDeleteConnection = (sourceId: string, targetId: string, choiceId?: string) => {
+    setNodes((prev) =>
+      prev.map((n) => {
+        if (n.id !== sourceId) return n;
+
+        // If it's a choice option connection
+        if (choiceId && n.choices) {
+          const updatedChoices = n.choices.map((c: any) =>
+            c.id === choiceId ? { ...c, targetNode: null } : c
+          );
+          return { ...n, choices: updatedChoices };
+        }
+
+        // If it's the direct outputPort connection
+        if (n.outputPort === targetId) {
+          return { ...n, outputPort: null };
+        }
+
+        return n;
+      })
+    );
+    setToastMsg("✓ Connection deleted successfully!");
+    setTimeout(() => setToastMsg(null), 3000);
+  };
+
   const validateWorkflow = () => {
     const triggerNode = nodes.find((n) => (n.type || '').toUpperCase() === "TRIGGER");
     if (!triggerNode) {
@@ -1824,6 +1849,109 @@ export default function WhatsAppChatbotBuilderPage() {
                 />
               )}
             </svg>
+
+            {/* CONNECTION DELETE BUTTONS */}
+            {nodes.map((node) => {
+              const buttons: React.ReactNode[] = [];
+
+              if (node.outputPort) {
+                const target = nodes.find((n) => n.id === node.outputPort);
+                if (target) {
+                  const startFallback = { x: node.x + 260, y: node.y + 40 };
+                  const start = portCoords[`port-out-${node.id}`] || startFallback;
+                  const endFallback = { x: target.x, y: target.y + 40 };
+                  const end = portCoords[`port-in-${target.id}`] || endFallback;
+                  const midX = (start.x + end.x) / 2;
+                  const midY = (start.y + end.y) / 2;
+
+                  buttons.push(
+                    <div
+                      key={`del_${node.id}_${target.id}`}
+                      style={{
+                        position: "absolute",
+                        left: `${midX}px`,
+                        top: `${midY}px`,
+                        transform: "translate(-50%, -50%)",
+                        width: "18px",
+                        height: "18px",
+                        borderRadius: "50%",
+                        background: "#ef4444",
+                        color: "#ffffff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                        zIndex: 10,
+                        border: "1px solid #ffffff",
+                        userSelect: "none"
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteConnection(node.id, target.id);
+                      }}
+                      title="Delete connection"
+                    >
+                      ×
+                    </div>
+                  );
+                }
+              }
+
+              if (node.choices && Array.isArray(node.choices)) {
+                node.choices.forEach((c: any, idx: number) => {
+                  if (c.targetNode) {
+                    const target = nodes.find((n) => n.id === c.targetNode);
+                    if (target) {
+                      const startFallback = { x: node.x + 255, y: node.y + 140 + idx * 30 };
+                      const start = portCoords[`port-out-${node.id}-${c.id}`] || startFallback;
+                      const endFallback = { x: target.x, y: target.y + 40 };
+                      const end = portCoords[`port-in-${target.id}`] || endFallback;
+                      const midX = (start.x + end.x) / 2;
+                      const midY = (start.y + end.y) / 2;
+
+                      buttons.push(
+                        <div
+                          key={`del_${node.id}_${c.id}_${target.id}`}
+                          style={{
+                            position: "absolute",
+                            left: `${midX}px`,
+                            top: `${midY}px`,
+                            transform: "translate(-50%, -50%)",
+                            width: "18px",
+                            height: "18px",
+                            borderRadius: "50%",
+                            background: "#ef4444",
+                            color: "#ffffff",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+                            fontSize: "12px",
+                            fontWeight: "bold",
+                            zIndex: 10,
+                            border: "1px solid #ffffff",
+                            userSelect: "none"
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteConnection(node.id, target.id, c.id);
+                          }}
+                          title="Delete connection"
+                        >
+                          ×
+                        </div>
+                      );
+                    }
+                  }
+                });
+              }
+
+              return buttons;
+            })}
 
             {/* RICH NODE CARDS ON CANVAS */}
             {nodes.map((node) => {
