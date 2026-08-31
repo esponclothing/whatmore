@@ -680,7 +680,6 @@ export default function WhatsAppChatbotBuilderPage() {
     e.target.value = "";
   };
 
-  // Export Flow to JSON file
   const handleExportJsonFlow = () => {
     if (nodes.length === 0) return;
     const exportData = {
@@ -695,11 +694,27 @@ export default function WhatsAppChatbotBuilderPage() {
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
-    setToastMsg("✓ Chatbot flow exported successfully!");
+    setToastMsg("✅ Chatbot flow exported successfully!");
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-
+  const handleCopyJsonFlow = async () => {
+    if (nodes.length === 0) return;
+    const exportData = {
+      name: flowName,
+      triggerKeyword: triggerKeyword,
+      nodes: nodes
+    };
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(exportData, null, 2));
+      setToastMsg("📋 JSON copied to clipboard!");
+      setTimeout(() => setToastMsg(null), 3000);
+    } catch (err) {
+      console.error("Failed to copy JSON:", err);
+      setToastMsg("❌ Failed to copy JSON");
+      setTimeout(() => setToastMsg(null), 3000);
+    }
+  };
 
     // Fetch Saved Chatbot Flows from DB
   const fetchFlows = async () => {
@@ -1634,6 +1649,10 @@ export default function WhatsAppChatbotBuilderPage() {
 
           <button className="studio-btn" onClick={handleExportJsonFlow} disabled={nodes.length === 0} title="Export Current Chatbot Flow as JSON file">
             <Layers size={14} style={{ transform: "rotate(180deg)" }} /> Export JSON
+          </button>
+
+          <button className="studio-btn" onClick={handleCopyJsonFlow} disabled={nodes.length === 0} title="Copy Current Chatbot Flow as JSON">
+            <Copy size={14} /> Copy JSON
           </button>
 
           <input
