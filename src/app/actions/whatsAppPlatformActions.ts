@@ -1412,6 +1412,8 @@ export async function assignWhatsAppLeadAction(data: {
 }
 
 export async function getAllEmployeesAndTeams() {
+  const { unstable_noStore: noStore } = require("next/cache");
+  noStore();
   await ensureSeeded();
   try {
     const [teams, employees] = await Promise.all([
