@@ -1466,15 +1466,7 @@ export default function WhatsAppInboxComponent() {
             <div className="chat-input-wrapper">
               {/* Quick Action Shortcut Buttons */}
               <div className="chat-quick-actions-bar">
-                <button className="quick-chip" onClick={() => applyQuickShortcut("/catalog")}>
-                  <BookOpen size={12} /> /catalog
-                </button>
-                <button className="quick-chip" onClick={() => applyQuickShortcut("/price")}>
-                  <DollarSign size={12} /> /price
-                </button>
-                <button className="quick-chip" onClick={() => applyQuickShortcut("/payment")}>
-                  <CreditCard size={12} /> /payment
-                </button>
+
                 <button className="quick-chip" onClick={() => setShowFollowUpModal(true)}>
                   <Calendar size={12} /> + Follow Up
                 </button>
