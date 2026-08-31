@@ -288,7 +288,6 @@ export default function WhatsAppInboxComponent() {
         const mapped = data.chats.map((c) => ({
           id: c.id,
           status: c.chat_status === 'open' ? 'OPEN' : 'CLOSED',
-          priority: c.priority || 'MEDIUM',
           unreadCount: c.unreadCount || 0,
           lastMessageText: c.last_message,
           lastMessageAt: c.created_at,
@@ -385,7 +384,6 @@ export default function WhatsAppInboxComponent() {
           state: res.conversation.customer?.state || "",
           customerType: res.conversation.customer?.customerType || "Wholesaler",
           leadStage: res.conversation.leadStatus || "New Lead",
-          priority: res.conversation.priority || "MEDIUM",
           tags: res.conversation.tags || ""
         });
       } else {
@@ -1193,7 +1191,7 @@ export default function WhatsAppInboxComponent() {
                         ) : (
                           <span className="badge-human-pill">Human</span>
                         )}
-                        {conv.priority === "HIGH" && <span className="badge-priority-high">HIGH</span>}
+
                         {isExpired && (
                           <span style={{ fontSize: "9px", padding: "1px 5px", borderRadius: "4px", background: "#fee2e2", color: "#ef4444", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "2px", border: "1px solid rgba(239,68,68,0.2)" }}>
                             🔒 Expired

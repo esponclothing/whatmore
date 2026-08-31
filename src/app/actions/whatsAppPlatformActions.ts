@@ -44,7 +44,6 @@ export interface ConversationFilterOptions {
   tab?: 'all' | 'assigned_to_me' | 'unassigned' | 'assigned' | 'mentions' | 'dms' | 'groups';
   unreadOnly?: boolean;
   leadStatus?: string;
-  priority?: string;
   customerType?: string;
   assignedEmployeeId?: string;
   filterEmployeeId?: string; // Team member filter for Admins
@@ -111,9 +110,7 @@ export async function getWhatsAppConversations(filters: ConversationFilterOption
       where.leadStatus = filters.leadStatus;
     }
 
-    if (filters.priority) {
-      where.priority = filters.priority;
-    }
+
 
     if (filters.customerType) {
       where.customerType = filters.customerType;
@@ -312,7 +309,7 @@ export async function sendDirectWhatsAppDispatchAction(phone: string, content: s
           accountId: account.id,
           customerId: customer.id,
           status: 'OPEN',
-          priority: 'MEDIUM',
+
           customerType: customer.customerType || 'Retailer',
           leadStatus: customer.status || 'New Lead'
         }
@@ -566,7 +563,6 @@ export async function updateCRMProfileFromWhatsApp(data: {
   state?: string;
   customerType?: string;
   leadStage?: string;
-  priority?: string;
   tags?: string;
   assignedEmployeeId?: string;
   notes?: string;
@@ -595,7 +591,6 @@ export async function updateCRMProfileFromWhatsApp(data: {
       where: { id: data.conversationId },
       data: {
         leadStatus: data.leadStage || undefined,
-        priority: data.priority || undefined,
         customerType: data.customerType || undefined,
         tags: data.tags || undefined,
         assignedEmployeeId: data.assignedEmployeeId || undefined
@@ -715,7 +710,7 @@ export async function generateWhatsAppPaymentLinkAction(data: {
 
     await prisma.whatsAppConversation.update({
       where: { id: data.conversationId },
-      data: { orderStatus: 'Payment Pending', priority: 'HIGH' }
+      data: { orderStatus: 'Payment Pending' }
     });
 
     return { success: true, paymentLink };
@@ -748,7 +743,6 @@ export async function getWhatsAppDashboardMetrics() {
       totalConvs,
       openConvs,
       closedConvs,
-      highPriority,
       totalMessages,
       sentToday,
       activeAutomations,
@@ -759,7 +753,6 @@ export async function getWhatsAppDashboardMetrics() {
       prisma.whatsAppConversation.count(),
       prisma.whatsAppConversation.count({ where: { status: 'OPEN' } }),
       prisma.whatsAppConversation.count({ where: { status: 'CLOSED' } }),
-      prisma.whatsAppConversation.count({ where: { priority: 'HIGH' } }),
       prisma.whatsAppMessage.count(),
       prisma.whatsAppMessage.count({ where: { sentAt: { gte: new Date(new Date().setHours(0,0,0,0)) } } }),
       prisma.whatsAppAutomationRule.count({ where: { isActive: true } }),
@@ -793,7 +786,6 @@ export async function getWhatsAppDashboardMetrics() {
         totalConvs,
         openConvs,
         closedConvs,
-        highPriority,
         totalMessages,
         sentToday: isConnected ? (sentToday || 0) : 0,
         activeAutomations,

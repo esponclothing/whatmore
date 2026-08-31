@@ -116,7 +116,6 @@ export async function GET(req: NextRequest) {
           order_count: conv.customer?.totalOrders || 0,
           order_status: "unknown",
           message_count: conv.unreadCount || 0,
-          priority: conv.priority,
           unreadCount: conv.unreadCount,
           customerId: conv.customerId,
           assignedEmployeeId: conv.assignedEmployeeId,
@@ -261,10 +260,9 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      // Add default SLA status
       const formatted = {
         ...conversation,
-        slaStatus: conversation.priority === 'HIGH' ? 'RED' : 'GREEN'
+        slaStatus: conversation.slaStatus || 'GREEN'
       };
 
       return NextResponse.json({ success: true, conversation: formatted });

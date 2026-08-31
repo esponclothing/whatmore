@@ -237,7 +237,6 @@ export async function POST(req: NextRequest) {
             customerId: customer.id,
             assignedEmployeeId: customer.assignedSalespersonId,
             status: "OPEN",
-            priority: "HIGH",
             leadStatus: customer.leadStage || "New Lead",
             lastMessageText: textContent,
             lastMessageAt: messageTimestamp,

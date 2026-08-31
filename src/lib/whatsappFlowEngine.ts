@@ -350,8 +350,6 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
             console.log(`[CRM Node] conv found: ${conv ? conv.id : 'NOT FOUND'} convTags="${conv?.tags}"`);
             if (conv) {
               let convUpdate: any = {};
-              // priority and temperature live on WhatsAppConversation
-              if (node.priority) convUpdate.priority = node.priority;
               if (node.temperature) convUpdate.temperature = node.temperature;
               // Always sync tags to conversation
               if (node.tags) {
@@ -466,7 +464,29 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
       });
 
       const nodes = JSON.parse(matchedFlow.nodesJson);
-      const result = await runNodes(nodes, matchedNextNodeId, {}, senderPhone, conversationId);
+      
+      // Load customer profile variables for interpolation
+      const cleanPhoneForVars = senderPhone.replace(/\D/g, '').slice(-10);
+      const customerForVars = await prisma.customer.findFirst({
+        where: { OR: [{ mobile: { contains: cleanPhoneForVars } }, { whatsappNumber: { contains: cleanPhoneForVars } }] }
+      });
+      const convForVars = customerForVars ? await prisma.whatsAppConversation.findFirst({
+        where: { customerId: customerForVars.id }, orderBy: { updatedAt: 'desc' }
+      }) : null;
+      const profileVars: Record<string, string> = {
+        name: customerForVars?.contactPerson || customerForVars?.businessName || '',
+        businessName: customerForVars?.businessName || '',
+        mobile: customerForVars?.mobile || senderPhone,
+        whatsappNumber: customerForVars?.whatsappNumber || senderPhone,
+        email: customerForVars?.email || '',
+        city: customerForVars?.city || '',
+        state: customerForVars?.state || '',
+        tags: customerForVars?.tags || '',
+        leadStage: customerForVars?.leadStage || '',
+        customerType: customerForVars?.customerType || '',
+      };
+      
+      const result = await runNodes(nodes, matchedNextNodeId, profileVars, senderPhone, conversationId);
 
       if (result.status === 'ended') {
         await prisma.whatsAppFlowState.deleteMany({ where: { phone: senderPhone } });

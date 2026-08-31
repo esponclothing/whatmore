@@ -214,7 +214,6 @@ const BOT_TEMPLATES = [
         x: 970,
         y: 40,
         leadStage: "Qualified Retailer",
-        priority: "MEDIUM",
         temperature: "WARM",
         tags: "Retailer, Qualified",
         text: "Update CRM Contact:\n• Lead Stage: Qualified Retailer\n• Priority: MEDIUM",
@@ -228,7 +227,6 @@ const BOT_TEMPLATES = [
         x: 970,
         y: 200,
         leadStage: "Wholesale Inquiry",
-        priority: "HIGH",
         temperature: "HOT",
         tags: "Wholesale, Hot Lead",
         text: "Update CRM Contact:\n• Lead Stage: Wholesale Inquiry\n• Priority: HIGH",
@@ -1218,7 +1216,7 @@ export default function WhatsAppChatbotBuilderPage() {
         newNode = { ...newNode, category: "api", title: "Webhook Fetch (API)", webhookUrl: "https://api.espon.in/v1/inventory", method: "POST", headers: "Content-Type: application/json", requestBody: '{"sku": "ESP-902"}' };
         break;
       case "crm_contact":
-        newNode = { ...newNode, category: "crm", title: "Update CRM Contact", leadStage: "Qualified Lead", priority: "HIGH", temperature: "HOT", tags: "Hot Lead, Wholesale" };
+        newNode = { ...newNode, category: "crm", title: "Update CRM Contact", leadStage: "Qualified Lead", temperature: "HOT", tags: "Hot Lead, Wholesale" };
         break;
       case "crm_lead":
         newNode = { ...newNode, category: "crm", title: "Create Lead", leadSource: "WhatsApp Bot", customerType: "Wholesaler" };
@@ -2047,7 +2045,7 @@ export default function WhatsAppChatbotBuilderPage() {
                           <UserCheck size={13} />
                           <span>Stage: {node.leadStage || 'Qualified'}</span>
                         </div>
-                        {node.priority && <span style={{ fontSize: "10px", opacity: 0.8 }}>Priority: {node.priority}</span>}
+
                       </div>
                     )}
 
@@ -2693,19 +2691,6 @@ export default function WhatsAppChatbotBuilderPage() {
                             <option value="Wholesale Inquiry">Wholesale Inquiry</option>
                             <option value="Negotiation">Negotiation</option>
                             <option value="Won">Won / Customer</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Priority</label>
-                          <select
-                            value={selectedNode.priority || "MEDIUM"}
-                            onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, priority: e.target.value } : n)))}
-                            style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
-                          >
-                            <option value="LOW">LOW</option>
-                            <option value="MEDIUM">MEDIUM</option>
-                            <option value="HIGH">HIGH</option>
-                            <option value="URGENT">URGENT</option>
                           </select>
                         </div>
                         <div>

@@ -1344,7 +1344,6 @@ model WhatsAppConversation {
   team               Team?    @relation(fields: [teamId], references: [id])
 
   status             String   @default("OPEN") // OPEN, CLOSED, SNOOZED, PENDING
-  priority           String   @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
   leadStatus         String   @default("New Lead") // New Lead, Contacted, Qualified, Negotiation, Won, Lost
   orderStatus        String?  // Processing, Packed, Dispatched, Delivered, Payment Pending
   customerType       String   @default("Wholesale") // Retailer, Wholesaler, Distributor, VIP
