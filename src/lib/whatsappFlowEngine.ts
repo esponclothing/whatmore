@@ -327,25 +327,33 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
             let updateData: any = {};
             if (node.leadStage) updateData.leadStage = node.leadStage;
             if (node.priority) updateData.priority = node.priority;
+            if (node.temperature) updateData.temperature = node.temperature;
             if (node.tags) {
+              // Always rebuild tag list — even if tag already exists
               let existingTags = (customer.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
-              if (!existingTags.includes(node.tags)) { existingTags.push(node.tags); updateData.tags = existingTags.join(', '); }
+              if (!existingTags.includes(node.tags)) { existingTags.push(node.tags); }
+              updateData.tags = existingTags.join(', ');
             }
             if (Object.keys(updateData).length > 0) {
               await prisma.customer.update({ where: { id: customer.id }, data: updateData });
             }
-             if (updateData.tags) {
+            // ALWAYS sync tags to conversation regardless of whether tag was "new"
+            if (node.tags) {
               const conv = await prisma.whatsAppConversation.findFirst({ 
                 where: { customerId: customer.id }, 
                 orderBy: { updatedAt: 'desc' } 
               });
               if (conv) {
+                let convTags = (conv.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
+                if (!convTags.includes(node.tags)) convTags.push(node.tags);
                 await prisma.whatsAppConversation.update({ 
                   where: { id: conv.id }, 
-                  data: { tags: updateData.tags } 
+                  data: { tags: convTags.join(', ') } 
                 });
               }
             }
+          } else {
+            console.error(`[CRM Node] Customer NOT FOUND for phone: ${toPhone} (cleaned: ${cleanPhone})`);
           }
         } catch (e) {
           console.error("CRM Update Node Error:", e);
