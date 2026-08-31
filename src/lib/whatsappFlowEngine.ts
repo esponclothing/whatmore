@@ -375,50 +375,67 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
     } else if (type === 'CRM_ROUNDROBIN' || type === 'START') {
         try {
           const cleanPhone = toPhone.replace(/\D/g, '').slice(-10);
-          const customer = await prisma.customer.findFirst({
-            where: { OR: [{ mobile: { contains: cleanPhone } }, { whatsappNumber: { contains: cleanPhone } }] }
-          });
-          if (customer) {
-            const conv = await prisma.whatsAppConversation.findFirst({ 
-              where: { customerId: customer.id }, 
-              orderBy: { updatedAt: 'desc' } 
-            });
-            if (conv) {
-              if (node.assignmentMode === 'DIRECT' && node.agentId) {
-                await prisma.whatsAppConversation.update({ where: { id: conv.id }, data: { assignedEmployeeId: node.agentId, status: 'OPEN' } });
-              } else {
-                let agentQuery: any = { employmentStatus: 'Active', chatAvailable: { not: false } };
-                const targetType = node.roundRobinTarget || 'TEAM';
-                if (targetType === 'TEAM' && node.teamId) {
-                  agentQuery.teamId = node.teamId;
-                } else if (targetType === 'AGENTS' && Array.isArray(node.agentIds) && node.agentIds.length > 0) {
-                  agentQuery.id = { in: node.agentIds };
-                }
+          let conv = conversationId 
+            ? await prisma.whatsAppConversation.findUnique({ where: { id: conversationId } })
+            : null;
 
-                const activeAgents = await prisma.employee.findMany({ 
-                  where: agentQuery,
-                  include: {
-                    _count: {
-                      select: {
-                        whatsAppConversations: {
-                          where: { status: 'OPEN' }
-                        }
+          if (!conv) {
+            const customer = await prisma.customer.findFirst({
+              where: { OR: [{ mobile: { contains: cleanPhone } }, { whatsappNumber: { contains: cleanPhone } }] }
+            });
+            if (customer) {
+              conv = await prisma.whatsAppConversation.findFirst({ 
+                where: { customerId: customer.id }, 
+                orderBy: { updatedAt: 'desc' } 
+              });
+            }
+          }
+
+          if (conv) {
+            if (node.assignmentMode === 'DIRECT' && node.agentId) {
+              await prisma.whatsAppConversation.update({ 
+                where: { id: conv.id }, 
+                data: { assignedEmployeeId: node.agentId, status: 'OPEN' } 
+              });
+              console.log(`[Flow Assign] Direct assigned chat ${conv.id} to agent ${node.agentId}`);
+            } else {
+              let agentQuery: any = { 
+                chatAvailable: { not: false } 
+              };
+
+              const targetType = node.roundRobinTarget || 'TEAM';
+              if (targetType === 'TEAM' && node.teamId) {
+                agentQuery.teamId = node.teamId;
+              } else if (targetType === 'AGENTS' && Array.isArray(node.agentIds) && node.agentIds.length > 0) {
+                agentQuery.id = { in: node.agentIds };
+              }
+
+              const activeAgents = await prisma.employee.findMany({ 
+                where: agentQuery,
+                include: {
+                  user: true,
+                  _count: {
+                    select: {
+                      assignedWhatsAppConversations: {
+                        where: { status: 'OPEN' }
                       }
                     }
                   }
-                });
-
-                if (activeAgents.length > 0) {
-                  activeAgents.sort((a: any, b: any) => a._count.whatsAppConversations - b._count.whatsAppConversations);
-                  const selectedAgent = activeAgents[0];
-                  await prisma.whatsAppConversation.update({ 
-                    where: { id: conv.id }, 
-                    data: { assignedEmployeeId: selectedAgent.id, status: 'OPEN' } 
-                  });
-                  console.log(`[Round Robin] Assigned chat ${conv.id} to agent ${selectedAgent.id} (Load: ${selectedAgent._count.whatsAppConversations})`);
-                } else {
-                  console.log(`[Round Robin] No available agents found for criteria:`, agentQuery);
                 }
+              });
+
+              console.log(`[Round Robin] Query:`, JSON.stringify(agentQuery), `Found agents: ${activeAgents.length}`);
+
+              if (activeAgents.length > 0) {
+                activeAgents.sort((a: any, b: any) => (a._count?.assignedWhatsAppConversations || 0) - (b._count?.assignedWhatsAppConversations || 0));
+                const selectedAgent = activeAgents[0];
+                await prisma.whatsAppConversation.update({ 
+                  where: { id: conv.id }, 
+                  data: { assignedEmployeeId: selectedAgent.id, status: 'OPEN' } 
+                });
+                console.log(`[Round Robin] Successfully assigned chat ${conv.id} to agent ${selectedAgent.user?.name || selectedAgent.id}`);
+              } else {
+                console.log(`[Round Robin] No agents matched query:`, agentQuery);
               }
             }
           }
