@@ -1011,12 +1011,12 @@ export default function WhatsAppChatbotBuilderPage() {
   // ---------------------------------------------------------
   // RICH BLOCK INITIALIZATION FOR ALL 25+ BLOCK TYPES
   // ---------------------------------------------------------
-  const handleAddBlockToCanvas = (block: any) => {
+  const handleAddBlockToCanvas = (block: any, x?: number, y?: number) => {
     const selected = nodes.find((n) => n.id === selectedNodeId) || nodes[nodes.length - 1];
     const newNodeId = `node_${Date.now()}`;
     const basePos = {
-      x: selected ? selected.x + 290 : 400,
-      y: selected ? selected.y + 40 : 200
+      x: typeof x === "number" ? x : (selected ? selected.x + 290 : 400),
+      y: typeof y === "number" ? y : (selected ? selected.y + 40 : 200)
     };
 
     let newNode: any = {
@@ -1650,7 +1650,16 @@ export default function WhatsAppChatbotBuilderPage() {
                         {filteredBlocks.map((b) => {
                           const Icon = b.icon;
                           return (
-                            <div key={b.id} className="block-tile" onClick={() => handleAddBlockToCanvas(b)}>
+                            <div
+                              key={b.id}
+                              className="block-tile"
+                              onClick={() => handleAddBlockToCanvas(b)}
+                              draggable={true}
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData("text/plain", b.id);
+                              }}
+                              style={{ cursor: "grab" }}
+                            >
                               <Icon size={18} color="#10b981" />
                               <span>{b.name}</span>
                             </div>
@@ -1673,6 +1682,29 @@ export default function WhatsAppChatbotBuilderPage() {
           onMouseUp={handleMouseUpCanvas}
           onMouseLeave={handleMouseUpCanvas}
           onWheel={handleWheelCanvas}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            const blockId = e.dataTransfer.getData("text/plain");
+            if (!blockId) return;
+
+            // Find the block config
+            let targetBlock: any = null;
+            for (const cat of blockCategories) {
+              const found = cat.blocks.find(b => b.id === blockId);
+              if (found) {
+                targetBlock = found;
+                break;
+              }
+            }
+            if (!targetBlock) return;
+
+            const rect = e.currentTarget.getBoundingClientRect();
+            const dropX = (e.clientX - rect.left - pan.x) / zoom;
+            const dropY = (e.clientY - rect.top - pan.y) / zoom;
+
+            handleAddBlockToCanvas(targetBlock, dropX, dropY);
+          }}
           style={{ cursor: isPanning ? "grabbing" : "grab", position: "relative" }}
         >
           {/* EMPTY STATE BANNER WHEN ALL BOTS ARE DELETED */}
