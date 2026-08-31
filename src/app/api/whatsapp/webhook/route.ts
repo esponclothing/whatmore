@@ -274,14 +274,7 @@ export async function POST(req: NextRequest) {
 
       console.log(`[WhatsApp Webhook] Incoming message from +91 ${cleanPhone}: "${textContent.slice(0, 50)}"`);
 
-      // Auto-assign conversation via Round-Robin if unassigned
-      if (!conversation.assignedEmployeeId) {
-        assignWhatsAppLeadAction({
-          conversationId: conversation.id,
-          method: 'ROUND_ROBIN'
-        }).catch(e => console.error("[Webhook Round-Robin Assign] Failed:", e.message));
-      }
-
+      // Removed old global auto-assignment logic to rely purely on Chatbot Engine routing.
       // Feature 1: Send Web Push Notification to all subscribed agents
       sendPushNotificationToAgents(
         `💬 ${customer.contactPerson || '+91 ' + cleanPhone}`,

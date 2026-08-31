@@ -385,10 +385,10 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
                 await prisma.whatsAppConversation.update({ where: { id: conv.id }, data: { assignedEmployeeId: node.agentId, status: 'OPEN' } });
               } else {
                 let agentQuery: any = { employmentStatus: 'Active', chatAvailable: { not: false } };
-                
-                if (node.roundRobinTarget === 'TEAM' && node.teamId) {
+                const targetType = node.roundRobinTarget || 'TEAM';
+                if (targetType === 'TEAM' && node.teamId) {
                   agentQuery.teamId = node.teamId;
-                } else if (node.roundRobinTarget === 'AGENTS' && Array.isArray(node.agentIds) && node.agentIds.length > 0) {
+                } else if (targetType === 'AGENTS' && Array.isArray(node.agentIds) && node.agentIds.length > 0) {
                   agentQuery.id = { in: node.agentIds };
                 }
 
