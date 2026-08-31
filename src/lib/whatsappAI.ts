@@ -325,26 +325,34 @@ export async function sendWhatsAppProductCards(toPhone: string, cards: any[]) {
   const cardsToSend = cards.slice(0, 5);
   
   for (const c of cardsToSend) {
+    const fallbackImage = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/1024px-No_image_available.svg.png";
+    const imageUrl = c.image_url || fallbackImage;
+    const caption = `*${c.title}*\nPrice: ${c.price}\n\n🛍️ Buy Now:\n${c.url}`.slice(0, 1024);
+
     const payload = {
       messaging_product: "whatsapp",
       recipient_type: "individual",
       to: toPhone,
-      type: "interactive",
-      interactive: {
-        type: "cta_url",
-        header: { type: "image", image: { link: c.image_url || "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/1024px-No_image_available.svg.png" } },
-        body: { text: `*${c.title}*\nPrice: ${c.price}`.slice(0, 160) },
-        action: { name: "cta_url", parameters: { display_text: "🛍️ Buy Now", url: c.url } }
+      type: "image",
+      image: {
+        link: imageUrl,
+        caption: caption
       }
     };
     try {
-      await fetch(url, {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("[sendWhatsAppProductCards Error]:", errorText);
+      }
       await new Promise(r => setTimeout(r, 500));
-    } catch (err) {}
+    } catch (err: any) {
+      console.error("[sendWhatsAppProductCards Catch]:", err.message);
+    }
   }
 }
 
