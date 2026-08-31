@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store, MessageSquare, Users, Bot, Layers, BookOpen } from "lucide-react";
+import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store, MessageSquare, Users, Bot, Layers, BookOpen, Edit3, X } from "lucide-react";
 import { 
   getWhatsAppApiCredentialsAction, 
   saveWhatsAppApiCredentialsAction, 
@@ -68,6 +68,9 @@ export default function WhatsAppAPISettingsPage() {
   const [agentResultMsg, setAgentResultMsg] = useState<{ success: boolean; text: string } | null>(null);
   const [clientInfo, setClientInfo] = useState<any>(null);
   const [agents, setAgents] = useState<any[]>([]);
+  const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
+  const [editAgentData, setEditAgentData] = useState<any>({});
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // Facebook Register state
   const [registering, setRegistering] = useState(false);
@@ -245,6 +248,27 @@ export default function WhatsAppAPISettingsPage() {
     } else {
       setCrmResultMsg({ success: false, text: "Error: " + res.error });
     }
+  };
+
+  const handleSaveEditAgent = async (agentId: string) => {
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/owner/agents/${agentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editAgentData)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEditingAgentId(null);
+        fetch('/api/owner/agents').then(r => r.json()).then(d => { if (d.agents) setAgents(d.agents); });
+      } else {
+        alert(data.error || "Failed to update agent");
+      }
+    } catch (e) {
+      alert("Connection error");
+    }
+    setSavingEdit(false);
   };
 
   if (loading) {
@@ -750,32 +774,72 @@ export default function WhatsAppAPISettingsPage() {
                     <th className="py-3 px-4">Email</th>
                     <th className="py-3 px-4">Role</th>
                     <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700 bg-white dark:bg-slate-900">
                   {agents.map(a => (
                     <tr key={a.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/50">
-                      <td className="py-3 px-4 font-bold text-gray-900 dark:text-white">{a.name}</td>
-                      <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{a.email}</td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
-                          a.role === "ADMIN" ? "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400" : "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400"
-                        }`}>
-                          {a.role}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
-                          a.isActive ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
-                        }`}>
-                          {a.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </td>
+                      {editingAgentId === a.id ? (
+                        <>
+                          <td className="py-3 px-4">
+                            <input type="text" value={editAgentData.name} onChange={(e) => setEditAgentData({...editAgentData, name: e.target.value})} className="w-full px-2 py-1 rounded border border-gray-200 text-sm" />
+                          </td>
+                          <td className="py-3 px-4">
+                            <input type="email" value={editAgentData.email} onChange={(e) => setEditAgentData({...editAgentData, email: e.target.value})} className="w-full px-2 py-1 rounded border border-gray-200 text-sm" />
+                            <input type="password" placeholder="New Password (optional)" value={editAgentData.password || ""} onChange={(e) => setEditAgentData({...editAgentData, password: e.target.value})} className="w-full px-2 py-1 rounded border border-gray-200 text-sm mt-1" />
+                          </td>
+                          <td className="py-3 px-4">
+                            <select value={editAgentData.role} onChange={(e) => setEditAgentData({...editAgentData, role: e.target.value})} className="px-2 py-1 rounded border border-gray-200 text-sm bg-white">
+                              <option value="AGENT">AGENT</option>
+                              <option value="ADMIN">ADMIN</option>
+                            </select>
+                          </td>
+                          <td className="py-3 px-4">
+                            <select value={editAgentData.isActive ? "true" : "false"} onChange={(e) => setEditAgentData({...editAgentData, isActive: e.target.value === "true"})} className="px-2 py-1 rounded border border-gray-200 text-sm bg-white">
+                              <option value="true">Active</option>
+                              <option value="false">Inactive</option>
+                            </select>
+                          </td>
+                          <td className="py-3 px-4 text-right flex justify-end gap-2">
+                            <button onClick={() => handleSaveEditAgent(a.id)} disabled={savingEdit} className="text-green-600 hover:text-green-800">
+                              {savingEdit ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
+                            </button>
+                            <button onClick={() => setEditingAgentId(null)} disabled={savingEdit} className="text-gray-500 hover:text-gray-700">
+                              <X size={16} />
+                            </button>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="py-3 px-4 font-bold text-gray-900 dark:text-white">{a.name}</td>
+                          <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{a.email}</td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                              a.role === "ADMIN" ? "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400" : "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400"
+                            }`}>
+                              {a.role}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                              a.isActive ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                            }`}>
+                              {a.isActive ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button onClick={() => { setEditingAgentId(a.id); setEditAgentData({...a, password: ""}); }} className="text-gray-400 hover:text-indigo-600 transition-colors">
+                              <Edit3 size={16} />
+                            </button>
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))}
                   {agents.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center text-gray-400">No agents found in this workspace.</td>
+                      <td colSpan={5} className="py-8 text-center text-gray-400">No agents found in this workspace.</td>
                     </tr>
                   )}
                 </tbody>
