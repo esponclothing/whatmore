@@ -729,8 +729,31 @@ export default function WhatsAppChatbotBuilderPage() {
         console.error("Failed to load live data for chatbot builder", err);
       }
     };
-    fetchLiveData();
-  }, []);
+
+    const handleCreateTag = async () => {
+      const tagName = window.prompt("Enter new tag name:");
+      if (!tagName || !tagName.trim()) return;
+      try {
+        const res = await fetch('/api/whatsapp/tags', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: tagName.trim(), color: '#6366f1' })
+        });
+        const data = await res.json();
+        if (data.success) {
+          fetchLiveData(); // Refresh tags
+        } else {
+          alert(data.error || "Failed to create tag.");
+        }
+      } catch (e) {
+        alert("Error creating tag.");
+      }
+    };
+
+    useEffect(() => {
+      fetchFlows();
+      fetchLiveData();
+    }, []);
 
   const handleSelectFlow = (flowId: string) => {
     const target = savedFlows.find((f) => f.id === flowId);
@@ -2374,7 +2397,10 @@ export default function WhatsAppChatbotBuilderPage() {
                           </select>
                         </div>
                         <div>
-                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Assign Tags</label>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Assign Tags</label>
+                            <button onClick={handleCreateTag} style={{ fontSize: "10px", color: "#4f46e5", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>+ Create New</button>
+                          </div>
                           <select
                             value={selectedNode.tags || ""}
                             onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, tags: e.target.value } : n)))}
@@ -2389,7 +2415,7 @@ export default function WhatsAppChatbotBuilderPage() {
                       </>
                     )}
 
-                    {(selectedNode.type || "").toUpperCase() === "CRM_ROUNDROBIN" && (
+                    {((selectedNode.type || "").toUpperCase() === "CRM_ROUNDROBIN" || (selectedNode.type || "").toUpperCase() === "START") && (
                       <div>
                         <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Assign To Agent</label>
                         <select

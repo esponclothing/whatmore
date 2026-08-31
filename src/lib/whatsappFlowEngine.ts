@@ -185,7 +185,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
         } catch (e) {
           console.error("CRM Update Node Error:", e);
         }
-    } else if (type === 'CRM_ROUNDROBIN') {
+    } else if (type === 'CRM_ROUNDROBIN' || type === 'START') {
         try {
           const conv = await prisma.whatsAppConversation.findFirst({ where: { phone: { contains: toPhone } }, orderBy: { updatedAt: 'desc' } });
           if (conv) {
