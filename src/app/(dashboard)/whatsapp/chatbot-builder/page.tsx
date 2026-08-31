@@ -2097,52 +2097,78 @@ export default function WhatsAppChatbotBuilderPage() {
                     {/* CHOICES LIST */}
                     {node.choices && (
                       <div className="node-choices-list" onMouseDown={(e) => e.stopPropagation()}>
-                        {node.choices.map((c: any, cIdx: number) => (
-                          <div
-                            key={c.id}
-                            className="node-choice-item"
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1 }}>
-                              <span className="choice-drag-dots">::</span>
-                              <span className="choice-num-badge">{cIdx + 1}</span>
-                              <input
-                                type="text"
-                                value={c.text}
-                                maxLength={20}
+                        {node.choices.map((c: any, cIdx: number) => {
+                          const isLimitExceeded = (c.text || "").length >= 20;
+                          return (
+                            <div
+                              key={c.id}
+                              className="node-choice-item"
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ 
+                                border: isLimitExceeded ? "1px solid #ef4444" : undefined, 
+                                position: "relative",
+                                background: isLimitExceeded ? "#fef2f2" : undefined
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1 }}>
+                                <span className="choice-drag-dots">::</span>
+                                <span className="choice-num-badge">{cIdx + 1}</span>
+                                <input
+                                  type="text"
+                                  value={c.text}
+                                  maxLength={20}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => handleUpdateOptionText(node.id, c.id, e.target.value)}
+                                  style={{
+                                    border: "none",
+                                    background: "transparent",
+                                    fontSize: "11.5px",
+                                    fontWeight: 600,
+                                    color: isLimitExceeded ? "#991b1b" : "#334155",
+                                    width: "100%",
+                                    outline: "none"
+                                  }}
+                                />
+                              </div>
+
+                              <span
+                                title="Delete Option"
                                 onMouseDown={(e) => e.stopPropagation()}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => handleUpdateOptionText(node.id, c.id, e.target.value)}
-                                style={{
-                                  border: "none",
-                                  background: "transparent",
-                                  fontSize: "11.5px",
-                                  fontWeight: 600,
-                                  color: "#334155",
-                                  width: "100%",
-                                  outline: "none"
-                                }}
+                                onClick={(e) => handleDeleteOptionFromNode(node.id, c.id, e)}
+                                style={{ cursor: "pointer", color: isLimitExceeded ? "#ef4444" : "#94a3b8", display: "inline-flex", padding: "2px" }}
+                              >
+                                <Trash2 size={11} />
+                              </span>
+
+                              {isLimitExceeded && (
+                                <span style={{
+                                  position: "absolute",
+                                  right: "26px",
+                                  top: "-8px",
+                                  background: "#ef4444",
+                                  color: "#ffffff",
+                                  fontSize: "8px",
+                                  padding: "1px 4px",
+                                  borderRadius: "4px",
+                                  fontWeight: 800,
+                                  boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
+                                  pointerEvents: "none"
+                                }}>
+                                  MAX CHARS!
+                                </span>
+                              )}
+
+                              <span
+                                id={`port-out-${node.id}-${c.id}`}
+                                className="choice-option-port"
+                                title="Click & Drag to connect this option to a node"
+                                onMouseDown={(e) => handleStartConnectWire(e, node.id, c.id, cIdx)}
                               />
                             </div>
-
-                            <span
-                              title="Delete Option"
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onClick={(e) => handleDeleteOptionFromNode(node.id, c.id, e)}
-                              style={{ cursor: "pointer", color: "#94a3b8", display: "inline-flex", padding: "2px" }}
-                            >
-                              <Trash2 size={11} />
-                            </span>
-
-                            <span
-                              id={`port-out-${node.id}-${c.id}`}
-                              className="choice-option-port"
-                              title="Click & Drag to connect this option to a node"
-                              onMouseDown={(e) => handleStartConnectWire(e, node.id, c.id, cIdx)}
-                            />
-                          </div>
-                        ))}
+                          );
+                        })}
 
                         <button
                           className="add-card-option-btn"
@@ -2825,47 +2851,57 @@ export default function WhatsAppChatbotBuilderPage() {
                       Option Links <span style={{ color: "#64748b", fontWeight: 500 }}>(Max 20 chars each)</span>
                     </label>
                     <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "6px" }}>
-                      {selectedNode.choices.map((c: any, index: number) => (
-                        <div key={c.id} style={{ display: "flex", alignItems: "center", gap: "6px", background: "#f8fafc", padding: "6px 8px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                          <span className="choice-num-badge">{index + 1}</span>
-                          <input
-                            type="text"
-                            value={c.text}
-                            maxLength={20}
-                            onChange={(e) => handleUpdateOptionText(selectedNode.id, c.id, e.target.value)}
-                            style={{ flex: 1, padding: "5px 7px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "4px", background: "#ffffff" }}
-                          />
-                          <select
-                            value={c.targetNode || ""}
-                            onChange={(e) => {
-                              const target = e.target.value;
-                              setNodes((prev) =>
-                                prev.map((n) => {
-                                  if (n.id !== selectedNode.id) return n;
-                                  const updatedChoices = [...n.choices];
-                                  updatedChoices[index].targetNode = target;
-                                  return { ...n, choices: updatedChoices };
-                                })
-                              );
-                            }}
-                            style={{ width: "110px", padding: "5px", fontSize: "11px", border: "1px solid #cbd5e1", borderRadius: "4px", background: "#fff" }}
-                          >
-                            <option value="">Connect to...</option>
-                            {nodes.map((targetCandidate) => (
-                              <option key={targetCandidate.id} value={targetCandidate.id}>
-                                {targetCandidate.title}
-                              </option>
-                            ))}
-                          </select>
-                          <span
-                            title="Delete Option"
-                            onClick={(e) => handleDeleteOptionFromNode(selectedNode.id, c.id, e)}
-                            style={{ cursor: "pointer", color: "#ef4444", padding: "3px" }}
-                          >
-                            <Trash2 size={13} />
-                          </span>
-                        </div>
-                      ))}
+                      {selectedNode.choices.map((c: any, index: number) => {
+                        const isLimitExceeded = (c.text || "").length >= 20;
+                        return (
+                          <div key={c.id} style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "#f8fafc", padding: "6px 8px", borderRadius: "6px", border: isLimitExceeded ? "1px solid #ef4444" : "1px solid #e2e8f0" }}>
+                              <span className="choice-num-badge">{index + 1}</span>
+                              <input
+                                type="text"
+                                value={c.text}
+                                maxLength={20}
+                                onChange={(e) => handleUpdateOptionText(selectedNode.id, c.id, e.target.value)}
+                                style={{ flex: 1, padding: "5px 7px", fontSize: "12px", border: isLimitExceeded ? "1px solid #ef4444" : "1px solid #cbd5e1", borderRadius: "4px", background: "#ffffff" }}
+                              />
+                              <select
+                                value={c.targetNode || ""}
+                                onChange={(e) => {
+                                  const target = e.target.value;
+                                  setNodes((prev) =>
+                                    prev.map((n) => {
+                                      if (n.id !== selectedNode.id) return n;
+                                      const updatedChoices = [...n.choices];
+                                      updatedChoices[index].targetNode = target;
+                                      return { ...n, choices: updatedChoices };
+                                    })
+                                  );
+                                }}
+                                style={{ width: "110px", padding: "5px", fontSize: "11px", border: "1px solid #cbd5e1", borderRadius: "4px", background: "#fff" }}
+                              >
+                                <option value="">Connect to...</option>
+                                {nodes.map((targetCandidate) => (
+                                  <option key={targetCandidate.id} value={targetCandidate.id}>
+                                    {targetCandidate.title}
+                                  </option>
+                                ))}
+                              </select>
+                              <span
+                                title="Delete Option"
+                                onClick={(e) => handleDeleteOptionFromNode(selectedNode.id, c.id, e)}
+                                style={{ cursor: "pointer", color: "#ef4444", padding: "3px" }}
+                              >
+                                <Trash2 size={13} />
+                              </span>
+                            </div>
+                            {isLimitExceeded && (
+                              <span style={{ color: "#ef4444", fontSize: "10px", fontWeight: 700, marginLeft: "28px" }}>
+                                ⚠️ Max 20 characters allowed for WhatsApp reply buttons!
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
 
                       <button
                         className="add-card-option-btn"

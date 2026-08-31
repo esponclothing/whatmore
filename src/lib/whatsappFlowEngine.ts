@@ -387,10 +387,14 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
 
       // Route based on interactive choice clicked
       let nextNodeId = null;
-      if (type === 'CHOICE') {
+      if (type === 'CHOICE' || type === 'BUTTONS' || type === 'LIST_MENU') {
         const choices = currentNode.choices || [];
         const matchIndex = choices.findIndex((c: any) =>
-          c.text && userText.toLowerCase().includes(String(c.text).toLowerCase())
+          c.text && (
+            userText.toLowerCase().includes(String(c.text).toLowerCase()) ||
+            String(c.text).toLowerCase().includes(userText.toLowerCase()) ||
+            String(c.text).toLowerCase().slice(0, 20) === userText.toLowerCase()
+          )
         );
 
         if (matchIndex !== -1) {
