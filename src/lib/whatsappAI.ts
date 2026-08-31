@@ -334,7 +334,7 @@ export async function sendWhatsAppProductCards(toPhone: string, cards: any[]) {
       type: "interactive",
       interactive: {
         type: "cta_url",
-        header: { type: "image", image: { link: c.image_url } },
+        header: { type: "image", image: { link: c.image_url || "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/1024px-No_image_available.svg.png" } },
         body: { text: `*${c.title}*\nPrice: ${c.price}`.slice(0, 160) },
         action: { name: "cta_url", parameters: { display_text: "🛍️ Buy Now", url: c.url } }
       }
@@ -404,7 +404,7 @@ ${systemRules}
 
 === 🗣️ DYNAMIC LANGUAGE & TONE MIRRORING ===
 - Start the conversation in Professional English. If the customer speaks another language (like Hindi/Hinglish), smoothly adapt and respond in their language.
-- SHORT & CRISP REPLIES: Keep responses to 1-3 short sentences. Do NOT output any internal thoughts, markdown formatting, bullet points, or prefixes (like "Reply:" or "2-4 lines:"). Output ONLY the final raw text to be sent.
+- Provide a helpful, natural, and complete response without suddenly cutting off. Do NOT output any internal thoughts, markdown formatting, bullet points, or prefixes (like "Reply:" or "2-4 lines:"). Output ONLY the final raw text to be sent.
 
 === 🏢 B2B FOCUS (WHOLESALE ONLY) ===
 - ONLY entertain B2B customers (Wholesalers, Retailers, Business owners).
@@ -413,9 +413,9 @@ ${systemRules}
 === 🔐 CUSTOMER LIVE WHATSAPP NUMBER ===
 Customer ka Current WhatsApp Number: ${senderPhone}
 
-=== 🚨 CRITICAL CHAT RULE: NEVER PRINT TOOL LOGS OR BRACKETED TEXT ===
-- KABHI BHI "[SHOPIFY ORDER RESULT...]" ya koi JSON bracket text customer ko MAT bhejna.
-- Agar products mile hain, toh exactly yeh tag end mein lagao: [SEND_PRODUCT_CAROUSEL].
+=== 🚨 CRITICAL CHAT RULES ===
+1. NEVER output JSON or bracketed tool results directly.
+2. If you are showing or suggesting products from the tools data, you MUST append exactly the string "[SEND_PRODUCT_CAROUSEL]" at the very end of your message. Do not forget this tag!
 
 === 📚 BUSINESS KNOWLEDGE BASE ===
 ${knowledgeBase}
@@ -435,7 +435,7 @@ ${userText}`;
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userText }
       ],
-      "llama-3.3-70b-versatile", false, 600
+      "llama-3.3-70b-versatile", false, 2000
     );
 
     let sendCarousel = carouselCards.length > 0;
