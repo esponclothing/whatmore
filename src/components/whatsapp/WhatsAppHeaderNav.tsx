@@ -49,10 +49,16 @@ export default function WhatsAppHeaderNav() {
   };
 
   const [userName, setUserName] = React.useState("");
+  const [userRole, setUserRole] = React.useState("");
   React.useEffect(() => {
     try {
       const u = document.cookie.split(";").find(c => c.trim().startsWith("wm_user="));
-      if (u) { const v = decodeURIComponent(u.split("=")[1]); setUserName(JSON.parse(v).name || ""); }
+      if (u) { 
+        const v = decodeURIComponent(u.split("=")[1]); 
+        const parsed = JSON.parse(v);
+        setUserName(parsed.name || ""); 
+        setUserRole(parsed.role || "");
+      }
     } catch {}
   }, []);
   const handleLogout = async () => {
@@ -88,6 +94,7 @@ export default function WhatsAppHeaderNav() {
 
       <nav className="whatmore-nav">
         {subNavItems.map((item) => {
+          if (userRole === "AGENT" && item.name !== "Inbox") return null;
           const Icon = item.icon;
           const active = isItemActive(item.path);
           return (

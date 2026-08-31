@@ -214,6 +214,21 @@ export default function WhatsAppInboxComponent() {
   const [isEditingCRM, setIsEditingCRM] = useState<boolean>(false);
   const [crmEditData, setCrmEditData] = useState<any>({});
 
+  const [currentUserRole, setCurrentUserRole] = useState<string>("");
+  const [currentEmployeeId, setCurrentEmployeeId] = useState<string>("");
+
+  useEffect(() => {
+    try {
+      const u = document.cookie.split(";").find(c => c.trim().startsWith("wm_user="));
+      if (u) {
+        const v = decodeURIComponent(u.split("=")[1]);
+        const parsed = JSON.parse(v);
+        setCurrentUserRole(parsed.role || "");
+        setCurrentEmployeeId(parsed.employeeId || "");
+      }
+    } catch {}
+  }, []);
+
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   // Fetch Employees List for Filtering & Assignment
@@ -269,12 +284,29 @@ export default function WhatsAppInboxComponent() {
           _raw: c
         }));
 
+        // Read user details from cookie for filtering to avoid stale state in closures
+        let role = "";
+        let empId = "";
+        try {
+          const u = document.cookie.split(";").find(c => c.trim().startsWith("wm_user="));
+          if (u) {
+            const v = decodeURIComponent(u.split("=")[1]);
+            const parsed = JSON.parse(v);
+            role = parsed.role || "";
+            empId = parsed.employeeId || "";
+          }
+        } catch {}
+
         // Apply Tab Filter (All, Assigned, Unassigned)
         let filtered = mapped;
-        if (activeNavTab === 'assigned_to_me' || activeNavTab === 'assigned') {
-          filtered = mapped.filter((c) => c._raw.assignedEmployeeId !== null);
-        } else if (activeNavTab === 'unassigned') {
-          filtered = mapped.filter((c) => c._raw.assignedEmployeeId === null);
+        if (role === 'AGENT') {
+          filtered = mapped.filter((c) => String(c._raw.assignedEmployeeId) === String(empId));
+        } else {
+          if (activeNavTab === 'assigned_to_me' || activeNavTab === 'assigned') {
+            filtered = mapped.filter((c) => c._raw.assignedEmployeeId !== null);
+          } else if (activeNavTab === 'unassigned') {
+            filtered = mapped.filter((c) => c._raw.assignedEmployeeId === null);
+          }
         }
 
         // Apply Lead Status Filter
@@ -1253,19 +1285,21 @@ export default function WhatsAppInboxComponent() {
                   <span>{isFullScreen ? "Exit Full Screen" : "Full Screen"}</span>
                 </button>
                 
-                <button
-                  className="chat-action-btn"
-                  onClick={handleDeleteConversation}
-                  title="Delete Conversation"
-                  style={{
-                    background: "#fef2f2",
-                    border: "1px solid #fee2e2",
-                    color: "#ef4444"
-                  }}
-                >
-                  <UserX size={14} />
-                  <span>Delete Chat</span>
-                </button>
+                {currentUserRole !== 'AGENT' && (
+                  <button
+                    className="chat-action-btn"
+                    onClick={handleDeleteConversation}
+                    title="Delete Conversation"
+                    style={{
+                      background: "#fef2f2",
+                      border: "1px solid #fee2e2",
+                      color: "#ef4444"
+                    }}
+                  >
+                    <UserX size={14} />
+                    <span>Delete Chat</span>
+                  </button>
+                )}
 
               </div>
             </div>
