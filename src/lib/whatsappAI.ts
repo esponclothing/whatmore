@@ -314,10 +314,17 @@ export function recommendSize(userText: string) {
 }
 
 export async function sendWhatsAppProductCards(toPhone: string, cards: any[]) {
-  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID || '1189183190949431';
+  let phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID || '1189183190949431';
   let token = process.env.WHATSAPP_TOKEN || '';
-  const settings = await prisma.whatsAppLegacySetting.findFirst();
-  if (settings?.whatsapp_token) token = settings.whatsapp_token;
+  
+  const account = await prisma.whatsAppAccount.findFirst({ where: { accessToken: { not: null } } });
+  if (account && account.phoneId && account.accessToken) {
+    phoneId = account.phoneId;
+    token = account.accessToken;
+  } else {
+    const settings = await prisma.whatsAppLegacySetting.findFirst();
+    if (settings?.whatsapp_token) token = settings.whatsapp_token;
+  }
 
   if (!token) return;
 

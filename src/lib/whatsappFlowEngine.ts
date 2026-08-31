@@ -83,7 +83,10 @@ async function dispatchNode(toPhone: string, node: any, vars: Record<string, str
       // Dynamic Catalog Dispatch
       const category = node.categoryName;
       const products = await prisma.product.findMany({
-        where: category ? { category } : undefined,
+        where: {
+          status: "Active",
+          ...(category ? { category } : {})
+        },
         take: 3 // Max 3 items
       });
       
