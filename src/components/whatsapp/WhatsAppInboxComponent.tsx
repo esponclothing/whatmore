@@ -1481,9 +1481,6 @@ export default function WhatsAppInboxComponent() {
                 <button className="quick-chip ai-suggest" onClick={handleSuggestReply} disabled={aiSuggesting} style={{ background: '#f0fdf4', color: '#15803d', borderColor: '#bbf7d0' }}>
                   <Sparkles size={12} /> {aiSuggesting ? "Generating..." : "Suggest Reply AI"}
                 </button>
-                <Link href="/whatsapp/ai-automation" className="quick-chip" style={{ background: '#f8fafc', color: '#475569', borderColor: '#cbd5e1', textDecoration: 'none' }} title="AI Settings">
-                  <Settings size={12} />
-                </Link>
                 <button
                   className={`quick-chip internal-toggle ${isInternalNote ? "active" : ""}`}
                   onClick={() => setIsInternalNote(!isInternalNote)}

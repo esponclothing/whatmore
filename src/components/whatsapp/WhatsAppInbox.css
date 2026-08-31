@@ -1,4 +1,4 @@
-﻿.inbox-container {
+.inbox-container {
   display: flex;
   height: calc(100vh - 145px);
   min-height: 580px;
@@ -705,30 +705,42 @@
 .chat-quick-actions-bar {
   display: flex;
   align-items: center;
-  gap: 5px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 12px;
   overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.chat-quick-actions-bar::-webkit-scrollbar {
+  height: 4px;
+}
+.chat-quick-actions-bar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
 }
 
 .quick-chip {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 600;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   color: #334155;
-  padding: 3px 8px;
-  border-radius: 12px;
+  padding: 6px 14px;
+  border-radius: 16px;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
 }
 
 .quick-chip:hover {
   background: #f1f5f9;
   color: #0f172a;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06);
 }
 
 .quick-chip.highlight {
