@@ -215,6 +215,7 @@ export default function WhatsAppInboxComponent() {
   const [crmEditData, setCrmEditData] = useState<any>({});
 
   const [currentUserRole, setCurrentUserRole] = useState<string>("");
+  const [currentUserName, setCurrentUserName] = useState<string>("Agent");
   const [currentEmployeeId, setCurrentEmployeeId] = useState<string>("");
 
   useEffect(() => {
@@ -285,17 +286,17 @@ export default function WhatsAppInboxComponent() {
         }));
 
         // Read user details from cookie for filtering to avoid stale state in closures
-        let role = "";
-        let empId = "";
         try {
           const u = document.cookie.split(";").find(c => c.trim().startsWith("wm_user="));
           if (u) {
             const v = decodeURIComponent(u.split("=")[1]);
             const parsed = JSON.parse(v);
-            role = parsed.role || "";
-            empId = parsed.employeeId || "";
+            if (parsed.role) setCurrentUserRole(parsed.role);
+            if (parsed.name) setCurrentUserName(parsed.name);
           }
-        } catch {}
+        } catch (e) {
+          console.error("Error reading wm_user cookie", e);
+        }
 
         // Apply Tab Filter (All, Assigned, Unassigned)
         let filtered = mapped;
@@ -422,7 +423,7 @@ export default function WhatsAppInboxComponent() {
       id: tempId,
       content: textToSend,
       senderType: "AGENT",
-      senderName: "Sales Rep",
+      senderName: currentUserName,
       messageType: "TEXT",
       isInternalNote: isInternal,
       sentAt: new Date().toISOString(),
@@ -454,7 +455,7 @@ export default function WhatsAppInboxComponent() {
       content: textToSend,
       isInternalNote: isInternal,
       senderType: "AGENT",
-      senderName: "Sales Rep"
+      senderName: currentUserName
     });
 
     if (res.success) {
@@ -522,7 +523,7 @@ export default function WhatsAppInboxComponent() {
                 mediaFilename: `voice-note.${ext}`,
                 messageType: 'AUDIO',
                 senderType: 'AGENT',
-                senderName: 'Sales Rep'
+                senderName: currentUserName
               });
               
               if (res.success) {
@@ -625,7 +626,7 @@ export default function WhatsAppInboxComponent() {
         mediaFilename: file.name,
         messageType: fileType,
         senderType: "AGENT",
-        senderName: "Sales Rep"
+        senderName: currentUserName
       });
 
       if (res.success) {
@@ -1090,9 +1091,9 @@ export default function WhatsAppInboxComponent() {
                         <span className={`stage-tag ${conv.leadStatus?.toLowerCase().replace(/\s+/g, '-')}`}>
                           {conv.leadStatus || "New Lead"}
                         </span>
-                        {conv.assignedEmployee?.user?.name && (
-                          <span style={{ fontSize: "9px", padding: "1px 5px", borderRadius: "4px", background: "#f3f4f6", color: "#4b5563", fontWeight: 700, display: "inline-flex", alignItems: "center", border: "1px solid #d1d5db" }}>
-                            Assigned: {conv.assignedEmployee.user.name}
+                        {conv._raw?.assignedEmployee && (
+                          <span style={{ fontSize: "9.5px", padding: "2px 6px", borderRadius: "12px", background: "#ffffff", color: "#334155", fontWeight: 600, display: "inline-flex", alignItems: "center", border: "1px solid #cbd5e1", marginLeft: "4px", gap: "3px" }}>
+                            <User size={10} /> {conv._raw.assignedEmployee.user?.name || "Assigned"}
                           </span>
                         )}
                         {conv.aiHandled ? (
@@ -2149,6 +2150,7 @@ export default function WhatsAppInboxComponent() {
                           Cancel
                         </button>
                       )}
+
                       <button
                         type="submit"
                         disabled={savingCanned}
