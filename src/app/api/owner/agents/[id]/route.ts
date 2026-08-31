@@ -56,18 +56,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             userId: dbUser.id,
             employeeId: `EMP_${agent.id.slice(0, 8).toUpperCase()}`,
             mobile: "",
-            status: isActive ? "ACTIVE" : "INACTIVE"
+            employmentStatus: isActive ? "Active" : "Inactive"
           }
         });
       } else {
         await prisma.employee.update({
           where: { id: dbEmployee.id },
-          data: { status: isActive ? "ACTIVE" : "INACTIVE" }
+          data: { employmentStatus: isActive ? "Active" : "Inactive" }
         });
       }
     } catch (syncErr) {
       console.error("[Agent Sync] Failed to update User/Employee:", syncErr);
     }
+
+    const { revalidatePath } = require("next/cache");
+    revalidatePath('/whatsapp/inbox');
+    revalidatePath('/whatsapp/team-inbox');
+    revalidatePath('/whatsapp/api-settings');
 
     return NextResponse.json({ success: true, agent });
   } catch (e: any) {

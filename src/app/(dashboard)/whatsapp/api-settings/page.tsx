@@ -75,7 +75,18 @@ export default function WhatsAppAPISettingsPage() {
   // Facebook Register state
   const [registering, setRegistering] = useState(false);
 
+  const [currentUserRole, setCurrentUserRole] = useState("");
+  const [currentUserEmail, setCurrentUserEmail] = useState("");
+
   useEffect(() => {
+    try {
+      const u = document.cookie.split(";").find(c => c.trim().startsWith("wm_user="));
+      if (u) {
+        const parsed = JSON.parse(decodeURIComponent(u.split("=")[1]));
+        setCurrentUserRole(parsed.role || "");
+        setCurrentUserEmail(parsed.email || "");
+      }
+    } catch {}
     loadAllSettings();
   }, []);
 
@@ -273,6 +284,83 @@ export default function WhatsAppAPISettingsPage() {
 
   if (loading) {
     return <div className="p-8 text-center text-gray-500">Loading settings directory...</div>;
+  }
+
+  if (currentUserRole === "AGENT") {
+    const myAgentInfo = agents.find(a => a.email === currentUserEmail);
+    const onAgentProfileSave = async () => {
+      if (!myAgentInfo) return;
+      setSavingEdit(true);
+      const payload = { ...myAgentInfo, ...editAgentData };
+      try {
+        const res = await fetch(`/api/owner/agents/${myAgentInfo.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) alert("Profile updated successfully!");
+        else alert(data.error || "Failed to update profile");
+      } catch (e) {
+        alert("Connection error");
+      }
+      setSavingEdit(false);
+    };
+
+    return (
+      <div className="p-8 w-full max-w-none flex flex-col gap-8">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white mb-1">My Profile</h1>
+          <p className="text-gray-500 dark:text-gray-400">Update your personal details and password.</p>
+        </div>
+        
+        {myAgentInfo ? (
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl shadow-sm p-6 max-w-md">
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="text-xs font-bold text-gray-600 block mb-1">Name</label>
+                <input 
+                  type="text" 
+                  value={editAgentData.name !== undefined ? editAgentData.name : myAgentInfo.name} 
+                  onChange={(e) => setEditAgentData({...editAgentData, name: e.target.value})} 
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" 
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-600 block mb-1">Email (Read Only)</label>
+                <input 
+                  type="email" 
+                  value={myAgentInfo.email} 
+                  disabled
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-500 cursor-not-allowed" 
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-600 block mb-1">New Password (optional)</label>
+                <input 
+                  type="password" 
+                  value={editAgentData.password || ""} 
+                  onChange={(e) => setEditAgentData({...editAgentData, password: e.target.value})} 
+                  placeholder="Enter to change password"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" 
+                />
+              </div>
+              <div className="pt-2">
+                <button 
+                  onClick={onAgentProfileSave} 
+                  disabled={savingEdit} 
+                  className="w-full px-5 py-2.5 text-sm font-bold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 flex items-center justify-center gap-2"
+                >
+                  {savingEdit ? <RefreshCw size={16} className="animate-spin" /> : "Save Changes"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-gray-500">Loading profile data...</div>
+        )}
+      </div>
+    );
   }
 
   return (

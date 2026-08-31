@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
             userId: dbUser.id,
             employeeId: `EMP_${agent.id.slice(0, 8).toUpperCase()}`,
             mobile: "",
-            status: "ACTIVE"
+            employmentStatus: "Active"
           }
         });
       }

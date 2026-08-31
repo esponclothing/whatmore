@@ -94,7 +94,7 @@ export default function WhatsAppHeaderNav() {
 
       <nav className="whatmore-nav">
         {subNavItems.map((item) => {
-          if (userRole === "AGENT" && item.name !== "Inbox") return null;
+          if (userRole === "AGENT" && item.name !== "Inbox" && item.name !== "Settings") return null;
           const Icon = item.icon;
           const active = isItemActive(item.path);
           return (
@@ -104,7 +104,7 @@ export default function WhatsAppHeaderNav() {
               className={`nav-item ${active ? "active" : ""} ${item.highlight ? "highlight" : ""}`}
             >
               <Icon size={16} />
-              <span>{item.name}</span>
+              <span>{userRole === "AGENT" && item.name === "Settings" ? "My Profile" : item.name}</span>
             </Link>
           );
         })}
