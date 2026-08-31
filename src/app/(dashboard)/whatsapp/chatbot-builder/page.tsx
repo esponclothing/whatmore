@@ -453,25 +453,31 @@ export default function WhatsAppChatbotBuilderPage() {
   const [isPanning, setIsPanning] = useState<boolean>(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
+  const [portCoords, setPortCoords] = useState<{[key: string]: {x: number, y: number}}>({});
+
+  const updatePortCoords = () => {
+    if (typeof window === "undefined") return;
+    const coords: {[key: string]: {x: number, y: number}} = {};
+    const ports = document.querySelectorAll('.node-input-port, .node-output-port, .choice-option-port');
+    ports.forEach(el => {
+      if (!el.id) return;
+      let x = el.offsetWidth / 2;
+      let y = el.offsetHeight / 2;
+      let current: HTMLElement | null = el as HTMLElement;
+      while (current && !current.classList.contains("canvas-pan-zoom-container")) {
+        x += current.offsetLeft;
+        y += current.offsetTop;
+        current = current.offsetParent as HTMLElement;
+      }
+      if (current) {
+        coords[el.id] = { x, y };
+      }
+    });
+    setPortCoords(coords);
+  };
+
   const getPortCoords = (portId: string, fallback: { x: number; y: number }) => {
-    if (typeof window === "undefined") return fallback;
-    const el = document.getElementById(portId);
-    if (!el) return fallback;
-
-    let x = el.offsetWidth / 2;
-    let y = el.offsetHeight / 2;
-    let current: HTMLElement | null = el;
-
-    while (current && !current.classList.contains("canvas-pan-zoom-container")) {
-      x += current.offsetLeft;
-      y += current.offsetTop;
-      current = current.offsetParent as HTMLElement;
-    }
-
-    // If we broke out without reaching the container, return fallback
-    if (!current) return fallback;
-
-    return { x, y };
+    return portCoords[portId] || fallback;
   };
 
   // Simulator Modal State
@@ -479,12 +485,10 @@ export default function WhatsAppChatbotBuilderPage() {
   const [simMessages, setSimMessages] = useState<any[]>([]);
   const [drawerTab, setDrawerTab] = useState<"basic" | "advanced">("basic");
   const [isMounted, setIsMounted] = useState<boolean>(false);
-  const [coordsTrigger, setCoordsTrigger] = useState<number>(0);
-
   useEffect(() => {
-    // Force recalculating port coordinates after DOM paint
-    setCoordsTrigger((prev) => prev + 1);
-  }, [nodes]);
+    // Recalculate port coordinates after DOM layout updates
+    updatePortCoords();
+  }, [nodes, currentFlowId, zoom]);
 
   // Discard unsaved changes handler
   const handleDiscardChanges = () => {
@@ -1774,7 +1778,7 @@ export default function WhatsAppChatbotBuilderPage() {
                   <div className="node-card-body">
                     {/* TYPE-SPECIFIC VISUAL CONTENT BADGES & PREVIEWS */}
                     {node.imageUrl && (
-                      <img src={node.imageUrl} alt="Banner" className="node-banner-img" />
+                      <img src={node.imageUrl} alt="Banner" className="node-banner-img" onLoad={updatePortCoords} />
                     )}
 
                     {node.type === "VIDEO" && (
