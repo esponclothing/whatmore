@@ -315,9 +315,17 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
             if (Object.keys(updateData).length > 0) {
               await prisma.customer.update({ where: { id: customer.id }, data: updateData });
             }
-            if (updateData.tags) {
-              const conv = await prisma.whatsAppConversation.findFirst({ where: { phone: { contains: toPhone } }, orderBy: { updatedAt: 'desc' } });
-              if (conv) await prisma.whatsAppConversation.update({ where: { id: conv.id }, data: { tags: updateData.tags } });
+             if (updateData.tags) {
+              const conv = await prisma.whatsAppConversation.findFirst({ 
+                where: { customerId: customer.id }, 
+                orderBy: { updatedAt: 'desc' } 
+              });
+              if (conv) {
+                await prisma.whatsAppConversation.update({ 
+                  where: { id: conv.id }, 
+                  data: { tags: updateData.tags } 
+                });
+              }
             }
           }
         } catch (e) {
@@ -325,14 +333,22 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
         }
     } else if (type === 'CRM_ROUNDROBIN' || type === 'START') {
         try {
-          const conv = await prisma.whatsAppConversation.findFirst({ where: { phone: { contains: toPhone } }, orderBy: { updatedAt: 'desc' } });
-          if (conv) {
-            if (node.agentId) {
-              await prisma.whatsAppConversation.update({ where: { id: conv.id }, data: { assignedEmployeeId: node.agentId, status: 'OPEN' } });
-            } else {
-              const activeAgents = await prisma.employee.findMany({ where: { employmentStatus: 'Active' }, take: 1 });
-              if (activeAgents.length > 0) {
-                await prisma.whatsAppConversation.update({ where: { id: conv.id }, data: { assignedEmployeeId: activeAgents[0].id, status: 'OPEN' } });
+          const customer = await prisma.customer.findFirst({
+            where: { OR: [{ mobile: { contains: toPhone } }, { whatsappNumber: { contains: toPhone } }] }
+          });
+          if (customer) {
+            const conv = await prisma.whatsAppConversation.findFirst({ 
+              where: { customerId: customer.id }, 
+              orderBy: { updatedAt: 'desc' } 
+            });
+            if (conv) {
+              if (node.agentId) {
+                await prisma.whatsAppConversation.update({ where: { id: conv.id }, data: { assignedEmployeeId: node.agentId, status: 'OPEN' } });
+              } else {
+                const activeAgents = await prisma.employee.findMany({ where: { employmentStatus: 'Active' }, take: 1 });
+                if (activeAgents.length > 0) {
+                  await prisma.whatsAppConversation.update({ where: { id: conv.id }, data: { assignedEmployeeId: activeAgents[0].id, status: 'OPEN' } });
+                }
               }
             }
           }
