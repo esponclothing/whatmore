@@ -320,9 +320,11 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
     if (type === 'CRM_CONTACT' || type === 'CRM_LEAD') {
         try {
           const cleanPhone = toPhone.replace(/\D/g, '').slice(-10);
+          console.log(`[CRM Node] toPhone="${toPhone}" cleanPhone="${cleanPhone}" node.tags="${node.tags}"`);
           const customer = await prisma.customer.findFirst({
             where: { OR: [{ mobile: { contains: cleanPhone } }, { whatsappNumber: { contains: cleanPhone } }] }
           });
+          console.log(`[CRM Node] customer found: ${customer ? customer.id : 'NOT FOUND'} mobile="${customer?.mobile}" tags="${customer?.tags}"`);
           if (customer) {
             let updateData: any = {};
             if (node.leadStage) updateData.leadStage = node.leadStage;
@@ -334,8 +336,10 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
               if (!existingTags.includes(node.tags)) { existingTags.push(node.tags); }
               updateData.tags = existingTags.join(', ');
             }
+            console.log(`[CRM Node] updateData:`, JSON.stringify(updateData));
             if (Object.keys(updateData).length > 0) {
               await prisma.customer.update({ where: { id: customer.id }, data: updateData });
+              console.log(`[CRM Node] customer updated OK`);
             }
             // ALWAYS sync tags to conversation regardless of whether tag was "new"
             if (node.tags) {
@@ -343,13 +347,17 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
                 where: { customerId: customer.id }, 
                 orderBy: { updatedAt: 'desc' } 
               });
+              console.log(`[CRM Node] conv found: ${conv ? conv.id : 'NOT FOUND'} convTags="${conv?.tags}"`);
               if (conv) {
                 let convTags = (conv.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
                 if (!convTags.includes(node.tags)) convTags.push(node.tags);
+                const newConvTags = convTags.join(', ');
+                console.log(`[CRM Node] updating conv tags to: "${newConvTags}"`);
                 await prisma.whatsAppConversation.update({ 
                   where: { id: conv.id }, 
-                  data: { tags: convTags.join(', ') } 
+                  data: { tags: newConvTags } 
                 });
+                console.log(`[CRM Node] conv tags updated OK`);
               }
             }
           } else {
