@@ -38,10 +38,14 @@ async function dispatchNode(toPhone: string, node: any, vars: Record<string, str
       if (conv) resolvedConvId = conv.id;
     }
 
-    if (type === 'TEXT' || type === 'START' || type === 'TRIGGER') {
+    if (type === 'TEXT' || type === 'START' || type === 'TRIGGER' || type === 'END' || type === 'LINK') {
       if (!node.text) return; // Skip if no text
       payload.type = 'text';
-      payload.text = { body: inter(node.text) };
+      let bodyText = inter(node.text);
+      if (node.buttonText && node.url) {
+        bodyText += `\n\n🔗 *${inter(node.buttonText)}*: ${inter(node.url)}`;
+      }
+      payload.text = { body: bodyText };
 
     } else if (type === 'IMAGE') {
       payload.type = 'image';
@@ -209,14 +213,17 @@ async function dispatchNode(toPhone: string, node: any, vars: Record<string, str
     const responseData = await response.json().catch(() => ({}));
     const wasSuccess = response.ok;
     const metaMessageId = responseData?.messages?.[0]?.id || null;
-
     if (wasSuccess && resolvedConvId) {
       let textToSend = '';
       let mType = 'TEXT';
       let mediaUrlVal: string | null = null;
+      let metaJsonStr: string | null = null;
 
-      if (type === 'TEXT' || type === 'START' || type === 'TRIGGER') {
+      if (type === 'TEXT' || type === 'START' || type === 'TRIGGER' || type === 'END' || type === 'LINK') {
         textToSend = inter(node.text || '');
+        if (node.buttonText && node.url) {
+          textToSend += `\n\n🔗 *${inter(node.buttonText)}*: ${inter(node.url)}`;
+        }
         mType = 'TEXT';
       } else if (type === 'IMAGE') {
         textToSend = inter(node.caption || node.text || '');
@@ -237,6 +244,7 @@ async function dispatchNode(toPhone: string, node: any, vars: Record<string, str
         if (node.imageUrl) {
           mediaUrlVal = inter(node.imageUrl);
         }
+        metaJsonStr = JSON.stringify(choices.map((c: any) => c.text));
       }
 
       if (textToSend || mediaUrlVal) {
@@ -248,6 +256,7 @@ async function dispatchNode(toPhone: string, node: any, vars: Record<string, str
             messageType: mType,
             content: textToSend,
             mediaUrl: mediaUrlVal,
+            metadata: metaJsonStr,
             status: 'SENT',
             metaMessageId,
             sentAt: new Date()

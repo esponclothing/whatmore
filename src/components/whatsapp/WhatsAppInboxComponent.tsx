@@ -1509,8 +1509,61 @@ export default function WhatsAppInboxComponent() {
                         </div>
                       )}
 
+                      {/* Interactive Buttons / List Renderer */}
+                      {(msg.messageType === "BUTTONS" || msg.messageType === "LIST") && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "4px" }}>
+                          {/* Image Header Preview */}
+                          {msg.mediaUrl && (
+                            <img
+                              src={msg.mediaUrl}
+                              alt="Button Header"
+                              style={{ width: "100%", maxHeight: "150px", objectFit: "cover", borderRadius: "8px", cursor: "pointer" }}
+                              onClick={() => window.open(msg.mediaUrl, "_blank")}
+                            />
+                          )}
+                          
+                          {/* Text Body */}
+                          <p className="message-text-content" style={{ margin: 0, color: msg.isInternalNote ? '#713f12' : undefined }}>
+                            {msg.content}
+                          </p>
+
+                          {/* Passive Interactive Options Preview */}
+                          {(() => {
+                            let options: string[] = [];
+                            try {
+                              if (msg.metadata) {
+                                options = JSON.parse(msg.metadata);
+                              }
+                            } catch (_) {}
+                            if (options.length === 0) return null;
+
+                            return (
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "4px" }}>
+                                {options.map((optText, oIdx) => (
+                                  <div
+                                    key={oIdx}
+                                    style={{
+                                      background: "#f1f5f9",
+                                      border: "1px solid #cbd5e1",
+                                      color: "#475569",
+                                      padding: "5px 12px",
+                                      borderRadius: "16px",
+                                      fontSize: "11px",
+                                      fontWeight: 600,
+                                      userSelect: "none"
+                                    }}
+                                  >
+                                    🔘 {optText}
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+
                       {/* Standard Text & Unsupported Format Renderer */}
-                      {msg.messageType !== "DOCUMENT" && msg.messageType !== "IMAGE" && msg.messageType !== "VIDEO" && msg.messageType !== "AUDIO" && msg.messageType !== "PAYMENT_LINK" && (
+                      {msg.messageType !== "DOCUMENT" && msg.messageType !== "IMAGE" && msg.messageType !== "VIDEO" && msg.messageType !== "AUDIO" && msg.messageType !== "PAYMENT_LINK" && msg.messageType !== "BUTTONS" && msg.messageType !== "LIST" && (
                         <p className="message-text-content" style={msg.isInternalNote ? { color: '#713f12' } : {}}>
                           {msg.messageType === "UNSUPPORTED" ? (
                             <span style={{ fontStyle: "italic", color: "#64748b", display: "inline-flex", alignItems: "center", gap: "4px" }}>
