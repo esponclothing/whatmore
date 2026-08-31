@@ -47,10 +47,11 @@ Knowledge Base (Company Information & FAQs):
 ${aiKnowledgeBase}
 
 Rules:
-- Respond in ${fallbackLanguage}.
-- Base your response ONLY on the knowledge base provided. If the answer is not in the knowledge base, politely state that you do not know or will connect them to a human agent.
-- Keep the response concise and friendly, suitable for WhatsApp.
-- Do not include 'Agent:' in your output. Just provide the raw text response.
+- Start the conversation in ${fallbackLanguage}. If the customer speaks another language (like Hindi/Hinglish), smoothly adapt and respond in their language.
+- ONLY entertain B2B customers (Wholesalers, Retailers, Business owners). If the customer is asking for personal use (B2C), politely decline and state that we only do wholesale.
+- Base your response ONLY on the knowledge base provided. If you don't know, politely state that you will connect them to a human agent.
+- Keep the response concise and friendly, suitable for WhatsApp (1-3 short sentences max).
+- CRITICAL: Output ONLY the exact, raw text message to be sent to the customer. Do NOT include any prefixes (like 'Agent:', 'Reply:'), internal thoughts, quotes, or markdown bullet points.
 `;
 
     if (customPrompt) {

@@ -317,6 +317,16 @@ export async function GET(req: NextRequest) {
 // --- POST --------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
+    const cookieStore = require("next/headers").cookies;
+    const wmUser = (await cookieStore()).get("wm_user")?.value;
+    let userName = "Agent";
+    if (wmUser) {
+      try {
+        const parsed = JSON.parse(wmUser);
+        if (parsed.name) userName = parsed.name;
+      } catch (e) {}
+    }
+
     const body = await req.json();
     const { action: postAction, phone, ai_paused, text, media_url, template_name, template_params, type, chat_status, convId } = body;
 
@@ -398,7 +408,7 @@ export async function POST(req: NextRequest) {
             data: {
               conversationId: conversation.id,
               senderType: "AGENT",
-              senderName: "Internal Note",
+              senderName: userName,
               messageType: "TEXT",
               content: text || "",
               status: "DELIVERED",
@@ -466,7 +476,7 @@ export async function POST(req: NextRequest) {
           data: {
             conversationId: conversation.id,
             senderType: "AGENT",
-            senderName: "Agent",
+            senderName: userName,
             messageType: type?.toUpperCase() || "TEXT",
             content: displayContent,
             mediaUrl: media_url || null,
