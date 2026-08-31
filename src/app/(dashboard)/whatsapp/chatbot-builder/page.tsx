@@ -2078,9 +2078,13 @@ export default function WhatsAppChatbotBuilderPage() {
                         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                           <Shuffle size={13} />
                           <span>Assign: {
-                            node.agentId 
+                            node.assignmentMode === 'DIRECT' && node.agentId
                               ? (availableAgents.find((a: any) => a.id === node.agentId)?.user?.name || 'Agent')
-                              : 'Auto (Round Robin)'
+                              : (node.assignmentMode !== 'DIRECT' && node.roundRobinTarget === 'TEAM' && node.teamId)
+                                ? `Team: ${availableTeams.find((t: any) => t.id === node.teamId)?.name || 'Unknown'}`
+                                : (node.assignmentMode !== 'DIRECT' && node.roundRobinTarget === 'AGENTS' && node.agentIds?.length > 0)
+                                  ? `${node.agentIds.length} Agents (Round Robin)`
+                                  : 'Auto (Round Robin)'
                           }</span>
                         </div>
                       </div>
