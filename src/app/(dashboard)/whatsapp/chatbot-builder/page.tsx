@@ -453,6 +453,21 @@ export default function WhatsAppChatbotBuilderPage() {
   const [isPanning, setIsPanning] = useState<boolean>(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
+  const getPortCoords = (portId: string, fallback: { x: number; y: number }) => {
+    if (typeof window === "undefined") return fallback;
+    const el = document.getElementById(portId);
+    const canvas = document.querySelector(".infinite-canvas-wrapper");
+    if (!el || !canvas) return fallback;
+
+    const rectPort = el.getBoundingClientRect();
+    const rectCanvas = canvas.getBoundingClientRect();
+
+    return {
+      x: (rectPort.left + rectPort.width / 2 - rectCanvas.left - pan.x) / zoom,
+      y: (rectPort.top + rectPort.height / 2 - rectCanvas.top - pan.y) / zoom
+    };
+  };
+
   // Simulator Modal State
   const [showSimModal, setShowSimModal] = useState<boolean>(false);
   const [simMessages, setSimMessages] = useState<any[]>([]);
@@ -707,53 +722,50 @@ export default function WhatsAppChatbotBuilderPage() {
     setIsLoadingFlows(false);
   };
 
+  // Fetch Live Data for Dropdowns
+  const fetchLiveData = async () => {
+    try {
+      const agentsRes = await getAllEmployeesAndTeams();
+      if (agentsRes.success && agentsRes.employees) setAvailableAgents(agentsRes.employees);
+
+      const tagsRes = await fetch('/api/whatsapp/tags');
+      const tagsData = await tagsRes.json();
+      if (tagsData.success && tagsData.tags) setAvailableTags(tagsData.tags);
+
+      const prodRes = await getProductsAction();
+      if (prodRes.success && prodRes.products) {
+        const uniqueCats = Array.from(new Set(prodRes.products.map((p: any) => p.category))).filter(Boolean) as string[];
+        setAvailableCollections(uniqueCats);
+      }
+    } catch (err) {
+      console.error("Failed to load live data for chatbot builder", err);
+    }
+  };
+
+  const handleCreateTag = async () => {
+    const tagName = window.prompt("Enter new tag name:");
+    if (!tagName || !tagName.trim()) return;
+    try {
+      const res = await fetch('/api/whatsapp/tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: tagName.trim(), color: '#6366f1' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchLiveData(); // Refresh tags
+      } else {
+        alert(data.error || "Failed to create tag.");
+      }
+    } catch (e) {
+      alert("Error creating tag.");
+    }
+  };
+
   useEffect(() => {
     fetchFlows();
-
-    // Fetch Live Data for Dropdowns
-    const fetchLiveData = async () => {
-      try {
-        const agentsRes = await getAllEmployeesAndTeams();
-        if (agentsRes.success && agentsRes.employees) setAvailableAgents(agentsRes.employees);
-
-        const tagsRes = await fetch('/api/whatsapp/tags');
-        const tagsData = await tagsRes.json();
-        if (tagsData.success && tagsData.tags) setAvailableTags(tagsData.tags);
-
-        const prodRes = await getProductsAction();
-        if (prodRes.success && prodRes.products) {
-          const uniqueCats = Array.from(new Set(prodRes.products.map((p: any) => p.category))).filter(Boolean) as string[];
-          setAvailableCollections(uniqueCats);
-        }
-      } catch (err) {
-        console.error("Failed to load live data for chatbot builder", err);
-      }
-    };
-
-    const handleCreateTag = async () => {
-      const tagName = window.prompt("Enter new tag name:");
-      if (!tagName || !tagName.trim()) return;
-      try {
-        const res = await fetch('/api/whatsapp/tags', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: tagName.trim(), color: '#6366f1' })
-        });
-        const data = await res.json();
-        if (data.success) {
-          fetchLiveData(); // Refresh tags
-        } else {
-          alert(data.error || "Failed to create tag.");
-        }
-      } catch (e) {
-        alert("Error creating tag.");
-      }
-    };
-
-    useEffect(() => {
-      fetchFlows();
-      fetchLiveData();
-    }, []);
+    fetchLiveData();
+  }, []);
 
   const handleSelectFlow = (flowId: string) => {
     const target = savedFlows.find((f) => f.id === flowId);
@@ -1190,22 +1202,31 @@ export default function WhatsAppChatbotBuilderPage() {
     const sourceNode = nodes.find((n) => n.id === sourceNodeId);
     if (!sourceNode) return;
 
-    let startX = sourceNode.x + 260;
-    let startY = sourceNode.y + 40;
-
-    if (typeof choiceIndex === "number" && sourceNode.choices && sourceNode.choices[choiceIndex]) {
-      startY = sourceNode.y + 140 + choiceIndex * 30;
+    let startFallback = { x: sourceNode.x + 260, y: sourceNode.y + 40 };
+    let portId = `port-out-${sourceNode.id}`;
+    if (choiceId) {
+      startFallback = { x: sourceNode.x + 255, y: sourceNode.y + 140 + (choiceIndex || 0) * 30 };
+      portId = `port-out-${sourceNode.id}-${choiceId}`;
     }
 
-    const currentCanvasMouseX = (e.clientX - pan.x) / zoom;
-    const currentCanvasMouseY = (e.clientY - pan.y) / zoom;
+    const start = getPortCoords(portId, startFallback);
+
+    const canvas = (e.currentTarget as HTMLElement).closest(".infinite-canvas-wrapper");
+    let currentCanvasMouseX = start.x;
+    let currentCanvasMouseY = start.y;
+
+    if (canvas) {
+      const rectCanvas = canvas.getBoundingClientRect();
+      currentCanvasMouseX = (e.clientX - rectCanvas.left - pan.x) / zoom;
+      currentCanvasMouseY = (e.clientY - rectCanvas.top - pan.y) / zoom;
+    }
 
     setConnectingFrom({
       sourceNodeId,
       choiceId,
       choiceIndex,
-      startX,
-      startY
+      startX: start.x,
+      startY: start.y
     });
     setConnectingMousePos({ x: currentCanvasMouseX, y: currentCanvasMouseY });
   };
@@ -1257,8 +1278,9 @@ export default function WhatsAppChatbotBuilderPage() {
     }
 
     if (connectingFrom) {
-      const mx = (e.clientX - pan.x) / zoom;
-      const my = (e.clientY - pan.y) / zoom;
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const mx = (e.clientX - rect.left - pan.x) / zoom;
+      const my = (e.clientY - rect.top - pan.y) / zoom;
       setConnectingMousePos({ x: mx, y: my });
       return;
     }
@@ -1337,22 +1359,26 @@ export default function WhatsAppChatbotBuilderPage() {
 
   const getBezierPath = (sourceNode: any, targetNode: any, optionIndex?: number) => {
     if (!sourceNode || !targetNode) return "";
-    const nodeWidth = 260;
-    const startX = sourceNode.x + nodeWidth;
-    let startY = sourceNode.y + 40;
-
+    
+    let startFallback = { x: sourceNode.x + 260, y: sourceNode.y + 40 };
+    let portId = `port-out-${sourceNode.id}`;
     if (typeof optionIndex === "number" && sourceNode.choices && sourceNode.choices[optionIndex]) {
-      startY = sourceNode.y + 140 + optionIndex * 30;
+      const choice = sourceNode.choices[optionIndex];
+      startFallback = { x: sourceNode.x + 255, y: sourceNode.y + 140 + optionIndex * 30 };
+      portId = `port-out-${sourceNode.id}-${choice.id}`;
     }
 
-    const endX = targetNode.x;
-    const endY = targetNode.y + 40;
+    const start = getPortCoords(portId, startFallback);
 
-    const controlDist = Math.max(60, Math.abs(endX - startX) * 0.5);
-    const cx1 = startX + controlDist;
-    const cx2 = endX - controlDist;
+    const endFallback = { x: targetNode.x, y: targetNode.y + 40 };
+    const endPortId = `port-in-${targetNode.id}`;
+    const end = getPortCoords(endPortId, endFallback);
 
-    return `M ${startX} ${startY} C ${cx1} ${startY}, ${cx2} ${endY}, ${endX} ${endY}`;
+    const controlDist = Math.max(60, Math.abs(end.x - start.x) * 0.5);
+    const cx1 = start.x + controlDist;
+    const cx2 = end.x - controlDist;
+
+    return `M ${start.x} ${start.y} C ${cx1} ${start.y}, ${cx2} ${end.y}, ${end.x} ${end.y}`;
   };
 
   const getBezierFromTo = (startX: number, startY: number, endX: number, endY: number) => {
@@ -1853,6 +1879,7 @@ export default function WhatsAppChatbotBuilderPage() {
                             </span>
 
                             <span
+                              id={`port-out-${node.id}-${c.id}`}
                               className="choice-option-port"
                               title="Click & Drag to connect this option to a node"
                               onMouseDown={(e) => handleStartConnectWire(e, node.id, c.id, cIdx)}
@@ -1873,6 +1900,7 @@ export default function WhatsAppChatbotBuilderPage() {
 
                   {node.type !== "TRIGGER" && (
                     <span
+                      id={`port-in-${node.id}`}
                       className="node-input-port"
                       title="Drop connection here to link to this node"
                       onMouseUp={(e) => handleDropConnection(node.id, e)}
@@ -1881,6 +1909,7 @@ export default function WhatsAppChatbotBuilderPage() {
 
                   {node.type !== "END" && (
                     <span
+                      id={`port-out-${node.id}`}
                       className="node-output-port"
                       title="Click & Drag to connect to next node"
                       onMouseDown={(e) => handleStartConnectWire(e, node.id)}
