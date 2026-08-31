@@ -38,14 +38,31 @@ async function dispatchNode(toPhone: string, node: any, vars: Record<string, str
       if (conv) resolvedConvId = conv.id;
     }
 
-    if (type === 'TEXT' || type === 'START' || type === 'TRIGGER' || type === 'END' || type === 'LINK') {
+    if (type === 'TEXT' || type === 'START' || type === 'TRIGGER') {
       if (!node.text) return; // Skip if no text
       payload.type = 'text';
-      let bodyText = inter(node.text);
+      payload.text = { body: inter(node.text) };
+
+    } else if (type === 'END' || type === 'LINK') {
+      if (!node.text) return;
+      const bodyText = inter(node.text);
       if (node.buttonText && node.url) {
-        bodyText += `\n\n🔗 *${inter(node.buttonText)}*: ${inter(node.url)}`;
+        payload.type = 'interactive';
+        payload.interactive = {
+          type: 'cta_url',
+          body: { text: bodyText },
+          action: {
+            name: 'cta_url',
+            parameters: {
+              display_text: String(inter(node.buttonText)).slice(0, 20),
+              url: inter(node.url)
+            }
+          }
+        };
+      } else {
+        payload.type = 'text';
+        payload.text = { body: bodyText };
       }
-      payload.text = { body: bodyText };
 
     } else if (type === 'IMAGE') {
       payload.type = 'image';
