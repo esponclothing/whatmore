@@ -3,8 +3,7 @@ import { sendWhatsAppMessageAction } from "@/app/actions/whatsAppPlatformActions
 
 /**
  * WhatsApp Chatbot Flow Engine
- * Ported from Shopify-Price-Editor/api/whatsapp-ai.js → executeFlowEngine()
- * Uses Prisma (WhatsAppFlowState, WhatsAppChatbotFlow) instead of Supabase
+ * Executes workflows created by the React Flow Builder
  */
 
 // Interpolate {{variable}} placeholders with values
@@ -20,71 +19,115 @@ function interpolate(str: string, vars: Record<string, string>) {
 // Dispatch a single flow node as a WhatsApp message
 async function dispatchNode(toPhone: string, node: any, vars: Record<string, string>) {
   const inter = (s: string) => interpolate(s, vars);
+  const type = (node.type || '').toUpperCase();
 
   try {
     const creds = await getCreds();
-    if (!creds) {
-      console.log(`[Flow Engine] DRY RUN — would send node ${node.type} to ${toPhone}`);
-      return;
-    }
+    if (!creds) return;
 
     const url = `https://graph.facebook.com/v20.0/${creds.phoneId}/messages`;
     const headers = { 'Authorization': `Bearer ${creds.token}`, 'Content-Type': 'application/json' };
     let payload: any = { messaging_product: 'whatsapp', recipient_type: 'individual', to: toPhone };
 
-    if (node.type === 'text') {
+    if (type === 'TEXT' || type === 'START' || type === 'TRIGGER') {
+      if (!node.text) return; // Skip if no text
       payload.type = 'text';
-      payload.text = { body: inter(node.data?.text || '') };
+      payload.text = { body: inter(node.text) };
 
-    } else if (node.type === 'image') {
+    } else if (type === 'IMAGE') {
       payload.type = 'image';
-      payload.image = { link: inter(node.data?.url || '') };
-      if (node.data?.caption) payload.image.caption = inter(node.data.caption);
+      payload.image = { link: inter(node.imageUrl || '') };
+      if (node.text) payload.image.caption = inter(node.text);
 
-    } else if (node.type === 'video') {
+    } else if (type === 'VIDEO') {
       payload.type = 'video';
-      payload.video = { link: inter(node.data?.url || '') };
+      payload.video = { link: inter(node.videoUrl || '') };
+      if (node.text) payload.video.caption = inter(node.text);
 
-    } else if (node.type === 'document') {
+    } else if (type === 'DOCUMENT') {
       payload.type = 'document';
-      payload.document = { link: inter(node.data?.url || ''), filename: node.data?.filename || 'Document' };
+      payload.document = { link: inter(node.docUrl || ''), filename: node.fileName || 'Document' };
 
-    } else if (node.type === 'buttons' || node.type === 'quick_reply') {
-      const btns = [node.data?.button1, node.data?.button2, node.data?.button3]
-        .filter(Boolean).slice(0, 3);
+    } else if (type === 'CHOICE') {
+      const choices = node.choices || [];
+      if (choices.length === 0) return;
+      
       payload.type = 'interactive';
-      payload.interactive = {
-        type: 'button',
-        body: { text: inter(node.data?.text || 'Please select:') },
-        action: {
-          buttons: btns.map((b: string, i: number) => ({
-            type: 'reply',
-            reply: { id: `flow_btn_${node.id}_${i}`, title: String(b).slice(0, 20) }
-          }))
-        }
-      };
+      
+      if (choices.length <= 3) {
+        // Use Buttons
+        payload.interactive = {
+          type: 'button',
+          body: { text: inter(node.text || 'Please select an option:') },
+          action: {
+            buttons: choices.map((c: any) => ({
+              type: 'reply',
+              reply: { id: `flow_btn_${node.id}_${c.id}`, title: String(c.text).slice(0, 20) }
+            }))
+          }
+        };
+      } else {
+        // Use List
+        payload.interactive = {
+          type: 'list',
+          header: { type: 'text', text: String(node.title || 'Options').slice(0, 60) },
+          body: { text: inter(node.text || 'Please choose:') },
+          action: {
+            button: 'Menu',
+            sections: [{ title: 'Options', rows: choices.map((c: any) => ({ id: `flow_list_${node.id}_${c.id}`, title: String(c.text).slice(0, 24) })) }]
+          }
+        };
+      }
 
-    } else if (node.type === 'list_menu') {
-      const items = [node.data?.item1, node.data?.item2, node.data?.item3, node.data?.item4, node.data?.item5]
-        .filter(Boolean).slice(0, 10);
-      payload.type = 'interactive';
-      payload.interactive = {
-        type: 'list',
-        header: { type: 'text', text: String(node.data?.title || 'Options').slice(0, 60) },
-        body: { text: inter(node.data?.text || 'Please choose:') },
-        action: {
-          button: String(node.data?.btnText || 'Menu').slice(0, 20),
-          sections: [{ title: 'Options', rows: items.map((t: string, i: number) => ({ id: `flow_list_${node.id}_${i}`, title: String(t).slice(0, 24) })) }]
-        }
-      };
+    } else if (type === 'CATALOG') {
+      // Dynamic Catalog Dispatch
+      const category = node.categoryName;
+      const products = await prisma.product.findMany({
+        where: category ? { category } : undefined,
+        take: 3 // Max 3 items
+      });
+      
+      if (products.length === 0) {
+        payload.type = 'text';
+        payload.text = { body: "Sorry, no products available in this category." };
+        await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
+        return;
+      }
+      
+      // Dispatch introductory text first
+      const introPayload = { ...payload, type: 'text', text: { body: inter(node.text || "Here are our products:") } };
+      await fetch(url, { method: 'POST', headers, body: JSON.stringify(introPayload) });
 
-    } else if (node.type === 'delay') {
-      const ms = Math.min((parseInt(node.data?.seconds) || 1) * 1000, 4000);
+      // Dispatch up to 3 images
+      for (const p of products) {
+        if (p.images && p.images.length > 0) {
+          const pPayload = {
+             messaging_product: 'whatsapp', recipient_type: 'individual', to: toPhone,
+             type: 'image',
+             image: { 
+               link: p.images[0],
+               caption: `${p.name} - ₹${p.sellingPrice}`
+             }
+          };
+          await fetch(url, { method: 'POST', headers, body: JSON.stringify(pPayload) });
+        } else {
+          const pPayload = {
+             messaging_product: 'whatsapp', recipient_type: 'individual', to: toPhone,
+             type: 'text',
+             text: { body: `${p.name} - ₹${p.sellingPrice}` }
+          };
+          await fetch(url, { method: 'POST', headers, body: JSON.stringify(pPayload) });
+        }
+      }
+      return; // Handled
+
+    } else if (type === 'DELAY') {
+      const ms = Math.min((parseInt(node.seconds) || 1) * 1000, 4000);
       await new Promise(r => setTimeout(r, ms));
-      return; // No message dispatch for delays
+      return; 
 
     } else {
-      return; // Unsupported or logic node — skip dispatch
+      return; // Logic node, nothing to dispatch
     }
 
     await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
@@ -102,25 +145,69 @@ async function getCreds() {
   return { token: account.accessToken, phoneId: account.phoneId };
 }
 
-// Run nodes sequentially until a pause point (button/input) or end
-async function runNodes(flow: any, startNodeId: string, vars: Record<string, string>, toPhone: string) {
+// Run nodes sequentially until a pause point or end
+async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, string>, toPhone: string) {
   let nextNodeId: string | null = startNodeId;
 
   while (nextNodeId) {
-    const node = flow.nodes?.find((n: any) => n.id === nextNodeId);
+    const node = nodes.find((n: any) => n.id === nextNodeId);
     if (!node) break;
 
     await dispatchNode(toPhone, node, vars);
 
-    // Pause at interactive nodes — wait for customer reply
-    const isPause = ['buttons', 'quick_reply', 'list_menu', 'input_name', 'input_email', 'input_phone', 'input_date', 'request'].includes(node.type);
+    const type = (node.type || '').toUpperCase();
+
+    // CRM Logic
+    if (type === 'CRM_CONTACT' || type === 'CRM_LEAD') {
+        try {
+          const customer = await prisma.customer.findFirst({
+            where: { OR: [{ mobile: { contains: toPhone } }, { whatsappNumber: { contains: toPhone } }] }
+          });
+          if (customer) {
+            let updateData: any = {};
+            if (node.leadStage) updateData.leadStage = node.leadStage;
+            if (node.priority) updateData.priority = node.priority;
+            if (node.tags) {
+              let existingTags = (customer.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
+              if (!existingTags.includes(node.tags)) { existingTags.push(node.tags); updateData.tags = existingTags.join(', '); }
+            }
+            if (Object.keys(updateData).length > 0) {
+              await prisma.customer.update({ where: { id: customer.id }, data: updateData });
+            }
+            if (updateData.tags) {
+              const conv = await prisma.whatsAppConversation.findFirst({ where: { phone: { contains: toPhone } }, orderBy: { updatedAt: 'desc' } });
+              if (conv) await prisma.whatsAppConversation.update({ where: { id: conv.id }, data: { tags: updateData.tags } });
+            }
+          }
+        } catch (e) {
+          console.error("CRM Update Node Error:", e);
+        }
+    } else if (type === 'CRM_ROUNDROBIN') {
+        try {
+          const conv = await prisma.whatsAppConversation.findFirst({ where: { phone: { contains: toPhone } }, orderBy: { updatedAt: 'desc' } });
+          if (conv) {
+            if (node.agentId) {
+              await prisma.whatsAppConversation.update({ where: { id: conv.id }, data: { assignedEmployeeId: node.agentId, status: 'OPEN' } });
+            } else {
+              const activeAgents = await prisma.employee.findMany({ where: { employmentStatus: 'Active' }, take: 1 });
+              if (activeAgents.length > 0) {
+                await prisma.whatsAppConversation.update({ where: { id: conv.id }, data: { assignedEmployeeId: activeAgents[0].id, status: 'OPEN' } });
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Round Robin Node Error:", e);
+        }
+    }
+
+    // Pause at interactive nodes
+    const isPause = ['CHOICE', 'INPUT_PHONE', 'INPUT_NAME', 'INPUT_EMAIL', 'INPUT_DATE'].includes(type);
     if (isPause) {
       return { status: 'paused', nodeId: node.id };
     }
 
-    // Find next edge
-    const nextEdge = flow.edges?.find((e: any) => e.source === node.id);
-    nextNodeId = nextEdge ? nextEdge.target : null;
+    // Routing Logic for Next Node
+    nextNodeId = node.outputPort || null; 
   }
 
   return { status: 'ended' };
@@ -128,76 +215,69 @@ async function runNodes(flow: any, startNodeId: string, vars: Record<string, str
 
 /**
  * Main Flow Engine Entry Point
- * Returns true if a flow handled the message (stops AI from responding)
  */
 export async function executeFlowEngine(senderPhone: string, userText: string, conversationId: string): Promise<boolean> {
   try {
-    // 1. Check if this user is currently inside a flow
     const userState = await prisma.whatsAppFlowState.findUnique({
       where: { phone: senderPhone }
     });
 
     if (userState) {
-      // User is mid-flow — find the flow
       const flowRecord = await prisma.whatsAppChatbotFlow.findUnique({
         where: { id: userState.flowId }
       });
 
       if (!flowRecord?.nodesJson) {
-        // Flow gone — clear state
         await prisma.whatsAppFlowState.delete({ where: { phone: senderPhone } });
         return false;
       }
 
-      let flow: any;
-      try { flow = JSON.parse(flowRecord.nodesJson); } catch (_) { return false; }
+      let nodes: any[] = [];
+      try { nodes = JSON.parse(flowRecord.nodesJson); } catch (_) { return false; }
+      if (!Array.isArray(nodes)) return false;
 
       const vars: Record<string, string> = JSON.parse(userState.variables || '{}');
-      const currentNode = flow.nodes?.find((n: any) => n.id === userState.currentNodeId);
+      const currentNode = nodes.find((n: any) => n.id === userState.currentNodeId);
 
       if (!currentNode) {
         await prisma.whatsAppFlowState.delete({ where: { phone: senderPhone } });
         return false;
       }
 
-      // Save input captured from user
-      if (['input_name', 'input_email', 'input_phone', 'input_date', 'request'].includes(currentNode.type)) {
-        if (currentNode.data?.variable) {
-          vars[currentNode.data.variable] = userText;
+      const type = (currentNode.type || '').toUpperCase();
+
+      // Save user input
+      if (['INPUT_NAME', 'INPUT_EMAIL', 'INPUT_PHONE', 'INPUT_DATE'].includes(type)) {
+        if (currentNode.variableName) {
+          vars[currentNode.variableName] = userText;
         }
       }
 
-      // Route based on button clicked
-      let nextEdge = null;
-      if (['buttons', 'quick_reply', 'list_menu'].includes(currentNode.type)) {
-        const allItems = [
-          currentNode.data?.button1, currentNode.data?.button2, currentNode.data?.button3,
-          currentNode.data?.item1, currentNode.data?.item2, currentNode.data?.item3,
-          currentNode.data?.item4, currentNode.data?.item5
-        ].filter(Boolean);
-
-        const matchIndex = allItems.findIndex((b: string) =>
-          b && userText.toLowerCase().includes(b.toLowerCase())
+      // Route based on interactive choice clicked
+      let nextNodeId = null;
+      if (type === 'CHOICE') {
+        const choices = currentNode.choices || [];
+        const matchIndex = choices.findIndex((c: any) =>
+          c.text && userText.toLowerCase().includes(String(c.text).toLowerCase())
         );
 
         if (matchIndex !== -1) {
-          nextEdge = flow.edges?.find((e: any) =>
-            e.source === currentNode.id && e.sourceHandle === `btn-${matchIndex + 1}`
-          );
+          nextNodeId = choices[matchIndex].targetNode;
         }
       }
 
-      if (!nextEdge) {
-        nextEdge = flow.edges?.find((e: any) => e.source === currentNode.id);
+      // If no interactive match, follow default output port
+      if (!nextNodeId) {
+        nextNodeId = currentNode.outputPort || null;
       }
 
-      if (!nextEdge) {
+      if (!nextNodeId) {
         // Flow ended
         await prisma.whatsAppFlowState.delete({ where: { phone: senderPhone } });
-        return true;
+        return true; 
       }
 
-      const result = await runNodes(flow, nextEdge.target, vars, senderPhone);
+      const result = await runNodes(nodes, nextNodeId, vars, senderPhone);
 
       if (result.status === 'ended') {
         await prisma.whatsAppFlowState.delete({ where: { phone: senderPhone } });
@@ -208,10 +288,10 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
         });
       }
 
-      return true; // Flow handled the message
+      return true; 
     }
 
-    // 2. User NOT in a flow — check active flows for keyword triggers
+    // 2. User NOT in a flow - check triggers
     const activeFlows = await prisma.whatsAppChatbotFlow.findMany({
       where: { isActive: true }
     });
@@ -219,28 +299,29 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
     for (const flowRecord of activeFlows) {
       if (!flowRecord.nodesJson) continue;
 
-      let flow: any;
-      try { flow = JSON.parse(flowRecord.nodesJson); } catch (_) { continue; }
+      let nodes: any[] = [];
+      try { nodes = JSON.parse(flowRecord.nodesJson); } catch (_) { continue; }
+      if (!Array.isArray(nodes)) continue;
 
-      // Check trigger keyword
       const triggerKeyword = flowRecord.triggerKeyword?.toLowerCase().trim();
       if (!triggerKeyword) continue;
 
-      if (userText.toLowerCase().trim() === triggerKeyword || userText.toLowerCase().includes(triggerKeyword)) {
-        // Start this flow
-        const triggerNode = flow.nodes?.find((n: any) => n.type === 'trigger');
-        const firstEdge = flow.edges?.find((e: any) => e.source === (triggerNode?.id || ''));
+      const keywords = triggerKeyword.split(',').map(k => k.trim());
+      const isMatch = keywords.some(k => k && (userText.toLowerCase().trim() === k || userText.toLowerCase().includes(k)));
+      
+      if (isMatch) {
+        const triggerNode = nodes.find((n: any) => (n.type || '').toUpperCase() === 'TRIGGER');
+        if (!triggerNode || !triggerNode.outputPort) continue;
+        
+        const nextNodeId = triggerNode.outputPort;
 
-        if (!firstEdge) continue;
-
-        // Create flow state
         await prisma.whatsAppFlowState.upsert({
           where: { phone: senderPhone },
-          update: { flowId: flowRecord.id, currentNodeId: firstEdge.target, variables: '{}' },
-          create: { phone: senderPhone, flowId: flowRecord.id, currentNodeId: firstEdge.target, variables: '{}' }
+          update: { flowId: flowRecord.id, currentNodeId: nextNodeId, variables: '{}' },
+          create: { phone: senderPhone, flowId: flowRecord.id, currentNodeId: nextNodeId, variables: '{}' }
         });
 
-        const result = await runNodes(flow, firstEdge.target, {}, senderPhone);
+        const result = await runNodes(nodes, nextNodeId, {}, senderPhone);
 
         if (result.status === 'ended') {
           await prisma.whatsAppFlowState.deleteMany({ where: { phone: senderPhone } });
@@ -251,17 +332,16 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
           });
         }
 
-        // Increment execution count
         await prisma.whatsAppChatbotFlow.update({
           where: { id: flowRecord.id },
           data: { executionCount: { increment: 1 } }
         });
 
-        return true; // Flow intercepted
+        return true; 
       }
     }
 
-    return false; // No flow matched
+    return false;
   } catch (err: any) {
     console.error('[Flow Engine Error]:', err.message);
     return false;

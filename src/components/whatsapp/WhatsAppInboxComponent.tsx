@@ -200,6 +200,13 @@ export default function WhatsAppInboxComponent() {
   const [showAssignModal, setShowAssignModal] = useState<boolean>(false);
   const [assigningLead, setAssigningLead] = useState<boolean>(false);
 
+  // Tags State
+  const [showTagsModal, setShowTagsModal] = useState<boolean>(false);
+  const [availableTags, setAvailableTags] = useState<any[]>([]);
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#e2e8f0");
+  const [isCreatingTag, setIsCreatingTag] = useState(false);
+
   // Quote Form State
   const [quoteItems, setQuoteItems] = useState([
     { name: "Cotton Polo T-Shirt (ESP-902)", quantity: 200, rate: 290 },
@@ -242,6 +249,20 @@ export default function WhatsAppInboxComponent() {
     };
     fetchEmps();
     
+    // Fetch Tags
+    const fetchTags = async () => {
+      try {
+        const res = await fetch('/api/whatsapp/tags');
+        const data = await res.json();
+        if (data.success && data.tags) {
+          setAvailableTags(data.tags);
+        }
+      } catch (err) {
+        console.error("Failed to fetch tags", err);
+      }
+    };
+    fetchTags();
+
     // Fetch Canned Responses
     const fetchCanned = async () => {
       const res = await getWhatsAppCannedResponsesAction();
@@ -799,6 +820,63 @@ export default function WhatsAppInboxComponent() {
     }
   };
 
+  const handleCreateTag = async () => {
+    if (!newTagName.trim()) return;
+    setIsCreatingTag(true);
+    try {
+      const res = await fetch('/api/whatsapp/tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newTagName, color: newTagColor, role: currentUserRole })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAvailableTags([data.tag, ...availableTags]);
+        setNewTagName("");
+      } else {
+        alert(data.error || "Failed to create tag");
+      }
+    } catch (err) {
+      alert("Error creating tag.");
+    }
+    setIsCreatingTag(false);
+  };
+
+  const handleToggleConversationTag = async (tagName: string) => {
+    if (!selectedConvId) return;
+    
+    let currentTags = (activeConvDetail?.tags || "").split(",").map((t: string) => t.trim()).filter(Boolean);
+    const hasTag = currentTags.includes(tagName);
+    const action = hasTag ? "remove" : "add";
+
+    // Optimistic UI update
+    if (hasTag) {
+      currentTags = currentTags.filter((t: string) => t !== tagName);
+    } else {
+      currentTags.push(tagName);
+    }
+    
+    // Temporarily update activeConvDetail
+    const updatedConv = { ...activeConvDetail, tags: currentTags.join(", ") };
+    
+    try {
+      const res = await fetch('/api/whatsapp/tags', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: selectedConvId, tagName, action })
+      });
+      const data = await res.json();
+      if (data.success) {
+        await fetchConversationDetail(selectedConvId, true);
+        await fetchConversationsList(true); // refresh sidebar
+      } else {
+        alert(data.error || "Failed to update tags");
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   // Save CRM Inline Profile Edits
   const handleSaveCRMProfile = async () => {
     if (!selectedConvId || !activeConvDetail?.customer?.id) return;
@@ -1245,6 +1323,10 @@ export default function WhatsAppInboxComponent() {
 
               <div className="chat-header-actions">
 {/* Call button removed */}
+                <button className="chat-action-btn highlight-tags" onClick={() => setShowTagsModal(true)} title="Manage Tags">
+                  <Tag size={14} />
+                  <span>Tags ({activeConvDetail.tags ? activeConvDetail.tags.split(',').length : 0})</span>
+                </button>
                 <button className="chat-action-btn highlight-assign" onClick={() => setShowAssignModal(true)} title="Assign WhatsApp Lead">
                   <UserCheck size={14} />
                   <span>{activeConvDetail.assignedEmployee?.user?.name ? `Assign (${activeConvDetail.assignedEmployee.user.name})` : "Assign"}</span>
@@ -2294,6 +2376,93 @@ export default function WhatsAppInboxComponent() {
               <button className="modal-submit-btn" onClick={handleSendPaymentSubmit}>
                 Send UPI / Card Payment Link in Chat
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTagsModal && (
+        <div className="inbox-modal-backdrop" onClick={() => setShowTagsModal(false)}>
+          <div className="inbox-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header-row">
+              <h3>Manage Conversation Tags</h3>
+              <button onClick={() => setShowTagsModal(false)}>✕</button>
+            </div>
+            <div className="modal-form-body">
+              
+              <div style={{ marginBottom: "12px" }}>
+                <span style={{ fontSize: "12px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>
+                  Current Tags
+                </span>
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "8px" }}>
+                  {(activeConvDetail?.tags || "").split(",").filter(Boolean).map((t: string) => (
+                    <span key={t} className="tag-pill" style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#e0f2fe', color: '#0369a1', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 600 }}>
+                      {t.trim()}
+                      <X size={12} style={{ cursor: 'pointer' }} onClick={() => handleToggleConversationTag(t.trim())} />
+                    </span>
+                  ))}
+                  {!(activeConvDetail?.tags || "").split(",").filter(Boolean).length && (
+                    <span style={{ fontSize: "12px", color: "#94a3b8" }}>No tags assigned yet.</span>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "12px", marginTop: "24px" }}>
+                <span style={{ fontSize: "12px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>
+                  Available Tags
+                </span>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px", maxHeight: "200px", overflowY: "auto" }}>
+                  {availableTags.map((tag) => {
+                    const isAssigned = (activeConvDetail?.tags || "").includes(tag.name);
+                    return (
+                      <div key={tag.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: tag.color }}></div>
+                          <span style={{ fontSize: '14px', fontWeight: 500, color: '#334155' }}>{tag.name}</span>
+                        </div>
+                        <button
+                          onClick={() => handleToggleConversationTag(tag.name)}
+                          style={{ padding: '4px 8px', fontSize: '12px', borderRadius: '4px', border: 'none', cursor: 'pointer', backgroundColor: isAssigned ? '#fecaca' : '#dcfce7', color: isAssigned ? '#991b1b' : '#166534', fontWeight: 600 }}
+                        >
+                          {isAssigned ? "Remove" : "Assign"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {availableTags.length === 0 && <span style={{ fontSize: "12px", color: "#94a3b8" }}>No tags created in this workspace.</span>}
+                </div>
+              </div>
+
+              {currentUserRole !== 'AGENT' && (
+                <div style={{ marginTop: "24px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", display: 'block', marginBottom: '8px' }}>
+                    Create New Tag (Admin)
+                  </span>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      placeholder="Tag Name"
+                      value={newTagName}
+                      onChange={(e) => setNewTagName(e.target.value)}
+                      style={{ flex: 1, padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '14px' }}
+                    />
+                    <input
+                      type="color"
+                      value={newTagColor}
+                      onChange={(e) => setNewTagColor(e.target.value)}
+                      style={{ width: '40px', height: '36px', padding: '2px', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer' }}
+                    />
+                    <button
+                      onClick={handleCreateTag}
+                      disabled={isCreatingTag || !newTagName.trim()}
+                      style={{ padding: '0 16px', backgroundColor: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 600, cursor: 'pointer', opacity: (isCreatingTag || !newTagName.trim()) ? 0.6 : 1 }}
+                    >
+                      {isCreatingTag ? "Saving..." : "Create"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
             </div>
           </div>
         </div>

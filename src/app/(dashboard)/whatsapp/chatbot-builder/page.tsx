@@ -64,7 +64,9 @@ import {
   saveWhatsAppChatbotFlowAction,
   deleteWhatsAppChatbotFlowAction,
   duplicateWhatsAppChatbotFlowAction,
-  toggleWhatsAppChatbotFlowStatusAction
+  toggleWhatsAppChatbotFlowStatusAction,
+  getAllEmployeesAndTeams,
+  getProductsAction
 } from "@/app/actions/whatsAppPlatformActions";
 import "@/components/whatsapp/ChatbotBuilder.css";
 
@@ -398,6 +400,11 @@ export default function WhatsAppChatbotBuilderPage() {
   const [isBotActive, setIsBotActive] = useState<boolean>(true);
   const [isLoadingFlows, setIsLoadingFlows] = useState<boolean>(true);
 
+  // Live Data for Dropdowns
+  const [availableAgents, setAvailableAgents] = useState<any[]>([]);
+  const [availableTags, setAvailableTags] = useState<any[]>([]);
+  const [availableCollections, setAvailableCollections] = useState<string[]>([]);
+
   // JSON File Import/Export Ref
   const jsonFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -702,6 +709,27 @@ export default function WhatsAppChatbotBuilderPage() {
 
   useEffect(() => {
     fetchFlows();
+
+    // Fetch Live Data for Dropdowns
+    const fetchLiveData = async () => {
+      try {
+        const agentsRes = await getAllEmployeesAndTeams();
+        if (agentsRes.success && agentsRes.employees) setAvailableAgents(agentsRes.employees);
+
+        const tagsRes = await fetch('/api/whatsapp/tags');
+        const tagsData = await tagsRes.json();
+        if (tagsData.success && tagsData.tags) setAvailableTags(tagsData.tags);
+
+        const prodRes = await getProductsAction();
+        if (prodRes.success && prodRes.products) {
+          const uniqueCats = Array.from(new Set(prodRes.products.map((p: any) => p.category))).filter(Boolean) as string[];
+          setAvailableCollections(uniqueCats);
+        }
+      } catch (err) {
+        console.error("Failed to load live data for chatbot builder", err);
+      }
+    };
+    fetchLiveData();
   }, []);
 
   const handleSelectFlow = (flowId: string) => {
@@ -1914,6 +1942,21 @@ export default function WhatsAppChatbotBuilderPage() {
                     style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", resize: "none" }}
                   />
                 </div>
+                {(selectedNode.type || "").toUpperCase() === "CATALOG" && (
+                  <div>
+                    <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Select Product Collection</label>
+                    <select
+                      value={selectedNode.categoryName || ""}
+                      onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, categoryName: e.target.value } : n)))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                    >
+                      <option value="">-- All Collections --</option>
+                      {availableCollections.map((col) => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* TYPE-SPECIFIC CONFIGURATION FIELDS WITH DIRECT FILE UPLOADER */}
                 {selectedNode.type === "IMAGE" && (
@@ -2282,36 +2325,72 @@ export default function WhatsAppChatbotBuilderPage() {
                   </>
                 )}
 
-                {selectedNode.type.startsWith("CRM_") && (
+                {(selectedNode.type || "").toUpperCase().startsWith("CRM_") && (
                   <>
-                    <div>
-                      <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>CRM Lead Stage</label>
-                      <select
-                        value={selectedNode.leadStage || "New Lead"}
-                        onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, leadStage: e.target.value } : n)))}
-                        style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
-                      >
-                        <option value="New Lead">New Lead</option>
-                        <option value="Contacted">Contacted</option>
-                        <option value="Qualified Lead">Qualified Lead</option>
-                        <option value="Wholesale Inquiry">Wholesale Inquiry</option>
-                        <option value="Negotiation">Negotiation</option>
-                        <option value="Won">Won / Customer</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Priority</label>
-                      <select
-                        value={selectedNode.priority || "MEDIUM"}
-                        onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, priority: e.target.value } : n)))}
-                        style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
-                      >
-                        <option value="LOW">LOW</option>
-                        <option value="MEDIUM">MEDIUM</option>
-                        <option value="HIGH">HIGH</option>
-                        <option value="URGENT">URGENT</option>
-                      </select>
-                    </div>
+                    {((selectedNode.type || "").toUpperCase() === "CRM_CONTACT" || (selectedNode.type || "").toUpperCase() === "CRM_LEAD") && (
+                      <>
+                        <div>
+                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>CRM Lead Stage</label>
+                          <select
+                            value={selectedNode.leadStage || "New Lead"}
+                            onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, leadStage: e.target.value } : n)))}
+                            style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                          >
+                            <option value="New Lead">New Lead</option>
+                            <option value="Contacted">Contacted</option>
+                            <option value="Qualified Lead">Qualified Lead</option>
+                            <option value="Wholesale Inquiry">Wholesale Inquiry</option>
+                            <option value="Negotiation">Negotiation</option>
+                            <option value="Won">Won / Customer</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Priority</label>
+                          <select
+                            value={selectedNode.priority || "MEDIUM"}
+                            onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, priority: e.target.value } : n)))}
+                            style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                          >
+                            <option value="LOW">LOW</option>
+                            <option value="MEDIUM">MEDIUM</option>
+                            <option value="HIGH">HIGH</option>
+                            <option value="URGENT">URGENT</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Assign Tags</label>
+                          <select
+                            value={selectedNode.tags || ""}
+                            onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, tags: e.target.value } : n)))}
+                            style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                          >
+                            <option value="">No tag assigned</option>
+                            {availableTags.map((tag: any) => (
+                              <option key={tag.id} value={tag.name}>{tag.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    )}
+
+                    {(selectedNode.type || "").toUpperCase() === "CRM_ROUNDROBIN" && (
+                      <div>
+                        <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Assign To Agent</label>
+                        <select
+                          value={selectedNode.agentId || ""}
+                          onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, agentId: e.target.value } : n)))}
+                          style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                        >
+                          <option value="">Auto (Round Robin)</option>
+                          {availableAgents.map((ag: any) => (
+                            <option key={ag.id} value={ag.id}>{ag.user?.name || "Agent"}</option>
+                          ))}
+                        </select>
+                        <span style={{ fontSize: "10px", color: "#64748b", marginTop: "4px", display: "block" }}>
+                          Leave as "Auto" to cycle leads among all active agents.
+                        </span>
+                      </div>
+                    )}
                   </>
                 )}
 

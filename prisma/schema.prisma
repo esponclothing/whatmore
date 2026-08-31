@@ -1977,3 +1977,11 @@ model WhatsAppMetaFlow {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+model WhatsAppTag {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  color     String   @default("#e2e8f0")
+  createdAt DateTime @default(now())
+}
+
