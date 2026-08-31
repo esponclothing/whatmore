@@ -238,6 +238,7 @@ export default function WhatsAppInboxComponent() {
   }, []);
 
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const chatMessagesContainerRef = useRef<HTMLDivElement>(null);
 
   // Fetch Employees List for Filtering & Assignment
   useEffect(() => {
@@ -423,8 +424,19 @@ export default function WhatsAppInboxComponent() {
 
   useEffect(() => {
     if (!activeConvDetail?.messages) return;
+    const container = chatMessagesContainerRef.current;
+    if (!container) return;
+
     const isNewConv = lastScrollConvIdRef.current !== selectedConvId;
-    chatBottomRef.current?.scrollIntoView({ behavior: isNewConv ? "auto" : "smooth" });
+    if (isNewConv) {
+      chatBottomRef.current?.scrollIntoView({ behavior: "auto" });
+    } else {
+      const threshold = 150; // pixels from the bottom
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+      if (isNearBottom) {
+        chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      }
+    }
     lastScrollConvIdRef.current = selectedConvId;
   }, [activeConvDetail?.messages, selectedConvId]);
 
@@ -1393,7 +1405,7 @@ export default function WhatsAppInboxComponent() {
             </div>
 
             {/* Messages Scroll Area */}
-            <div className="chat-messages-container">
+            <div className="chat-messages-container" ref={chatMessagesContainerRef}>
               {activeConvDetail.messages?.map((msg: any) => {
                 const isAgent = msg.senderType === "AGENT" || msg.senderType === "BOT" || msg.senderType === "AI";
                 const isInternal = msg.isInternalNote;

@@ -350,6 +350,76 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
  */
 export async function executeFlowEngine(senderPhone: string, userText: string, conversationId: string): Promise<boolean> {
   try {
+    // 1. Check active flow triggers first to see if a flow matches the keyword!
+    const activeFlows = await prisma.whatsAppChatbotFlow.findMany({
+      where: { isActive: true }
+    });
+
+    let matchedFlow = null;
+    let matchedTriggerNode = null;
+    let matchedNextNodeId = null;
+
+    for (const flowRecord of activeFlows) {
+      if (!flowRecord.nodesJson) continue;
+
+      let nodes: any[] = [];
+      try { nodes = JSON.parse(flowRecord.nodesJson); } catch (_) { continue; }
+      if (!Array.isArray(nodes)) continue;
+
+      const triggerKeyword = flowRecord.triggerKeyword?.toLowerCase().trim();
+      if (!triggerKeyword) continue;
+
+      const keywords = triggerKeyword.split(',').map(k => k.trim());
+      const isMatch = keywords.some(k => k && (userText.toLowerCase().trim() === k || userText.toLowerCase().includes(k)));
+
+      if (isMatch) {
+        const triggerNode = nodes.find((n: any) => (n.type || '').toUpperCase() === 'TRIGGER');
+        if (triggerNode && triggerNode.outputPort) {
+          matchedFlow = flowRecord;
+          matchedTriggerNode = triggerNode;
+          matchedNextNodeId = triggerNode.outputPort;
+          break;
+        }
+      }
+    }
+
+    if (matchedFlow && matchedNextNodeId) {
+      // Clear any existing/stuck flow states for this phone so it triggers fresh!
+      await prisma.whatsAppFlowState.deleteMany({
+        where: { phone: senderPhone }
+      });
+
+      // Insert new flow state
+      await prisma.whatsAppFlowState.create({
+        data: {
+          phone: senderPhone,
+          flowId: matchedFlow.id,
+          currentNodeId: matchedNextNodeId,
+          variables: '{}'
+        }
+      });
+
+      const nodes = JSON.parse(matchedFlow.nodesJson);
+      const result = await runNodes(nodes, matchedNextNodeId, {}, senderPhone, conversationId);
+
+      if (result.status === 'ended') {
+        await prisma.whatsAppFlowState.deleteMany({ where: { phone: senderPhone } });
+      } else {
+        await prisma.whatsAppFlowState.update({
+          where: { phone: senderPhone },
+          data: { currentNodeId: result.nodeId! }
+        });
+      }
+
+      await prisma.whatsAppChatbotFlow.update({
+        where: { id: matchedFlow.id },
+        data: { executionCount: { increment: 1 } }
+      });
+
+      return true;
+    }
+
+    // 2. If it is NOT a trigger keyword, process existing flow state if present
     const userState = await prisma.whatsAppFlowState.findUnique({
       where: { phone: senderPhone }
     });
@@ -425,56 +495,6 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
       }
 
       return true; 
-    }
-
-    // 2. User NOT in a flow - check triggers
-    const activeFlows = await prisma.whatsAppChatbotFlow.findMany({
-      where: { isActive: true }
-    });
-
-    for (const flowRecord of activeFlows) {
-      if (!flowRecord.nodesJson) continue;
-
-      let nodes: any[] = [];
-      try { nodes = JSON.parse(flowRecord.nodesJson); } catch (_) { continue; }
-      if (!Array.isArray(nodes)) continue;
-
-      const triggerKeyword = flowRecord.triggerKeyword?.toLowerCase().trim();
-      if (!triggerKeyword) continue;
-
-      const keywords = triggerKeyword.split(',').map(k => k.trim());
-      const isMatch = keywords.some(k => k && (userText.toLowerCase().trim() === k || userText.toLowerCase().includes(k)));
-      
-      if (isMatch) {
-        const triggerNode = nodes.find((n: any) => (n.type || '').toUpperCase() === 'TRIGGER');
-        if (!triggerNode || !triggerNode.outputPort) continue;
-        
-        const nextNodeId = triggerNode.outputPort;
-
-        await prisma.whatsAppFlowState.upsert({
-          where: { phone: senderPhone },
-          update: { flowId: flowRecord.id, currentNodeId: nextNodeId, variables: '{}' },
-          create: { phone: senderPhone, flowId: flowRecord.id, currentNodeId: nextNodeId, variables: '{}' }
-        });
-
-        const result = await runNodes(nodes, nextNodeId, {}, senderPhone, conversationId);
-
-        if (result.status === 'ended') {
-          await prisma.whatsAppFlowState.deleteMany({ where: { phone: senderPhone } });
-        } else {
-          await prisma.whatsAppFlowState.update({
-            where: { phone: senderPhone },
-            data: { currentNodeId: result.nodeId! }
-          });
-        }
-
-        await prisma.whatsAppChatbotFlow.update({
-          where: { id: flowRecord.id },
-          data: { executionCount: { increment: 1 } }
-        });
-
-        return true; 
-      }
     }
 
     return false;
