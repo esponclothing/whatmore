@@ -48,7 +48,7 @@ async function dispatchNode(toPhone: string, node: any, vars: Record<string, str
       payload.type = 'document';
       payload.document = { link: inter(node.docUrl || ''), filename: node.fileName || 'Document' };
 
-    } else if (type === 'CHOICE') {
+    } else if (type === 'CHOICE' || type === 'BUTTONS' || type === 'LIST_MENU') {
       const choices = node.choices || [];
       if (choices.length === 0) return;
       
@@ -66,6 +66,12 @@ async function dispatchNode(toPhone: string, node: any, vars: Record<string, str
             }))
           }
         };
+        if (node.imageUrl) {
+          payload.interactive.header = {
+            type: 'image',
+            image: { link: inter(node.imageUrl) }
+          };
+        }
       } else {
         // Use List
         payload.interactive = {
