@@ -472,6 +472,13 @@ export default function WhatsAppChatbotBuilderPage() {
   const [showSimModal, setShowSimModal] = useState<boolean>(false);
   const [simMessages, setSimMessages] = useState<any[]>([]);
   const [drawerTab, setDrawerTab] = useState<"basic" | "advanced">("basic");
+  const [isMounted, setIsMounted] = useState<boolean>(false);
+  const [coordsTrigger, setCoordsTrigger] = useState<number>(0);
+
+  useEffect(() => {
+    // Force recalculating port coordinates after DOM paint
+    setCoordsTrigger((prev) => prev + 1);
+  }, [nodes]);
 
   // Discard unsaved changes handler
   const handleDiscardChanges = () => {
@@ -763,6 +770,7 @@ export default function WhatsAppChatbotBuilderPage() {
   };
 
   useEffect(() => {
+    setIsMounted(true);
     fetchFlows();
     fetchLiveData();
   }, []);

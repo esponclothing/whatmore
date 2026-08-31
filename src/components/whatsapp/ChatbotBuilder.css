@@ -321,7 +321,6 @@
   top: 0;
   left: 0;
   transform-origin: 0 0;
-  transition: transform 0.1s ease-out;
 }
 
 /* SVG Connection Overlay Layer */
