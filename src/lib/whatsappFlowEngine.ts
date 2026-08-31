@@ -31,8 +31,9 @@ async function dispatchNode(toPhone: string, node: any, vars: Record<string, str
 
     let resolvedConvId = conversationId;
     if (!resolvedConvId) {
+      const cleanPhone = toPhone.replace(/\D/g, '').slice(-10);
       const conv = await prisma.whatsAppConversation.findFirst({
-        where: { customer: { mobile: { contains: toPhone } } },
+        where: { customer: { OR: [{ mobile: { contains: cleanPhone } }, { whatsappNumber: { contains: cleanPhone } }] } },
         orderBy: { updatedAt: 'desc' }
       });
       if (conv) resolvedConvId = conv.id;
@@ -318,8 +319,9 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
     // CRM Logic
     if (type === 'CRM_CONTACT' || type === 'CRM_LEAD') {
         try {
+          const cleanPhone = toPhone.replace(/\D/g, '').slice(-10);
           const customer = await prisma.customer.findFirst({
-            where: { OR: [{ mobile: { contains: toPhone } }, { whatsappNumber: { contains: toPhone } }] }
+            where: { OR: [{ mobile: { contains: cleanPhone } }, { whatsappNumber: { contains: cleanPhone } }] }
           });
           if (customer) {
             let updateData: any = {};
@@ -350,8 +352,9 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
         }
     } else if (type === 'CRM_ROUNDROBIN' || type === 'START') {
         try {
+          const cleanPhone = toPhone.replace(/\D/g, '').slice(-10);
           const customer = await prisma.customer.findFirst({
-            where: { OR: [{ mobile: { contains: toPhone } }, { whatsappNumber: { contains: toPhone } }] }
+            where: { OR: [{ mobile: { contains: cleanPhone } }, { whatsappNumber: { contains: cleanPhone } }] }
           });
           if (customer) {
             const conv = await prisma.whatsAppConversation.findFirst({ 
