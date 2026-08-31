@@ -258,7 +258,7 @@ export default function WhatsAppInboxComponent() {
     try {
       const params = new URLSearchParams({ action: 'chats' });
       if (searchQuery) params.set('search', searchQuery);
-      const res = await fetch('/api/whatsapp/inbox?' + params.toString());
+      const res = await fetch('/api/whatsapp/inbox?' + params.toString(), { cache: 'no-store' });
       if (!res.ok) throw new Error('API error ' + res.status);
       const data = await res.json();
 
@@ -349,7 +349,7 @@ export default function WhatsAppInboxComponent() {
     if (!silent) setLoadingDetail(true);
     try {
       const params = new URLSearchParams({ action: 'detail', convId: id });
-      const apiRes = await fetch('/api/whatsapp/inbox?' + params.toString());
+      const apiRes = await fetch('/api/whatsapp/inbox?' + params.toString(), { cache: 'no-store' });
       if (!apiRes.ok) throw new Error('API error ' + apiRes.status);
       const res = await apiRes.json();
       if (res.success && res.conversation) {
@@ -1338,7 +1338,9 @@ export default function WhatsAppInboxComponent() {
                         {msg.isInternalNote ? (
                           <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><LockIcon size={12} /> Internal Note</span>
                         ) : (
-                          msg.senderName
+                          (msg.senderName === "Sales Rep" || msg.senderName === "Agent") && activeConvDetail.assignedEmployee?.user?.name 
+                            ? activeConvDetail.assignedEmployee.user.name 
+                            : msg.senderName
                         )}
                       </div>
 
