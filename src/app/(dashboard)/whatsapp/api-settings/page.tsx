@@ -780,61 +780,27 @@ export default function WhatsAppAPISettingsPage() {
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700 bg-white dark:bg-slate-900">
                   {agents.map(a => (
                     <tr key={a.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/50">
-                      {editingAgentId === a.id ? (
-                        <>
-                          <td className="py-3 px-4">
-                            <input type="text" value={editAgentData.name} onChange={(e) => setEditAgentData({...editAgentData, name: e.target.value})} className="w-full px-2 py-1 rounded border border-gray-200 text-sm" />
-                          </td>
-                          <td className="py-3 px-4">
-                            <input type="email" value={editAgentData.email} onChange={(e) => setEditAgentData({...editAgentData, email: e.target.value})} className="w-full px-2 py-1 rounded border border-gray-200 text-sm" />
-                            <input type="password" placeholder="New Password (optional)" value={editAgentData.password || ""} onChange={(e) => setEditAgentData({...editAgentData, password: e.target.value})} className="w-full px-2 py-1 rounded border border-gray-200 text-sm mt-1" />
-                          </td>
-                          <td className="py-3 px-4">
-                            <select value={editAgentData.role} onChange={(e) => setEditAgentData({...editAgentData, role: e.target.value})} className="px-2 py-1 rounded border border-gray-200 text-sm bg-white">
-                              <option value="AGENT">AGENT</option>
-                              <option value="ADMIN">ADMIN</option>
-                            </select>
-                          </td>
-                          <td className="py-3 px-4">
-                            <select value={editAgentData.isActive ? "true" : "false"} onChange={(e) => setEditAgentData({...editAgentData, isActive: e.target.value === "true"})} className="px-2 py-1 rounded border border-gray-200 text-sm bg-white">
-                              <option value="true">Active</option>
-                              <option value="false">Inactive</option>
-                            </select>
-                          </td>
-                          <td className="py-3 px-4 text-right flex justify-end gap-2">
-                            <button onClick={() => handleSaveEditAgent(a.id)} disabled={savingEdit} className="text-green-600 hover:text-green-800">
-                              {savingEdit ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
-                            </button>
-                            <button onClick={() => setEditingAgentId(null)} disabled={savingEdit} className="text-gray-500 hover:text-gray-700">
-                              <X size={16} />
-                            </button>
-                          </td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="py-3 px-4 font-bold text-gray-900 dark:text-white">{a.name}</td>
-                          <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{a.email}</td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
-                              a.role === "ADMIN" ? "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400" : "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400"
-                            }`}>
-                              {a.role}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
-                              a.isActive ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
-                            }`}>
-                              {a.isActive ? "Active" : "Inactive"}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <button onClick={() => { setEditingAgentId(a.id); setEditAgentData({...a, password: ""}); }} className="text-gray-400 hover:text-indigo-600 transition-colors">
-                              <Edit3 size={16} />
-                            </button>
-                          </td>
-                        </>
-                      )}
+                      <td className="py-3 px-4 font-bold text-gray-900 dark:text-white">{a.name}</td>
+                      <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{a.email}</td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                          a.role === "ADMIN" ? "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400" : "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400"
+                        }`}>
+                          {a.role}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                          a.isActive ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                        }`}>
+                          {a.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button onClick={() => { setEditingAgentId(a.id); setEditAgentData({...a, password: ""}); }} className="text-gray-400 hover:text-indigo-600 transition-colors">
+                          <Edit3 size={16} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {agents.length === 0 && (
@@ -844,6 +810,54 @@ export default function WhatsAppAPISettingsPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+      {editingAgentId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
+              <h3 className="font-bold text-gray-900 dark:text-white">Edit Team Agent</h3>
+              <button onClick={() => setEditingAgentId(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5 flex flex-col gap-4">
+              <div>
+                <label className="text-xs font-bold text-gray-600 block mb-1">Name</label>
+                <input type="text" value={editAgentData.name || ''} onChange={(e) => setEditAgentData({...editAgentData, name: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-600 block mb-1">Email</label>
+                <input type="email" value={editAgentData.email || ''} onChange={(e) => setEditAgentData({...editAgentData, email: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-600 block mb-1">New Password (optional)</label>
+                <input type="password" value={editAgentData.password || ''} onChange={(e) => setEditAgentData({...editAgentData, password: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-600 block mb-1">Role</label>
+                  <select value={editAgentData.role || 'AGENT'} onChange={(e) => setEditAgentData({...editAgentData, role: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                    <option value="AGENT">AGENT</option>
+                    <option value="ADMIN">ADMIN</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-600 block mb-1">Status</label>
+                  <select value={editAgentData.isActive ? "true" : "false"} onChange={(e) => setEditAgentData({...editAgentData, isActive: e.target.value === "true"})} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 border-t border-gray-100 dark:border-slate-700 bg-gray-50 flex justify-end gap-3">
+              <button onClick={() => setEditingAgentId(null)} className="px-4 py-2 text-sm font-bold text-gray-600 hover:text-gray-800">Cancel</button>
+              <button onClick={() => handleSaveEditAgent(editingAgentId)} disabled={savingEdit} className="px-5 py-2 text-sm font-bold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 flex items-center gap-2">
+                {savingEdit ? <RefreshCw size={16} className="animate-spin" /> : "Save Changes"}
+              </button>
             </div>
           </div>
         </div>

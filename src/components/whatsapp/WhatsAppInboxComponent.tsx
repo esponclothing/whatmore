@@ -2309,49 +2309,11 @@ export default function WhatsAppInboxComponent() {
               <button onClick={() => setShowAssignModal(false)}>×</button>
             </div>
             <div className="modal-form-body">
-              <div
-                style={{
-                  background: "#f0fdf4",
-                  border: "2px dashed #10b981",
-                  borderRadius: "8px",
-                  padding: "14px",
-                  marginBottom: "14px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between"
-                }}
-              >
-                <div>
-                  <h4 style={{ fontSize: "14px", fontWeight: 700, color: "#065f46", margin: 0 }}>
-                    Auto-Assign via Round-Robin
-                  </h4>
-                  <p style={{ fontSize: "12px", color: "#047857", margin: "2px 0 0 0" }}>
-                    Automatically assigns to the active sales executive with the lowest open workload.
-                  </p>
-                </div>
-                <button
-                  disabled={assigningLead}
-                  onClick={() => handleAssignLead(undefined, "ROUND_ROBIN")}
-                  style={{
-                    background: "#10b981",
-                    color: "#ffffff",
-                    border: "none",
-                    padding: "8px 14px",
-                    borderRadius: "6px",
-                    fontSize: "12.5px",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    whiteSpace: "nowrap"
-                  }}
-                >
-                  {assigningLead ? "Assigning..." : "Run Round-Robin"}
-                </button>
+              <div style={{ marginBottom: "12px" }}>
+                <span style={{ fontSize: "12px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>
+                  Select Agent to Assign
+                </span>
               </div>
-
-              <span style={{ fontSize: "12px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>
-                Or Assign Manually to Team Member
-              </span>
-
               <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "6px", maxHeight: "250px", overflowY: "auto" }}>
                 {employeesList.map((emp) => (
                   <div
