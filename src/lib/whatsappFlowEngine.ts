@@ -326,38 +326,43 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
           });
           console.log(`[CRM Node] customer found: ${customer ? customer.id : 'NOT FOUND'} mobile="${customer?.mobile}" tags="${customer?.tags}"`);
           if (customer) {
-            let updateData: any = {};
-            if (node.leadStage) updateData.leadStage = node.leadStage;
-            if (node.priority) updateData.priority = node.priority;
-            if (node.temperature) updateData.temperature = node.temperature;
+            // Only update fields that exist on Customer model
+            let customerUpdate: any = {};
+            if (node.leadStage) customerUpdate.leadStage = node.leadStage;
+            if (node.customerType) customerUpdate.customerType = node.customerType;
             if (node.tags) {
               // Always rebuild tag list — even if tag already exists
               let existingTags = (customer.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
               if (!existingTags.includes(node.tags)) { existingTags.push(node.tags); }
-              updateData.tags = existingTags.join(', ');
+              customerUpdate.tags = existingTags.join(', ');
             }
-            console.log(`[CRM Node] updateData:`, JSON.stringify(updateData));
-            if (Object.keys(updateData).length > 0) {
-              await prisma.customer.update({ where: { id: customer.id }, data: updateData });
+            console.log(`[CRM Node] customerUpdate:`, JSON.stringify(customerUpdate));
+            if (Object.keys(customerUpdate).length > 0) {
+              await prisma.customer.update({ where: { id: customer.id }, data: customerUpdate });
               console.log(`[CRM Node] customer updated OK`);
             }
-            // ALWAYS sync tags to conversation regardless of whether tag was "new"
-            if (node.tags) {
-              const conv = await prisma.whatsAppConversation.findFirst({ 
-                where: { customerId: customer.id }, 
-                orderBy: { updatedAt: 'desc' } 
-              });
-              console.log(`[CRM Node] conv found: ${conv ? conv.id : 'NOT FOUND'} convTags="${conv?.tags}"`);
-              if (conv) {
+
+            // Find the conversation to update priority/temperature/tags (these fields live on the conversation)
+            const conv = await prisma.whatsAppConversation.findFirst({ 
+              where: { customerId: customer.id }, 
+              orderBy: { updatedAt: 'desc' } 
+            });
+            console.log(`[CRM Node] conv found: ${conv ? conv.id : 'NOT FOUND'} convTags="${conv?.tags}"`);
+            if (conv) {
+              let convUpdate: any = {};
+              // priority and temperature live on WhatsAppConversation
+              if (node.priority) convUpdate.priority = node.priority;
+              if (node.temperature) convUpdate.temperature = node.temperature;
+              // Always sync tags to conversation
+              if (node.tags) {
                 let convTags = (conv.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
                 if (!convTags.includes(node.tags)) convTags.push(node.tags);
-                const newConvTags = convTags.join(', ');
-                console.log(`[CRM Node] updating conv tags to: "${newConvTags}"`);
-                await prisma.whatsAppConversation.update({ 
-                  where: { id: conv.id }, 
-                  data: { tags: newConvTags } 
-                });
-                console.log(`[CRM Node] conv tags updated OK`);
+                convUpdate.tags = convTags.join(', ');
+              }
+              console.log(`[CRM Node] convUpdate:`, JSON.stringify(convUpdate));
+              if (Object.keys(convUpdate).length > 0) {
+                await prisma.whatsAppConversation.update({ where: { id: conv.id }, data: convUpdate });
+                console.log(`[CRM Node] conv updated OK with tags: "${convUpdate.tags}"`);
               }
             }
           } else {
