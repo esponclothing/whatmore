@@ -321,50 +321,53 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
         try {
           const cleanPhone = toPhone.replace(/\D/g, '').slice(-10);
           console.log(`[CRM Node] toPhone="${toPhone}" cleanPhone="${cleanPhone}" node.tags="${node.tags}"`);
-          const customer = await prisma.customer.findFirst({
-            where: { OR: [{ mobile: { contains: cleanPhone } }, { whatsappNumber: { contains: cleanPhone } }] }
-          });
-          console.log(`[CRM Node] customer found: ${customer ? customer.id : 'NOT FOUND'} mobile="${customer?.mobile}" tags="${customer?.tags}"`);
+          let conv = conversationId 
+            ? await prisma.whatsAppConversation.findUnique({ where: { id: conversationId }, include: { customer: true } })
+            : null;
+          let customer = conv?.customer;
+
+          if (!customer) {
+            customer = await prisma.customer.findFirst({
+              where: { OR: [{ mobile: { contains: cleanPhone } }, { whatsappNumber: { contains: cleanPhone } }] }
+            });
+          }
+
           if (customer) {
-            // Only update fields that exist on Customer model
             let customerUpdate: any = {};
             if (node.leadStage) customerUpdate.leadStage = node.leadStage;
             if (node.customerType) customerUpdate.customerType = node.customerType;
             if (node.tags) {
-              // Always rebuild tag list — even if tag already exists
               let existingTags = (customer.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
               if (!existingTags.includes(node.tags)) { existingTags.push(node.tags); }
               customerUpdate.tags = existingTags.join(', ');
             }
-            console.log(`[CRM Node] customerUpdate:`, JSON.stringify(customerUpdate));
             if (Object.keys(customerUpdate).length > 0) {
               await prisma.customer.update({ where: { id: customer.id }, data: customerUpdate });
-              console.log(`[CRM Node] customer updated OK`);
             }
 
-            // Find the conversation to update priority/temperature/tags (these fields live on the conversation)
-            const conv = await prisma.whatsAppConversation.findFirst({ 
-              where: { customerId: customer.id }, 
-              orderBy: { updatedAt: 'desc' } 
-            });
-            console.log(`[CRM Node] conv found: ${conv ? conv.id : 'NOT FOUND'} convTags="${conv?.tags}"`);
+            if (!conv) {
+              conv = await prisma.whatsAppConversation.findFirst({ 
+                where: { customerId: customer.id }, 
+                orderBy: { updatedAt: 'desc' } 
+              });
+            }
+
             if (conv) {
               let convUpdate: any = {};
               if (node.temperature) convUpdate.temperature = node.temperature;
-              // Always sync tags to conversation
+              if (node.leadStage) convUpdate.leadStatus = node.leadStage;
               if (node.tags) {
                 let convTags = (conv.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
                 if (!convTags.includes(node.tags)) convTags.push(node.tags);
                 convUpdate.tags = convTags.join(', ');
               }
-              console.log(`[CRM Node] convUpdate:`, JSON.stringify(convUpdate));
               if (Object.keys(convUpdate).length > 0) {
                 await prisma.whatsAppConversation.update({ where: { id: conv.id }, data: convUpdate });
-                console.log(`[CRM Node] conv updated OK with tags: "${convUpdate.tags}"`);
+                console.log(`[CRM Node] Conversation ${conv.id} updated with tags="${convUpdate.tags}" leadStatus="${convUpdate.leadStatus}"`);
               }
             }
           } else {
-            console.error(`[CRM Node] Customer NOT FOUND for phone: ${toPhone} (cleaned: ${cleanPhone})`);
+            console.error(`[CRM Node] Customer NOT FOUND for phone: ${toPhone}`);
           }
         } catch (e) {
           console.error("CRM Update Node Error:", e);

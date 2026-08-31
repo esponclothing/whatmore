@@ -1175,12 +1175,21 @@ export default function WhatsAppInboxComponent() {
                         {isUnread && <span className="unread-counter-badge">{conv.unreadCount}</span>}
                       </div>
 
-                      <div className="conv-tags-line">
+                      <div className="conv-tags-line" style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', alignItems: 'center' }}>
                         <span className={`stage-tag ${conv.leadStatus?.toLowerCase().replace(/\s+/g, '-')}`}>
                           {conv.leadStatus || "New Lead"}
                         </span>
+                        {conv.tags && conv.tags.split(',').filter(Boolean).map((t: string) => {
+                          const tagClean = t.trim();
+                          if (!tagClean || tagClean === "Auto Created" || tagClean === "WhatsApp Lead") return null;
+                          return (
+                            <span key={tagClean} style={{ fontSize: "9.5px", padding: "1px 6px", borderRadius: "10px", background: "#e0e7ff", color: "#4338ca", fontWeight: 700, border: "1px solid #c7d2fe" }}>
+                              🏷️ {tagClean}
+                            </span>
+                          );
+                        })}
                         {conv._raw?.assignedEmployee && (
-                          <span style={{ fontSize: "9.5px", padding: "2px 6px", borderRadius: "12px", background: "#ffffff", color: "#334155", fontWeight: 600, display: "inline-flex", alignItems: "center", border: "1px solid #cbd5e1", marginLeft: "4px", gap: "3px" }}>
+                          <span style={{ fontSize: "9.5px", padding: "2px 6px", borderRadius: "12px", background: "#ffffff", color: "#334155", fontWeight: 600, display: "inline-flex", alignItems: "center", border: "1px solid #cbd5e1", marginLeft: "2px", gap: "3px" }}>
                             <User size={10} /> {conv._raw.assignedEmployee.user?.name || "Assigned"}
                           </span>
                         )}
