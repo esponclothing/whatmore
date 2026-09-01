@@ -83,7 +83,8 @@ import {
   deleteWhatsAppCannedResponseAction,
   sendWhatsAppTemplateAction,
   sendProductCardAction,
-  sendWhatsAppFlowMessageAction
+  sendWhatsAppFlowMessageAction,
+  getWhatsAppSettingsAction
 } from "@/app/actions/whatsAppPlatformActions";
 import { useWhatsAppStore } from "@/store/whatsappStore";
 import "./WhatsAppInbox.css";
@@ -232,6 +233,17 @@ export default function WhatsAppInboxComponent() {
   const [paymentAmount, setPaymentAmount] = useState<number>(45000);
   const [paymentDesc, setPaymentDesc] = useState<string>("Advance Payment for Order #ORD-1092");
   const [paymentDeliveryMethod, setPaymentDeliveryMethod] = useState<'both'|'link'|'qr'>('both');
+  const [paymentConfigured, setPaymentConfigured] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkPaymentSettings = async () => {
+      const res = await getWhatsAppSettingsAction();
+      if (res.success && res.settings?.activeGateway) {
+        setPaymentConfigured(true);
+      }
+    };
+    checkPaymentSettings();
+  }, []);
 
   // CRM Inline Edit States
   const [isEditingCRM, setIsEditingCRM] = useState<boolean>(false);
@@ -1424,14 +1436,16 @@ export default function WhatsAppInboxComponent() {
                   <UserCheck size={14} />
                   <span>{activeConvDetail.assignedEmployee?.user?.name ? `Assign (${activeConvDetail.assignedEmployee.user.name})` : "Assign"}</span>
                 </button>
-                <button className="chat-action-btn" onClick={() => setShowQuoteModal(true)} title="Create Quotation">
+                <button className="chat-action-btn" onClick={() => setShowQuoteModal(true)} title="Generate Quotation">
                   <FileText size={14} />
                   <span>Quotation</span>
                 </button>
-                <button className="chat-action-btn" onClick={() => setShowPaymentModal(true)} title="Send Payment Link">
-                  <CreditCard size={14} />
-                  <span>Payment</span>
-                </button>
+                {paymentConfigured && (
+                  <button className="chat-action-btn" onClick={() => setShowPaymentModal(true)} title="Send Payment Link">
+                    <CreditCard size={14} />
+                    <span>Payment</span>
+                  </button>
+                )}
                 <button
                   className="chat-action-btn"
                   disabled={aiToggleLoading}
@@ -2172,11 +2186,13 @@ export default function WhatsAppInboxComponent() {
               <h5 className="crm-section-title">Quick Actions</h5>
               <div className="crm-quick-btns">
                 <button className="crm-action-tile" onClick={() => setShowQuoteModal(true)}>
-                  <FileText size={14} /> Create Quotation
+                  <FileText size={14} /> Send Quotation
                 </button>
-                <button className="crm-action-tile" onClick={() => setShowPaymentModal(true)}>
-                  <CreditCard size={14} /> Send Payment Link
-                </button>
+                {paymentConfigured && (
+                  <button className="crm-action-tile" onClick={() => setShowPaymentModal(true)}>
+                    <CreditCard size={14} /> Send Payment Link
+                  </button>
+                )}
               </div>
             </div>
 
@@ -2525,45 +2541,90 @@ export default function WhatsAppInboxComponent() {
       )}
 
       {showPaymentModal && (
-        <div className="inbox-modal-backdrop" onClick={() => setShowPaymentModal(false)}>
-          <div className="inbox-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header-row">
-              <h3>Generate WhatsApp Payment Link</h3>
-              <button onClick={() => setShowPaymentModal(false)}>×</button>
+        <div className="inbox-modal-backdrop" onClick={() => setShowPaymentModal(false)} style={{ backdropFilter: "blur(4px)", background: "rgba(15,23,42,0.4)" }}>
+          <div className="inbox-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "460px", padding: 0, borderRadius: "16px", overflow: "hidden", boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)" }}>
+            <div className="modal-header-row" style={{ background: "linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%)", color: "white", padding: "20px 24px", borderBottom: "none" }}>
+              <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
+                <CreditCard size={20} /> Generate Payment Link
+              </h3>
+              <button onClick={() => setShowPaymentModal(false)} style={{ color: "white", opacity: 0.8 }}>×</button>
             </div>
-            <div className="modal-form-body">
-              <label>Amount (₹)</label>
-              <input
-                type="number"
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
-              />
-
-              <label>Payment Description</label>
-              <input
-                type="text"
-                value={paymentDesc}
-                onChange={(e) => setPaymentDesc(e.target.value)}
-              />
-
-              <label>What to send?</label>
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px", background: "#f8fafc", padding: "12px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", color: "#334155" }}>
-                  <input type="radio" name="deliveryMethod" value="both" checked={paymentDeliveryMethod === 'both'} onChange={() => setPaymentDeliveryMethod('both')} style={{ accentColor: "#4f46e5", cursor: "pointer" }} />
-                  <strong>Both</strong> (QR Code Image & Interactive Link Button)
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", color: "#334155" }}>
-                  <input type="radio" name="deliveryMethod" value="link" checked={paymentDeliveryMethod === 'link'} onChange={() => setPaymentDeliveryMethod('link')} style={{ accentColor: "#4f46e5", cursor: "pointer" }} />
-                  <strong>Link Only</strong> (Interactive "Pay Now" Button)
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", color: "#334155" }}>
-                  <input type="radio" name="deliveryMethod" value="qr" checked={paymentDeliveryMethod === 'qr'} onChange={() => setPaymentDeliveryMethod('qr')} style={{ accentColor: "#4f46e5", cursor: "pointer" }} />
-                  <strong>QR Only</strong> (QR Code Image with Scan Instructions)
-                </label>
+            <div className="modal-form-body" style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px", background: "#fff" }}>
+              
+              <div>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Amount (₹)</label>
+                <div style={{ position: "relative" }}>
+                  <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#64748b", fontWeight: 600, fontSize: "15px" }}>₹</span>
+                  <input
+                    type="number"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
+                    style={{ width: "100%", padding: "12px 14px 12px 32px", fontSize: "16px", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontWeight: 600, color: "#1e293b", transition: "all 0.2s" }}
+                    onFocus={(e) => e.target.style.borderColor = "#4f46e5"}
+                    onBlur={(e) => e.target.style.borderColor = "#cbd5e1"}
+                  />
+                </div>
               </div>
 
-              <button className="modal-submit-btn" onClick={handleSendPaymentSubmit}>
-                Send UPI / Card Payment Link in Chat
+              <div>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Payment Description</label>
+                <input
+                  type="text"
+                  value={paymentDesc}
+                  onChange={(e) => setPaymentDesc(e.target.value)}
+                  style={{ width: "100%", padding: "12px 14px", fontSize: "14px", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", color: "#334155", transition: "all 0.2s" }}
+                  onFocus={(e) => e.target.style.borderColor = "#4f46e5"}
+                  onBlur={(e) => e.target.style.borderColor = "#cbd5e1"}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "8px" }}>Delivery Method</label>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: "12px", padding: "12px", borderRadius: "10px", border: paymentDeliveryMethod === 'both' ? "2px solid #4f46e5" : "1px solid #e2e8f0", background: paymentDeliveryMethod === 'both' ? "#eff6ff" : "#fff", cursor: "pointer", transition: "all 0.2s" }}>
+                    <input type="radio" name="deliveryMethod" value="both" checked={paymentDeliveryMethod === 'both'} onChange={() => setPaymentDeliveryMethod('both')} style={{ accentColor: "#4f46e5", marginTop: "4px", transform: "scale(1.2)" }} />
+                    <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                      <strong style={{ fontSize: "14px", color: paymentDeliveryMethod === 'both' ? "#1e40af" : "#334155" }}>Both Options</strong>
+                      <span style={{ fontSize: "12px", color: "#64748b" }}>Send a scannable QR Image and an interactive "Pay Now" button link.</span>
+                    </div>
+                  </label>
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: "12px", padding: "12px", borderRadius: "10px", border: paymentDeliveryMethod === 'link' ? "2px solid #4f46e5" : "1px solid #e2e8f0", background: paymentDeliveryMethod === 'link' ? "#eff6ff" : "#fff", cursor: "pointer", transition: "all 0.2s" }}>
+                    <input type="radio" name="deliveryMethod" value="link" checked={paymentDeliveryMethod === 'link'} onChange={() => setPaymentDeliveryMethod('link')} style={{ accentColor: "#4f46e5", marginTop: "4px", transform: "scale(1.2)" }} />
+                    <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                      <strong style={{ fontSize: "14px", color: paymentDeliveryMethod === 'link' ? "#1e40af" : "#334155" }}>Link Button Only</strong>
+                      <span style={{ fontSize: "12px", color: "#64748b" }}>Send only the interactive WhatsApp CTA button for seamless checkout.</span>
+                    </div>
+                  </label>
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: "12px", padding: "12px", borderRadius: "10px", border: paymentDeliveryMethod === 'qr' ? "2px solid #4f46e5" : "1px solid #e2e8f0", background: paymentDeliveryMethod === 'qr' ? "#eff6ff" : "#fff", cursor: "pointer", transition: "all 0.2s" }}>
+                    <input type="radio" name="deliveryMethod" value="qr" checked={paymentDeliveryMethod === 'qr'} onChange={() => setPaymentDeliveryMethod('qr')} style={{ accentColor: "#4f46e5", marginTop: "4px", transform: "scale(1.2)" }} />
+                    <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                      <strong style={{ fontSize: "14px", color: paymentDeliveryMethod === 'qr' ? "#1e40af" : "#334155" }}>QR Code Only</strong>
+                      <span style={{ fontSize: "12px", color: "#64748b" }}>Send only the generated UPI QR image with scan instructions.</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <button 
+                onClick={handleSendPaymentSubmit}
+                style={{
+                  marginTop: "8px",
+                  padding: "14px",
+                  background: "#4f46e5",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  boxShadow: "0 4px 6px -1px rgba(79, 70, 229, 0.2), 0 2px 4px -1px rgba(79, 70, 229, 0.1)"
+                }}
+              >
+                <Send size={16} /> Send Request in Chat
               </button>
             </div>
           </div>
