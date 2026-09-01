@@ -305,7 +305,7 @@ async function getCreds() {
 }
 
 // Run nodes sequentially until a pause point or end
-async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, string>, toPhone: string, conversationId?: string) {
+async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, string>, toPhone: string, conversationId?: string, wasClosed: boolean = false) {
   let nextNodeId: string | null = startNodeId;
 
   while (nextNodeId) {
@@ -393,8 +393,9 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
 
           if (conv) {
             // If the chat is already OPEN and actively assigned to an agent, do not reassign it.
-            if (conv.status === 'OPEN' && conv.assignedEmployeeId) {
-              console.log(`[Flow Assign] Chat ${conv.id} is already OPEN and assigned to ${conv.assignedEmployeeId}. Skipping reassignment.`);
+            // We use wasClosed to check if it was actively OPEN *before* this message arrived.
+            if (!wasClosed && conv.assignedEmployeeId) {
+              console.log(`[Flow Assign] Chat ${conv.id} is actively OPEN and assigned to ${conv.assignedEmployeeId}. Skipping reassignment.`);
             } else if (node.assignmentMode === 'DIRECT' && node.agentId) {
               await prisma.whatsAppConversation.update({ 
                 where: { id: conv.id }, 
@@ -520,7 +521,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
 /**
  * Main Flow Engine Entry Point
  */
-export async function executeFlowEngine(senderPhone: string, userText: string, conversationId: string): Promise<boolean> {
+export async function executeFlowEngine(senderPhone: string, userText: string, conversationId: string, wasClosed: boolean = false): Promise<boolean> {
   try {
     // 1. Check active flow triggers first to see if a flow matches the keyword!
     const activeFlows = await prisma.whatsAppChatbotFlow.findMany({
@@ -594,7 +595,7 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
         customerType: customerForVars?.customerType || '',
       };
       
-      const result = await runNodes(nodes, matchedNextNodeId, profileVars, senderPhone, conversationId);
+      const result = await runNodes(nodes, matchedNextNodeId, profileVars, senderPhone, conversationId, wasClosed);
 
       if (result.status === 'ended') {
         await prisma.whatsAppFlowState.deleteMany({ where: { phone: senderPhone } });

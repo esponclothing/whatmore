@@ -230,6 +230,8 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      let wasClosed = false;
+
       if (!conversation) {
         conversation = await prisma.whatsAppConversation.create({
           data: {
@@ -245,7 +247,7 @@ export async function POST(req: NextRequest) {
           }
         });
       } else {
-        const wasClosed = conversation.status === "CLOSED";
+        wasClosed = conversation.status === "CLOSED";
         const preservedAgentId = conversation.assignedEmployeeId || customer.assignedSalespersonId;
 
         await prisma.whatsAppConversation.update({
@@ -293,7 +295,7 @@ export async function POST(req: NextRequest) {
       // Feature 2: Chatbot Flow Engine — check if a flow should intercept
       const isTextMessage = msg.type === "text" || msg.type === "interactive";
       if (isTextMessage) {
-        const flowHandled = await executeFlowEngine(fromPhone, textContent, conversation.id);
+        const flowHandled = await executeFlowEngine(fromPhone, textContent, conversation.id, wasClosed);
 
         if (!flowHandled && conversation.aiHandled) {
           // Feature 7: AI + Logging
