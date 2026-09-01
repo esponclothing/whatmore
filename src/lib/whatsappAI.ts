@@ -255,10 +255,13 @@ export async function searchProducts(userText: string) {
       }
 
       if (idx < 5) {
+        // Build clean title without repeating size in name — show size from dedicated field
+        const sizeLabel = p.size ? ` (${p.size})` : '';
+        const cleanTitle = p.name.replace(/\s*[-–]?\s*(M\s*to\s*X{1,3}L?|S\s*to\s*X{1,3}L?|\bXL\b|\bXXL\b|\bXXXL\b)[\s,]*/gi, '').trim();
         productLines.push(`Product: ${p.name} - Price: ₹${singlePrice} ${comboLine}`);
         carouselCards.push({
-          title: p.name.slice(0, 60),
-          price: cardPrice.slice(0, 160),
+          title: cleanTitle + sizeLabel,
+          price: cardPrice,
           image_url: p.images?.[0] || '',
           url: productUrl
         });
@@ -334,9 +337,11 @@ export async function sendWhatsAppProductCards(toPhone: string, cards: any[]) {
   for (const c of cardsToSend) {
     const fallbackImage = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/1024px-No_image_available.svg.png";
     const imageUrl = c.image_url || fallbackImage;
-    const caption = `*${c.title}*\nPrice: ${c.price}\n\n🛍️ Buy Now:\n${c.url}`.slice(0, 1024);
+    // Caption without Buy Now link (link goes in button)
+    const caption = `*${c.title}*\nPrice: ${c.price}`.slice(0, 1024);
 
-    const payload = {
+    // Step 1: Send product image with caption
+    const imagePayload = {
       messaging_product: "whatsapp",
       recipient_type: "individual",
       to: toPhone,
@@ -350,15 +355,63 @@ export async function sendWhatsAppProductCards(toPhone: string, cards: any[]) {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(imagePayload)
       });
       if (!res.ok) {
         const errorText = await res.text();
-        console.error("[sendWhatsAppProductCards Error]:", errorText);
+        console.error("[sendWhatsAppProductCards Image Error]:", errorText);
       }
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 400));
     } catch (err: any) {
-      console.error("[sendWhatsAppProductCards Catch]:", err.message);
+      console.error("[sendWhatsAppProductCards Image Catch]:", err.message);
+    }
+
+    // Step 2: Send a button message with "Buy Now" CTA
+    const buttonPayload = {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: toPhone,
+      type: "interactive",
+      interactive: {
+        type: "cta_url",
+        body: { text: `Shop now for ${c.title.slice(0, 60)}` },
+        action: {
+          name: "cta_url",
+          parameters: {
+            display_text: "🛍️ Buy Now",
+            url: c.url
+          }
+        }
+      }
+    };
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(buttonPayload)
+      });
+      if (!res.ok) {
+        const errorText = await res.text();
+        // If CTA button fails (some accounts don't support it), fall back to text link
+        if (errorText.includes('unsupported') || errorText.includes('invalid')) {
+          const fallbackPayload = {
+            messaging_product: "whatsapp",
+            to: toPhone,
+            type: "text",
+            text: { body: `🛍️ Buy Now: ${c.url}` }
+          };
+          await fetch(url, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(fallbackPayload)
+          });
+        } else {
+          console.error("[sendWhatsAppProductCards Button Error]:", errorText);
+        }
+      }
+      await new Promise(r => setTimeout(r, 400));
+    } catch (err: any) {
+      console.error("[sendWhatsAppProductCards Button Catch]:", err.message);
     }
   }
 }
