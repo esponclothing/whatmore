@@ -121,6 +121,7 @@ export async function GET(req: NextRequest) {
           order_status: "unknown",
           message_count: conv.unreadCount || 0,
           unreadCount: conv.unreadCount,
+          chat_status: (conv.status || 'OPEN').toLowerCase(),
           customerId: conv.customerId,
           assignedEmployeeId: conv.assignedEmployeeId,
           assignedEmployee: conv.assignedEmployee,
