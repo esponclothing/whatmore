@@ -3,9 +3,18 @@
 import React, { useState, useEffect } from "react";
 import {
   GitBranch, Plus, Search, RefreshCw, CheckCircle2, Clock, AlertCircle,
-  X, Send, Trash2, Eye, Info, HelpCircle
+  X, Send, Trash2, Eye, Info, HelpCircle, MessageSquare, Edit
 } from "lucide-react";
-import { getWhatsAppMetaFlows, saveWhatsAppMetaFlowAction, deleteWhatsAppMetaFlowAction, sendWhatsAppFlowMessageAction } from "@/app/actions/whatsAppPlatformActions";
+import { 
+  getWhatsAppMetaFlows, 
+  saveWhatsAppMetaFlowAction, 
+  deleteWhatsAppMetaFlowAction, 
+  sendWhatsAppFlowMessageAction,
+  getWhatsAppCannedResponsesAction,
+  createWhatsAppCannedResponseAction,
+  updateWhatsAppCannedResponseAction,
+  deleteWhatsAppCannedResponseAction
+} from "@/app/actions/whatsAppPlatformActions";
 
 const PREBUILT_TEMPLATES = [
   {
@@ -66,6 +75,17 @@ export default function WhatsAppFlowsPage() {
   const [testPhone, setTestPhone] = useState("");
   const [testingFlow, setTestingFlow] = useState<string | null>(null);
 
+  const [activeTab, setActiveTab] = useState<"flows" | "replies">("flows");
+  
+  // Canned Responses State
+  const [cannedResponses, setCannedResponses] = useState<any[]>([]);
+  const [loadingCanned, setLoadingCanned] = useState(true);
+  const [newReplyTitle, setNewReplyTitle] = useState("");
+  const [newReplyShortcut, setNewReplyShortcut] = useState("");
+  const [newReplyContent, setNewReplyContent] = useState("");
+  const [editingReply, setEditingReply] = useState<any>(null);
+  const [savingCanned, setSavingCanned] = useState(false);
+
   const showToast = (text: string, type: "success" | "error" = "success") => {
     setToastMsg({ text, type });
     setTimeout(() => setToastMsg(null), 4000);
@@ -78,9 +98,79 @@ export default function WhatsAppFlowsPage() {
     setLoading(false);
   };
 
+  const fetchCanned = async () => {
+    setLoadingCanned(true);
+    const res = await getWhatsAppCannedResponsesAction();
+    if (res.success && res.responses) setCannedResponses(res.responses);
+    setLoadingCanned(false);
+  };
+
   useEffect(() => {
     fetchFlows();
+    fetchCanned();
   }, []);
+
+  const handleCreateOrUpdateCannedResponse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newReplyTitle.trim() || !newReplyShortcut.trim() || !newReplyContent.trim()) {
+      showToast("Please fill in all fields.", "error");
+      return;
+    }
+
+    setSavingCanned(true);
+    let res;
+    if (editingReply) {
+      res = await updateWhatsAppCannedResponseAction(editingReply.id, {
+        title: newReplyTitle,
+        shortcut: newReplyShortcut,
+        content: newReplyContent
+      });
+    } else {
+      res = await createWhatsAppCannedResponseAction({
+        title: newReplyTitle,
+        shortcut: newReplyShortcut,
+        content: newReplyContent
+      });
+    }
+
+    if (res.success) {
+      showToast(editingReply ? "Canned reply updated!" : "Canned reply created!");
+      setNewReplyTitle("");
+      setNewReplyShortcut("");
+      setNewReplyContent("");
+      setEditingReply(null);
+      await fetchCanned();
+    } else {
+      showToast(res.error || "Failed to save canned reply.", "error");
+    }
+    setSavingCanned(false);
+  };
+
+  const handleDeleteCannedResponse = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this canned response?")) return;
+    const res = await deleteWhatsAppCannedResponseAction(id);
+    if (res.success) {
+      showToast("Canned reply deleted.");
+      await fetchCanned();
+    } else {
+      showToast(res.error || "Failed to delete.", "error");
+    }
+  };
+
+  const handleEditClick = (reply: any) => {
+    setEditingReply(reply);
+    setNewReplyTitle(reply.title);
+    setNewReplyShortcut(reply.shortcut || "");
+    setNewReplyContent(reply.content);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingReply(null);
+    setNewReplyTitle("");
+    setNewReplyShortcut("");
+    setNewReplyContent("");
+  };
 
   const selectPrebuiltTemplate = (tpl: typeof PREBUILT_TEMPLATES[0]) => {
     setName(tpl.name);
@@ -177,27 +267,54 @@ export default function WhatsAppFlowsPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "28px", gap: "20px" }}>
         <div>
           <h1 style={{ fontSize: "24px", fontWeight: 800, color: "#0f172a", margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
-            ⚡ Interactive Meta Flows
+            ⚡ Automations & Flows
           </h1>
           <p style={{ fontSize: "14px", color: "#64748b", marginTop: "6px", lineHeight: 1.5, maxWidth: "700px" }}>
-            Build customized form questionnaires, size calculators, surveys, and bookings that customers open directly inside their WhatsApp screen.
+            Manage interactive WhatsApp Flows and your Quick Reply library for faster customer support.
           </p>
         </div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexShrink: 0 }}>
-          <input
-            value={testPhone}
-            onChange={e => setTestPhone(e.target.value)}
-            placeholder="Test Phone (91XXXXXXXXXX)"
-            style={{ padding: "10px 14px", border: "1px solid #cbd5e1", borderRadius: "10px", fontSize: "13px", width: "200px", outline: "none", transition: "all 0.2s" }}
-          />
-          <button onClick={fetchFlows} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "10px 16px", background: "white", border: "1px solid #cbd5e1", borderRadius: "10px", fontSize: "13.5px", fontWeight: 700, color: "#475569", cursor: "pointer", transition: "all 0.2s" }}>
-            <RefreshCw size={14} /> Refresh
-          </button>
-          <button onClick={() => { resetForm(); setShowCreateModal(true); }} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "10px 18px", background: "#6d28d9", border: "none", borderRadius: "10px", fontSize: "13.5px", fontWeight: 700, color: "white", cursor: "pointer", boxShadow: "0 4px 12px rgba(109,40,217,0.2)", transition: "all 0.2s" }}>
-            <Plus size={16} /> Create Flow
-          </button>
-        </div>
       </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: "24px", borderBottom: "1px solid #e2e8f0", marginBottom: "24px" }}>
+        <button
+          onClick={() => setActiveTab("flows")}
+          style={{
+            background: "none", border: "none", borderBottom: activeTab === "flows" ? "2px solid #6d28d9" : "2px solid transparent",
+            padding: "0 4px 12px", fontSize: "14px", fontWeight: 600, color: activeTab === "flows" ? "#6d28d9" : "#64748b",
+            cursor: "pointer", transition: "all 0.2s", display: "flex", alignItems: "center", gap: "6px"
+          }}
+        >
+          <GitBranch size={16} /> Interactive Meta Flows
+        </button>
+        <button
+          onClick={() => setActiveTab("replies")}
+          style={{
+            background: "none", border: "none", borderBottom: activeTab === "replies" ? "2px solid #6d28d9" : "2px solid transparent",
+            padding: "0 4px 12px", fontSize: "14px", fontWeight: 600, color: activeTab === "replies" ? "#6d28d9" : "#64748b",
+            cursor: "pointer", transition: "all 0.2s", display: "flex", alignItems: "center", gap: "6px"
+          }}
+        >
+          <MessageSquare size={16} /> Quick Replies / Canned
+        </button>
+      </div>
+
+      {activeTab === "flows" && (
+        <>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px", gap: "10px", alignItems: "center" }}>
+            <input
+              value={testPhone}
+              onChange={e => setTestPhone(e.target.value)}
+              placeholder="Test Phone (91XXXXXXXXXX)"
+              style={{ padding: "10px 14px", border: "1px solid #cbd5e1", borderRadius: "10px", fontSize: "13px", width: "200px", outline: "none", transition: "all 0.2s" }}
+            />
+            <button onClick={fetchFlows} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "10px 16px", background: "white", border: "1px solid #cbd5e1", borderRadius: "10px", fontSize: "13.5px", fontWeight: 700, color: "#475569", cursor: "pointer", transition: "all 0.2s" }}>
+              <RefreshCw size={14} /> Refresh
+            </button>
+            <button onClick={() => { resetForm(); setShowCreateModal(true); }} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "10px 18px", background: "#6d28d9", border: "none", borderRadius: "10px", fontSize: "13.5px", fontWeight: 700, color: "white", cursor: "pointer", boxShadow: "0 4px 12px rgba(109,40,217,0.2)", transition: "all 0.2s" }}>
+              <Plus size={16} /> Create Flow
+            </button>
+          </div>
 
       {/* List of Flows */}
       {loading ? (
@@ -257,6 +374,133 @@ export default function WhatsAppFlowsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+      </>
+      )}
+
+      {activeTab === "replies" && (
+        <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
+          
+          {/* Create / Edit Form */}
+          <form onSubmit={handleCreateOrUpdateCannedResponse} style={{ flex: "0 0 350px", background: "white", padding: "20px", borderRadius: "16px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "16px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", position: "sticky", top: "20px" }}>
+            <h4 style={{ fontSize: "16px", fontWeight: 800, color: "#0f172a", margin: "0" }}>
+              {editingReply ? "📝 Edit Canned Response" : "＋ Create New Canned Response"}
+            </h4>
+            
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#64748b", marginBottom: "6px" }}>TITLE *</label>
+              <input
+                type="text"
+                placeholder="e.g. Greeting"
+                value={newReplyTitle}
+                onChange={(e) => setNewReplyTitle(e.target.value)}
+                style={{ width: "100%", padding: "10px 14px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13.5px", outline: "none" }}
+                required
+              />
+            </div>
+            
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#64748b", marginBottom: "6px" }}>SHORTCUT CODE *</label>
+              <input
+                type="text"
+                placeholder="e.g. /hi"
+                value={newReplyShortcut}
+                onChange={(e) => setNewReplyShortcut(e.target.value)}
+                style={{ width: "100%", padding: "10px 14px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13.5px", outline: "none" }}
+                required
+              />
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#64748b", marginBottom: "6px" }}>REPLY BODY CONTENT *</label>
+              <textarea
+                rows={5}
+                placeholder="Type the message to send when shortcut is typed..."
+                value={newReplyContent}
+                onChange={(e) => setNewReplyContent(e.target.value)}
+                style={{ width: "100%", padding: "10px 14px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13.5px", resize: "vertical", outline: "none" }}
+                required
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+              {editingReply && (
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  style={{ flex: 1, background: "#f1f5f9", border: "none", borderRadius: "8px", padding: "10px", fontSize: "13.5px", fontWeight: 600, color: "#475569", cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+              )}
+
+              <button
+                type="submit"
+                disabled={savingCanned}
+                style={{ flex: 2, background: "#6d28d9", border: "none", borderRadius: "8px", padding: "10px", fontSize: "13.5px", fontWeight: 700, color: "#ffffff", cursor: "pointer", boxShadow: "0 4px 12px rgba(109,40,217,0.2)" }}
+              >
+                {savingCanned ? "Saving..." : editingReply ? "Save Changes" : "Create Reply"}
+              </button>
+            </div>
+          </form>
+
+          {/* List */}
+          <div style={{ flex: 1 }}>
+            {loadingCanned ? (
+              <div style={{ textAlign: "center", padding: "40px", color: "#9ca3af" }}>Loading...</div>
+            ) : cannedResponses.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "60px 20px", color: "#9ca3af", background: "white", borderRadius: "16px", border: "1px solid #e2e8f0" }}>
+                <MessageSquare size={40} style={{ marginBottom: "16px", opacity: 0.3 }} />
+                <h3 style={{ fontWeight: 700, marginBottom: "8px", color: "#374151" }}>No Quick Replies</h3>
+                <p style={{ fontSize: "13px" }}>Create your first canned response using the form on the left.</p>
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" }}>
+                {cannedResponses.map((cr) => (
+                  <div
+                    key={cr.id}
+                    style={{
+                      background: "white",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "12px",
+                      padding: "16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <strong style={{ fontSize: "14px", color: "#0f172a" }}>{cr.title}</strong>
+                        <span style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#3b82f6", padding: "2px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, alignSelf: "flex-start" }}>
+                          {cr.shortcut}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        <button
+                          onClick={() => handleEditClick(cr)}
+                          style={{ background: "#eff6ff", border: "none", color: "#3b82f6", padding: "6px", borderRadius: "6px", cursor: "pointer" }}
+                        >
+                          <Edit size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCannedResponse(cr.id)}
+                          style={{ background: "#fef2f2", border: "none", color: "#ef4444", padding: "6px", borderRadius: "6px", cursor: "pointer" }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                    <p style={{ fontSize: "13px", color: "#475569", margin: 0, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                      {cr.content}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
