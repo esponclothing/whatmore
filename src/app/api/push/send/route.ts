@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import webPush from "web-push";
 
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BB-KZlpv_rpNWxWRhy0qmhKvmRPSD54y7BKlbA07xsuRbUlEbDLASekDIHTFgX-au3sAOSG4WJ5ZaHgk9tJ0HEg";
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "yWJ-C37EvnvQMHhHuwWSwCiOn3Ni7x5Rt3pywRbdjso";
+const VAPID_PUBLIC_KEY = "BB-KZlpv_rpNWxWRhy0qmhKvmRPSD54y7BKlbA07xsuRbUlEbDLASekDIHTFgX-au3sAOSG4WJ5ZaHgk9tJ0HEg";
+const VAPID_PRIVATE_KEY = "yWJ-C37EvnvQMHhHuwWSwCiOn3Ni7x5Rt3pywRbdjso";
 
 webPush.setVapidDetails(
   "mailto:support@whatmore.com",
