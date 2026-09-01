@@ -611,7 +611,7 @@ export default function WhatsAppFlowsPage() {
           </form>
 
           {/* Live Preview Side Panel */}
-          <div style={{ flex: "0 0 300px", background: "#e5ddd5", padding: "16px", borderRadius: "16px", position: "sticky", top: "20px", border: "1px solid #cbd5e1", display: "flex", flexDirection: "column", gap: "10px", backgroundImage: "url('https://i.ibb.co/37jM3K9/bg-chat.png')", backgroundSize: "cover" }}>
+          <div style={{ flex: "0 0 300px", backgroundColor: "#e5ddd5", padding: "16px", borderRadius: "16px", position: "sticky", top: "20px", border: "1px solid #cbd5e1", display: "flex", flexDirection: "column", gap: "10px", backgroundImage: "radial-gradient(#cbd5e1 1px, transparent 1px)", backgroundSize: "12px 12px" }}>
             <h4 style={{ fontSize: "14px", fontWeight: 700, color: "#111827", margin: "0 0 8px", textAlign: "center", background: "rgba(255,255,255,0.9)", padding: "6px", borderRadius: "8px" }}>
               Live Preview
             </h4>
