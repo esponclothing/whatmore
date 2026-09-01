@@ -2505,13 +2505,43 @@ export default function WhatsAppChatbotBuilderPage() {
 
                     <input
                       type="text"
-                      placeholder="Or paste image URL (https://...)"
+                      placeholder="Or paste image URL or CTRL+V to paste image file directly..."
                       value={selectedNode.imageUrl || ""}
                       onChange={(e) =>
                         setNodes((prev) =>
                           prev.map((n) => (n.id === selectedNode.id ? { ...n, imageUrl: e.target.value } : n))
                         )
                       }
+                      onPaste={(e) => {
+                        const items = e.clipboardData?.items;
+                        if (!items) return;
+                        
+                        for (let i = 0; i < items.length; i++) {
+                          if (items[i].type.indexOf("image") !== -1) {
+                            e.preventDefault(); // Prevent pasting the filename string
+                            const file = items[i].getAsFile();
+                            if (!file) continue;
+                            
+                            if (file.size > 5 * 1024 * 1024) {
+                              setToastMsg("❌ Image size must be less than 5MB");
+                              setTimeout(() => setToastMsg(null), 3000);
+                              return;
+                            }
+
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              const result = reader.result as string;
+                              setNodes((prev) =>
+                                prev.map((n) => (n.id === selectedNode.id ? { ...n, imageUrl: result } : n))
+                              );
+                              setToastMsg(`✓ Image pasted successfully!`);
+                              setTimeout(() => setToastMsg(null), 3000);
+                            };
+                            reader.readAsDataURL(file);
+                            return; // Stop after first image
+                          }
+                        }
+                      }}
                       style={{
                         width: "100%",
                         padding: "6px 8px",
