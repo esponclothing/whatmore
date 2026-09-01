@@ -403,6 +403,13 @@ export async function sendWhatsAppMessageAction(data: {
         } else if (data.messageType === 'AUDIO' && data.mediaUrl) {
            payload.type = 'audio';
            payload.audio = { ...mediaField }; // Audio does not support caption in Meta API
+        } else if (data.messageType === 'PAYMENT_LINK' && data.mediaUrl) {
+           payload.type = 'interactive';
+           payload.interactive = {
+             type: 'cta_url',
+             body: { text: data.content },
+             action: { name: 'cta_url', parameters: { display_text: '💳 Pay Now', url: data.mediaUrl } }
+           };
         } else {
            payload.type = 'text';
            payload.text = { body: data.content };
@@ -686,7 +693,47 @@ export async function generateWhatsAppPaymentLinkAction(data: {
   description: string;
 }) {
   try {
-    const paymentUrl = `https://espon.in/pay/wa_${Date.now()}`;
+    const creds = await prisma.whatsAppSettings.findFirst();
+    const gw = creds?.activeGateway;
+    let paymentUrl = `https://whatmore-production.up.railway.app/pay/wa_${Date.now()}`;
+
+    const customer = await prisma.customer.findUnique({ where: { id: data.customerId } });
+    const contactPhone = customer?.whatsappNumber ? customer.whatsappNumber.replace(/\D/g, '') : (customer?.mobile || '').replace(/\D/g, '').slice(-10) || '9999999999';
+
+    if (gw === 'RAZORPAY' && creds?.razorpayKeyId && creds?.razorpayKeySecret) {
+      const auth = Buffer.from(`${creds.razorpayKeyId}:${creds.razorpayKeySecret}`).toString('base64');
+      const rzpRes = await fetch('https://api.razorpay.com/v1/payment_links', {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: Math.round(data.amount * 100),
+          currency: 'INR',
+          description: data.description,
+          customer: { name: customer?.contactPerson || 'Customer', contact: `+91${contactPhone}` },
+          notify: { sms: false, email: false },
+          reminder_enable: false
+        })
+      });
+      const rzpData = await rzpRes.json();
+      if (rzpData.short_url) paymentUrl = rzpData.short_url;
+    } else if (gw === 'CASHFREE' && creds?.cashfreeAppId && creds?.cashfreeSecretKey) {
+      const cfRes = await fetch('https://api.cashfree.com/pg/links', {
+        method: 'POST',
+        headers: { 'x-api-version': '2023-08-01', 'x-client-id': creds.cashfreeAppId, 'x-client-secret': creds.cashfreeSecretKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          link_id: `wm_${Date.now()}`,
+          link_amount: data.amount,
+          link_currency: 'INR',
+          link_purpose: data.description,
+          customer_details: { customer_phone: contactPhone, customer_name: customer?.contactPerson || 'Customer' }
+        })
+      });
+      const cfData = await cfRes.json();
+      if (cfData.link_url) paymentUrl = cfData.link_url;
+    } else if (gw === 'UPI' && creds?.merchantUpiId) {
+      const domain = process.env.NEXTAUTH_URL || 'https://whatmore-production.up.railway.app';
+      paymentUrl = `${domain}/pay?pa=${encodeURIComponent(creds.merchantUpiId)}&pn=${encodeURIComponent(creds.merchantUpiName || 'Espon')}&am=${data.amount}&tn=${encodeURIComponent(data.description)}`;
+    }
     
     const paymentLink = await prisma.whatsAppPaymentLink.create({
       data: {
@@ -704,7 +751,8 @@ export async function generateWhatsAppPaymentLinkAction(data: {
       senderType: 'AGENT',
       senderName: 'Billing System',
       messageType: 'PAYMENT_LINK',
-      content: `Payment Request: ₹${data.amount.toLocaleString('en-IN')} for ${data.description}.\nClick link to complete payment via UPI / Card / NetBanking:\n${paymentUrl}`,
+      content: `💳 *Payment Request*\n\nAmount: ₹${data.amount.toLocaleString('en-IN')}\nDescription: ${data.description}\n\nClick below to pay securely:`,
+      mediaUrl: paymentUrl, // Handled as CTA URL inside sendWhatsAppMessageAction
       metadata: JSON.stringify({ paymentLinkId: paymentLink.id, amount: data.amount, paymentUrl })
     });
 
