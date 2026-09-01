@@ -603,32 +603,8 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
         } else if (gw === 'UPI' && creds?.merchantUpiId) {
           const upiId = creds.merchantUpiId;
           const payeeName = creds.merchantUpiName || 'Espon';
-          const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(desc)}`;
-          const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(upiLink)}`;
-          const msgText = `💳 *Payment Request*\n\nAmount: ₹${amount}\nDescription: ${desc}\n\n🏦 UPI ID: *${upiId}*\n\nScan this QR to pay, or copy the UPI ID above.`;
-
-          const acct = await getCreds();
-          if (acct) {
-            const imgPayload = {
-              messaging_product: 'whatsapp', to: `91${cleanPhone}`, type: 'image',
-              image: { link: qrApiUrl, caption: msgText.slice(0, 1024) }
-            };
-            await fetch(`https://graph.facebook.com/v20.0/${acct.phoneId}/messages`, {
-              method: 'POST', headers: { 'Authorization': `Bearer ${acct.token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify(imgPayload)
-            });
-
-            // Log as BOT message
-            const resolvedConvId = conversationId || (await prisma.whatsAppConversation.findFirst({ where: { customer: { OR: [{ mobile: { contains: cleanPhone } }, { whatsappNumber: { contains: cleanPhone } }] } }, orderBy: { updatedAt: 'desc' } }))?.id;
-            if (resolvedConvId) {
-              await prisma.whatsAppMessage.create({
-                data: {
-                  conversationId: resolvedConvId, senderType: 'BOT', senderName: 'Chatbot',
-                  messageType: 'TEXT', content: msgText, status: 'SENT', sentAt: new Date()
-                }
-              });
-            }
-          }
+          const domain = process.env.NEXTAUTH_URL || 'https://whatmore-production.up.railway.app';
+          payUrl = `${domain}/pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${amount}&tn=${encodeURIComponent(desc)}`;
         }
 
         if (payUrl) {
