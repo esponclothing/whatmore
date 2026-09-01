@@ -691,6 +691,7 @@ export async function generateWhatsAppPaymentLinkAction(data: {
   customerId: string;
   amount: number;
   description: string;
+  deliveryMethod?: 'link' | 'qr' | 'both';
 }) {
   try {
     const creds = await prisma.whatsAppSettings.findFirst();
@@ -739,14 +740,16 @@ export async function generateWhatsAppPaymentLinkAction(data: {
       const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(upiLink)}`;
       const qrMsgText = `🏦 UPI ID: *${creds.merchantUpiId}*\n\nScan this QR to pay, or click the Pay Now button below.`;
 
-      await sendWhatsAppMessageAction({
-        conversationId: data.conversationId,
-        senderType: 'AGENT',
-        senderName: 'Billing System',
-        messageType: 'IMAGE',
-        content: qrMsgText,
-        mediaUrl: qrApiUrl,
-      });
+      if (data.deliveryMethod === 'qr' || data.deliveryMethod === 'both' || !data.deliveryMethod) {
+        await sendWhatsAppMessageAction({
+          conversationId: data.conversationId,
+          senderType: 'AGENT',
+          senderName: 'Billing System',
+          messageType: 'IMAGE',
+          content: qrMsgText,
+          mediaUrl: qrApiUrl,
+        });
+      }
     }
     
     const paymentLink = await prisma.whatsAppPaymentLink.create({
@@ -759,16 +762,18 @@ export async function generateWhatsAppPaymentLinkAction(data: {
       }
     });
 
-    // Send Payment Link Message into WhatsApp Chat
-    await sendWhatsAppMessageAction({
-      conversationId: data.conversationId,
-      senderType: 'AGENT',
-      senderName: 'Billing System',
-      messageType: 'PAYMENT_LINK',
-      content: `💳 *Payment Request*\n\nAmount: ₹${data.amount.toLocaleString('en-IN')}\nDescription: ${data.description}\n\nClick below to pay securely:`,
-      mediaUrl: paymentUrl, // Handled as CTA URL inside sendWhatsAppMessageAction
-      metadata: JSON.stringify({ paymentLinkId: paymentLink.id, amount: data.amount, paymentUrl })
-    });
+    // Send Payment Link Message into WhatsApp Chat conditionally
+    if (data.deliveryMethod === 'link' || data.deliveryMethod === 'both' || !data.deliveryMethod) {
+      await sendWhatsAppMessageAction({
+        conversationId: data.conversationId,
+        senderType: 'AGENT',
+        senderName: 'Billing System',
+        messageType: 'PAYMENT_LINK',
+        content: `💳 *Payment Request*\n\nAmount: ₹${data.amount.toLocaleString('en-IN')}\nDescription: ${data.description}\n\nClick below to pay securely:`,
+        mediaUrl: paymentUrl, // Handled as CTA URL inside sendWhatsAppMessageAction
+        metadata: JSON.stringify({ paymentLinkId: paymentLink.id, amount: data.amount, paymentUrl })
+      });
+    }
 
     await prisma.whatsAppConversation.update({
       where: { id: data.conversationId },

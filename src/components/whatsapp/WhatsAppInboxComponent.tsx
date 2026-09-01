@@ -231,6 +231,7 @@ export default function WhatsAppInboxComponent() {
   // Payment Form State
   const [paymentAmount, setPaymentAmount] = useState<number>(45000);
   const [paymentDesc, setPaymentDesc] = useState<string>("Advance Payment for Order #ORD-1092");
+  const [paymentDeliveryMethod, setPaymentDeliveryMethod] = useState<'both'|'link'|'qr'>('both');
 
   // CRM Inline Edit States
   const [isEditingCRM, setIsEditingCRM] = useState<boolean>(false);
@@ -944,7 +945,8 @@ export default function WhatsAppInboxComponent() {
       conversationId: selectedConvId,
       customerId: activeConvDetail.customer.id,
       amount: paymentAmount,
-      description: paymentDesc
+      description: paymentDesc,
+      deliveryMethod: paymentDeliveryMethod
     });
     if (res.success) {
       setShowPaymentModal(false);
@@ -2543,6 +2545,22 @@ export default function WhatsAppInboxComponent() {
                 value={paymentDesc}
                 onChange={(e) => setPaymentDesc(e.target.value)}
               />
+
+              <label>What to send?</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px", background: "#f8fafc", padding: "12px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", color: "#334155" }}>
+                  <input type="radio" name="deliveryMethod" value="both" checked={paymentDeliveryMethod === 'both'} onChange={() => setPaymentDeliveryMethod('both')} style={{ accentColor: "#4f46e5", cursor: "pointer" }} />
+                  <strong>Both</strong> (QR Code Image & Interactive Link Button)
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", color: "#334155" }}>
+                  <input type="radio" name="deliveryMethod" value="link" checked={paymentDeliveryMethod === 'link'} onChange={() => setPaymentDeliveryMethod('link')} style={{ accentColor: "#4f46e5", cursor: "pointer" }} />
+                  <strong>Link Only</strong> (Interactive "Pay Now" Button)
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", color: "#334155" }}>
+                  <input type="radio" name="deliveryMethod" value="qr" checked={paymentDeliveryMethod === 'qr'} onChange={() => setPaymentDeliveryMethod('qr')} style={{ accentColor: "#4f46e5", cursor: "pointer" }} />
+                  <strong>QR Only</strong> (QR Code Image with Scan Instructions)
+                </label>
+              </div>
 
               <button className="modal-submit-btn" onClick={handleSendPaymentSubmit}>
                 Send UPI / Card Payment Link in Chat
