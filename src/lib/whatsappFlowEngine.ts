@@ -392,7 +392,10 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
           }
 
           if (conv) {
-            if (node.assignmentMode === 'DIRECT' && node.agentId) {
+            // If the chat is already OPEN and actively assigned to an agent, do not reassign it.
+            if (conv.status === 'OPEN' && conv.assignedEmployeeId) {
+              console.log(`[Flow Assign] Chat ${conv.id} is already OPEN and assigned to ${conv.assignedEmployeeId}. Skipping reassignment.`);
+            } else if (node.assignmentMode === 'DIRECT' && node.agentId) {
               await prisma.whatsAppConversation.update({ 
                 where: { id: conv.id }, 
                 data: { assignedEmployeeId: node.agentId, status: 'OPEN' } 
