@@ -658,7 +658,8 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
       if (type === 'CHOICE' || type === 'BUTTONS' || type === 'LIST_MENU') {
         const choices = currentNode.choices || [];
         const matchIndex = choices.findIndex((c: any) =>
-          c.text && (
+          c.text &&
+          (
             userText.toLowerCase().includes(String(c.text).toLowerCase()) ||
             String(c.text).toLowerCase().includes(userText.toLowerCase()) ||
             String(c.text).toLowerCase().slice(0, 20) === userText.toLowerCase()
@@ -667,6 +668,29 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
 
         if (matchIndex !== -1) {
           nextNodeId = choices[matchIndex].targetNode;
+        } else {
+          // Unrecognized input on a CHOICE node — re-send the menu and stay paused
+          const cleanPhoneForResend = senderPhone.replace(/\D/g, '').slice(-10);
+          const custForResend = await prisma.customer.findFirst({
+            where: { OR: [{ mobile: { contains: cleanPhoneForResend } }, { whatsappNumber: { contains: cleanPhoneForResend } }] }
+          });
+          const acctForResend = await prisma.whatsAppAccount.findFirst();
+          if (acctForResend && custForResend) {
+            const menuText = `Please select one of the options:\n${choices.map((c: any, i: number) => `${i + 1}. ${c.text}`).join('\n')}`;
+            const resendPayload: any = {
+              messaging_product: 'whatsapp',
+              to: `91${cleanPhoneForResend}`,
+              type: 'text',
+              text: { body: menuText }
+            };
+            await fetch(`https://graph.facebook.com/v20.0/${acctForResend.phoneId}/messages`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${acctForResend.accessToken}` },
+              body: JSON.stringify(resendPayload)
+            });
+          }
+          // Stay paused at this node
+          return true;
         }
       }
 
