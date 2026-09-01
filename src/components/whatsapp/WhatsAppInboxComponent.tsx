@@ -210,11 +210,15 @@ export default function WhatsAppInboxComponent() {
   const [newTagColor, setNewTagColor] = useState("#e2e8f0");
   const [isCreatingTag, setIsCreatingTag] = useState(false);
 
-  // Unified active tags (merged between conversation and customer)
+  // Unified active tags (merged between conversation and customer, excluding legacy auto-tags)
   const activeTagsList = useMemo(() => {
+    const isAuto = (t: string) => {
+      const l = t.toLowerCase().trim();
+      return l === 'whatsapp lead' || l === 'auto created';
+    };
     const t1 = (activeConvDetail?.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
     const t2 = (activeConvDetail?.customer?.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
-    return Array.from(new Set([...t1, ...t2]));
+    return Array.from(new Set([...t1, ...t2])).filter(t => !isAuto(t));
   }, [activeConvDetail?.tags, activeConvDetail?.customer?.tags]);
 
   // Quote Form State
@@ -2569,7 +2573,10 @@ export default function WhatsAppInboxComponent() {
                   Available Tags
                 </span>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px", maxHeight: "200px", overflowY: "auto" }}>
-                  {availableTags.map((tag) => {
+                  {availableTags.filter(tag => {
+                    const l = (tag.name || '').toLowerCase().trim();
+                    return l !== 'whatsapp lead' && l !== 'auto created';
+                  }).map((tag) => {
                     const isAssigned = activeTagsList.includes(tag.name);
                     return (
                       <div key={tag.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '6px' }}>

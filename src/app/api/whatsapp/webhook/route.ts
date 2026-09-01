@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
             leadStage: "New Enquiry",
             temperature: "HOT",
             assignedSalespersonId: defaultEmployee?.id,
-            tags: "WhatsApp Lead, Auto Created"
+            tags: null
           }
         });
       } else if (whatsappProfileName && (customer.contactPerson?.startsWith("Contact +91") || customer.contactPerson === "Unknown Lead" || !customer.contactPerson)) {
@@ -241,7 +241,7 @@ export async function POST(req: NextRequest) {
             lastMessageText: textContent,
             lastMessageAt: messageTimestamp,
             unreadCount: 1,
-            tags: customer.tags
+            tags: null
           }
         });
       } else {

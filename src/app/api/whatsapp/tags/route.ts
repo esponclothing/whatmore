@@ -3,8 +3,12 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
-    const tags = await prisma.whatsAppTag.findMany({
+    const rawTags = await prisma.whatsAppTag.findMany({
       orderBy: { createdAt: 'desc' }
+    });
+    const tags = rawTags.filter(t => {
+      const l = t.name.toLowerCase().trim();
+      return l !== 'whatsapp lead' && l !== 'auto created';
     });
     return NextResponse.json({ success: true, tags });
   } catch (error: any) {

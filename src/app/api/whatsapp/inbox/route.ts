@@ -113,7 +113,10 @@ export async function GET(req: NextRequest) {
           tags: Array.from(new Set([
             ...(conv.tags || '').split(','),
             ...(conv.customer?.tags || '').split(',')
-          ])).map((t: string) => t.trim()).filter(Boolean),
+          ])).map((t: string) => t.trim()).filter(Boolean).filter(t => {
+            const l = t.toLowerCase().trim();
+            return l !== 'whatsapp lead' && l !== 'auto created';
+          }),
           order_count: conv.customer?.totalOrders || 0,
           order_status: "unknown",
           message_count: conv.unreadCount || 0,
@@ -261,17 +264,29 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      // Consolidate and sync tags between conversation and customer
+      // Consolidate and sync tags between conversation and customer (filtering legacy auto-tags)
+      const isAutoTag = (t: string) => {
+        const l = t.toLowerCase().trim();
+        return l === 'whatsapp lead' || l === 'auto created';
+      };
+
       const mergedTagsList = Array.from(new Set([
         ...(conversation.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean),
         ...(conversation.customer?.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean),
-      ]));
+      ])).filter(t => !isAutoTag(t));
       const mergedTagsStr = mergedTagsList.join(', ');
 
-      // If conversation.tags was missing tags from customer, persist it back
+      // Clean up legacy auto-tags from database
       if (conversation.tags !== mergedTagsStr) {
         await prisma.whatsAppConversation.update({
           where: { id: convId },
+          data: { tags: mergedTagsStr }
+        }).catch(() => {});
+      }
+
+      if (conversation.customerId && conversation.customer?.tags !== mergedTagsStr) {
+        await prisma.customer.update({
+          where: { id: conversation.customerId },
           data: { tags: mergedTagsStr }
         }).catch(() => {});
       }
