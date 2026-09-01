@@ -3118,3 +3118,32 @@ export async function getAllAgentsAction() {
     return { success: false, error: e.message };
   }
 }
+
+export async function syncSessionRoleAction() {
+  const cookieStore = await cookies();
+  const userCookie = cookieStore.get("wm_user");
+  if (!userCookie?.value) return null;
+  
+  try {
+    const parsed = JSON.parse(decodeURIComponent(userCookie.value));
+    if (!parsed.email) return null;
+    
+    let dbRole = null;
+    const agent = await prisma.whatsAppAgentUser.findUnique({ where: { email: parsed.email } });
+    if (agent) dbRole = agent.role;
+    else {
+      const user = await prisma.user.findUnique({ where: { email: parsed.email } });
+      if (user) dbRole = user.role;
+    }
+    
+    if (dbRole && dbRole !== parsed.role) {
+       parsed.role = dbRole;
+       cookieStore.set("wm_user", JSON.stringify(parsed), { httpOnly: false, secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 7, path: "/", sameSite: "lax" });
+       return dbRole;
+    }
+    
+    return null;
+  } catch(e) {
+    return null;
+  }
+}

@@ -7,7 +7,7 @@ import {
   MessageSquare, LayoutDashboard, Bot, ShoppingBag, Key, Activity, Box, GitBranch, FileCode, Zap, Bell
 } from "lucide-react";
 import "./WhatsAppHeaderNav.css";
-import { getWhatsAppDashboardMetrics } from "@/app/actions/whatsAppPlatformActions";
+import { getWhatsAppDashboardMetrics, syncSessionRoleAction } from "@/app/actions/whatsAppPlatformActions";
 
 const VAPID_PUBLIC_KEY = "BB-KZlpv_rpNWxWRhy0qmhKvmRPSD54y7BKlbA07xsuRbUlEbDLASekDIHTFgX-au3sAOSG4WJ5ZaHgk9tJ0HEg";
 
@@ -71,6 +71,13 @@ export default function WhatsAppHeaderNav() {
         const parsed = JSON.parse(v);
         setUserName(parsed.name || ""); 
         setUserRole(parsed.role || "");
+        
+        // Background sync to ensure role is up to date (e.g. if admin changed agent's role while logged in)
+        syncSessionRoleAction().then((newRole) => {
+          if (newRole && newRole !== parsed.role) {
+            setUserRole(newRole);
+          }
+        });
       }
     } catch {}
   }, []);
