@@ -392,14 +392,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
           }
 
           if (conv) {
-            // If already assigned to an agent, retain them on reopen unless node explicitly overrides via DIRECT mode
-            if (conv.assignedEmployeeId && node.assignmentMode !== 'DIRECT') {
-              console.log(`[Flow Assign] Chat ${conv.id} already assigned to ${conv.assignedEmployeeId}. Retaining existing assigned agent.`);
-              await prisma.whatsAppConversation.update({
-                where: { id: conv.id },
-                data: { status: 'OPEN' }
-              });
-            } else if (node.assignmentMode === 'DIRECT' && node.agentId) {
+            if (node.assignmentMode === 'DIRECT' && node.agentId) {
               await prisma.whatsAppConversation.update({ 
                 where: { id: conv.id }, 
                 data: { assignedEmployeeId: node.agentId, status: 'OPEN' } 
