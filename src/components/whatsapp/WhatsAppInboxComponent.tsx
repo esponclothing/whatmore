@@ -1807,110 +1807,113 @@ export default function WhatsAppInboxComponent() {
                     <button type="button" onClick={() => setShowTemplatePicker(true)} style={{ marginLeft: "auto", background: "#d97706", color: "white", border: "none", padding: "4px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 800, cursor: "pointer" }}>Send Template</button>
                   </div>
                 )}
-                <form className={`chat-input-form ${isInternalNote ? "internal-mode" : ""}`} onSubmit={handleSendMessage}>
-                <button
-                  type="button"
-                  className="input-attachment-btn"
-                  title="Attach File / Image / Document"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Paperclip size={18} />
-                </button>
-                
-                <button
-                  type="button"
-                  className="input-attachment-btn"
-                  title="Record Voice Note"
-                  onClick={startRecording}
-                  style={{ color: '#ef4444' }}
-                >
-                  <Mic size={18} />
-                </button>
+                <form className={`chat-input-form ${isInternalNote ? "internal-mode" : ""}`} onSubmit={handleSendMessage} style={{ display: "flex", gap: "12px", alignItems: "flex-end", padding: "12px", background: isInternalNote ? "#fffdf5" : "#ffffff", borderTop: "1px solid #e2e8f0" }}>
+                  
+                  <div style={{ display: "flex", gap: "2px", background: "#f8fafc", padding: "4px 8px", borderRadius: "24px", border: "1px solid #e2e8f0", alignItems: "center" }}>
+                    <button
+                      type="button"
+                      className="input-attachment-btn"
+                      title="Attach File / Image / Document"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Paperclip size={18} />
+                    </button>
+                    
+                    <button
+                      type="button"
+                      className="input-attachment-btn"
+                      title="Record Voice Note"
+                      onClick={startRecording}
+                      style={{ color: '#ef4444' }}
+                    >
+                      <Mic size={18} />
+                    </button>
 
-                {/* Template Picker Button */}
-                <button
-                  type="button"
-                  className="input-attachment-btn"
-                  title="Send Template Message"
-                  onClick={() => setShowTemplatePicker(true)}
-                  style={{ color: showTemplatePicker ? '#4f46e5' : '#64748b' }}
-                >
-                  <FileCode size={18} />
-                </button>
+                    {/* Template Picker Button */}
+                    <button
+                      type="button"
+                      className="input-attachment-btn"
+                      title="Send Template Message"
+                      onClick={() => setShowTemplatePicker(true)}
+                      style={{ color: showTemplatePicker ? '#4f46e5' : '#64748b' }}
+                    >
+                      <FileCode size={18} />
+                    </button>
 
-                {/* Product Catalog Button */}
-                <button
-                  type="button"
-                  className="input-attachment-btn"
-                  title="Send Product from Catalog"
-                  onClick={() => setShowProductPanel(v => !v)}
-                  style={{ color: showProductPanel ? '#10b981' : '#64748b' }}
-                >
-                  <ShoppingBag size={18} />
-                </button>
+                    {/* Product Catalog Button */}
+                    <button
+                      type="button"
+                      className="input-attachment-btn"
+                      title="Send Product from Catalog"
+                      onClick={() => setShowProductPanel(v => !v)}
+                      style={{ color: showProductPanel ? '#10b981' : '#64748b' }}
+                    >
+                      <ShoppingBag size={18} />
+                    </button>
 
-                {/* Flow Picker Button */}
-                <button
-                  type="button"
-                  className="input-attachment-btn"
-                  title="Send Interactive Flow Form"
-                  onClick={() => setShowFlowPicker(true)}
-                  style={{ color: showFlowPicker ? '#a78bfa' : '#64748b' }}
-                >
-                  <Zap size={18} />
-                </button>
+                    {/* Flow Picker Button */}
+                    <button
+                      type="button"
+                      className="input-attachment-btn"
+                      title="Send Interactive Flow Form"
+                      onClick={() => setShowFlowPicker(true)}
+                      style={{ color: showFlowPicker ? '#a78bfa' : '#64748b' }}
+                    >
+                      <Zap size={18} />
+                    </button>
 
-                <div style={{ position: "relative" }}>
-                  <button
-                    type="button"
-                    className="input-attachment-btn"
-                    title="Quick Replies / Canned Responses"
-                    onClick={() => setShowCannedResponses(!showCannedResponses)}
-                  >
-                    <Zap size={18} color={showCannedResponses ? "#f59e0b" : "#64748b"} />
-                  </button>
+                    <div style={{ position: "relative" }}>
+                      <button
+                        type="button"
+                        className="input-attachment-btn"
+                        title="Quick Replies / Canned Responses"
+                        onClick={() => setShowCannedResponses(!showCannedResponses)}
+                      >
+                        <Zap size={18} color={showCannedResponses ? "#f59e0b" : "#64748b"} />
+                      </button>
 
-                  {/* Canned Responses Popup Menu */}
-                  {showCannedResponses && (
-                    <div style={{ position: "absolute", bottom: "100%", left: "0", marginBottom: "8px", width: "300px", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)", zIndex: 10 }}>
-                      <div style={{ padding: "8px 12px", borderBottom: "1px solid #e2e8f0", fontSize: "12px", fontWeight: 700, color: "#64748b", background: "#f8fafc", borderRadius: "8px 8px 0 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span>Quick Replies</span>
-                        <button type="button" onClick={() => setShowCannedResponses(false)} style={{ background: "none", border: "none", cursor: "pointer" }}><X size={14} /></button>
-                      </div>
-                      <div style={{ maxHeight: "250px", overflowY: "auto", padding: "4px" }}>
-                        {cannedResponses.length > 0 ? (
-                          cannedResponses.map(cr => (
-                            <button
-                              key={cr.id}
-                              type="button"
-                              onClick={() => {
-                                setMessageInput(prev => prev ? `${prev} ${cr.content}` : cr.content);
-                                setShowCannedResponses(false);
-                              }}
-                              style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 10px", background: "none", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "12.5px" }}
-                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f1f5f9"}
-                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                            >
-                              <strong style={{ color: "#0f172a", display: "block", marginBottom: "2px" }}>{cr.title} <span style={{ color: "#3b82f6", fontSize: "11px", fontWeight: "normal" }}>{cr.shortcut}</span></strong>
-                              <span style={{ color: "#64748b", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cr.content}</span>
-                            </button>
-                          ))
-                        ) : (
-                          <div style={{ padding: "12px", textAlign: "center", fontSize: "12px", color: "#64748b" }}>No quick replies found.</div>
-                        )}
-                      </div>
+                      {/* Canned Responses Popup Menu */}
+                      {showCannedResponses && (
+                        <div style={{ position: "absolute", bottom: "100%", left: "0", marginBottom: "14px", width: "300px", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)", zIndex: 10, overflow: "hidden" }}>
+                          <div style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", fontSize: "12px", fontWeight: 700, color: "#64748b", background: "#f8fafc", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span>Quick Replies</span>
+                            <button type="button" onClick={() => setShowCannedResponses(false)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}><X size={14} /></button>
+                          </div>
+                          <div style={{ maxHeight: "250px", overflowY: "auto", padding: "6px" }}>
+                            {cannedResponses.length > 0 ? (
+                              cannedResponses.map(cr => (
+                                <button
+                                  key={cr.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setMessageInput(prev => prev ? `${prev} ${cr.content}` : cr.content);
+                                    setShowCannedResponses(false);
+                                  }}
+                                  style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", background: "none", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "12.5px", transition: "background 0.2s" }}
+                                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f1f5f9"}
+                                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                                >
+                                  <strong style={{ color: "#0f172a", display: "block", marginBottom: "4px" }}>{cr.title} <span style={{ color: "#3b82f6", fontSize: "11px", fontWeight: "normal", marginLeft: "4px" }}>{cr.shortcut}</span></strong>
+                                  <span style={{ color: "#64748b", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cr.content}</span>
+                                </button>
+                              ))
+                            ) : (
+                              <div style={{ padding: "16px", textAlign: "center", fontSize: "13px", color: "#64748b" }}>No quick replies found.</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
 
-                <button
-                  type="button"
-                  className="input-attachment-btn"
-                  title="Quick Emojis"
-                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                >
-                  <Smile size={18} color={showEmojiPicker ? "#10b981" : "#64748b"} />
-                </button>
+                    <button
+                      type="button"
+                      className="input-attachment-btn"
+                      title="Quick Emojis"
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    >
+                      <Smile size={18} color={showEmojiPicker ? "#10b981" : "#64748b"} />
+                    </button>
+                  </div>
 
                 {/* Team Mentions Popup Menu */}
                 {showMentionsMenu && (
@@ -2811,32 +2814,66 @@ export default function WhatsAppInboxComponent() {
       )}
 
       {showFollowUpModal && (
-        <div className="inbox-modal-backdrop" onClick={() => setShowFollowUpModal(false)}>
-          <div className="inbox-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header-row">
-              <h3>Schedule Follow-Up Task</h3>
-              <button onClick={() => setShowFollowUpModal(false)}>×</button>
+        <div className="inbox-modal-backdrop" onClick={() => setShowFollowUpModal(false)} style={{ backdropFilter: "blur(4px)", background: "rgba(15,23,42,0.4)" }}>
+          <div className="inbox-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "420px", padding: 0, borderRadius: "16px", overflow: "hidden", boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)" }}>
+            <div className="modal-header-row" style={{ background: "linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)", color: "white", padding: "20px 24px", borderBottom: "none" }}>
+              <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
+                <Calendar size={20} /> Schedule Follow-Up
+              </h3>
+              <button onClick={() => setShowFollowUpModal(false)} style={{ color: "white", opacity: 0.8 }}>×</button>
             </div>
-            <div className="modal-form-body">
-              <label>Follow-Up In (Days)</label>
-              <input
-                type="number"
-                min="1"
-                max="90"
-                value={followUpDays}
-                onChange={(e) => setFollowUpDays(parseInt(e.target.value) || 3)}
-              />
+            <div className="modal-form-body" style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px", background: "#fff" }}>
+              
+              <div>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Follow-Up In (Days)</label>
+                <div style={{ position: "relative" }}>
+                  <span style={{ position: "absolute", right: "14px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: "14px", fontWeight: 500 }}>Days</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="90"
+                    value={followUpDays}
+                    onChange={(e) => setFollowUpDays(parseInt(e.target.value) || 3)}
+                    style={{ width: "100%", padding: "12px 50px 12px 14px", fontSize: "16px", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontWeight: 600, color: "#1e293b", transition: "all 0.2s" }}
+                    onFocus={(e) => e.target.style.borderColor = "#8b5cf6"}
+                    onBlur={(e) => e.target.style.borderColor = "#cbd5e1"}
+                  />
+                </div>
+              </div>
 
-              <label>Follow-Up Notes / Context</label>
-              <textarea
-                rows={3}
-                value={followUpNotes}
-                onChange={(e) => setFollowUpNotes(e.target.value)}
-                placeholder="E.g. Check if they liked the sample shirts..."
-              />
+              <div>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Follow-Up Notes / Context</label>
+                <textarea
+                  rows={3}
+                  value={followUpNotes}
+                  onChange={(e) => setFollowUpNotes(e.target.value)}
+                  placeholder="E.g. Check if they liked the sample shirts..."
+                  style={{ width: "100%", padding: "12px 14px", fontSize: "14px", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", color: "#334155", transition: "all 0.2s", resize: "none" }}
+                  onFocus={(e) => e.target.style.borderColor = "#8b5cf6"}
+                  onBlur={(e) => e.target.style.borderColor = "#cbd5e1"}
+                />
+              </div>
 
-              <button className="modal-submit-btn" onClick={handleCreateFollowUpSubmit}>
-                Create Follow-Up Task
+              <button 
+                onClick={handleCreateFollowUpSubmit}
+                style={{
+                  marginTop: "8px",
+                  padding: "14px",
+                  background: "#8b5cf6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  boxShadow: "0 4px 6px -1px rgba(139, 92, 246, 0.2), 0 2px 4px -1px rgba(139, 92, 246, 0.1)"
+                }}
+              >
+                <Check size={16} /> Schedule Task
               </button>
             </div>
           </div>
