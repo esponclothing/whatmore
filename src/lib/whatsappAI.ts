@@ -340,41 +340,19 @@ export async function sendWhatsAppProductCards(toPhone: string, cards: any[]) {
     // Caption without Buy Now link (link goes in button)
     const caption = `*${c.title}*\nPrice: ${c.price}`.slice(0, 1024);
 
-    // Step 1: Send product image with caption
-    const imagePayload = {
-      messaging_product: "whatsapp",
-      recipient_type: "individual",
-      to: toPhone,
-      type: "image",
-      image: {
-        link: imageUrl,
-        caption: caption
-      }
-    };
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(imagePayload)
-      });
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error("[sendWhatsAppProductCards Image Error]:", errorText);
-      }
-      await new Promise(r => setTimeout(r, 400));
-    } catch (err: any) {
-      console.error("[sendWhatsAppProductCards Image Catch]:", err.message);
-    }
-
-    // Step 2: Send a button message with "Buy Now" CTA
-    const buttonPayload = {
+    // Combine Image, Title, Price, and Buy Now button into a single interactive message
+    const combinedPayload = {
       messaging_product: "whatsapp",
       recipient_type: "individual",
       to: toPhone,
       type: "interactive",
       interactive: {
         type: "cta_url",
-        body: { text: `Shop now for ${c.title.slice(0, 60)}` },
+        header: {
+          type: "image",
+          image: { link: imageUrl }
+        },
+        body: { text: caption },
         action: {
           name: "cta_url",
           parameters: {
@@ -384,17 +362,36 @@ export async function sendWhatsAppProductCards(toPhone: string, cards: any[]) {
         }
       }
     };
+
     try {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(buttonPayload)
+        body: JSON.stringify(combinedPayload)
       });
       if (!res.ok) {
         const errorText = await res.text();
-        // If CTA button fails (some accounts don't support it), fall back to text link
+        // If CTA button fails, fall back to Image with caption, then text link
         if (errorText.includes('unsupported') || errorText.includes('invalid')) {
-          const fallbackPayload = {
+          const fallbackImagePayload = {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: toPhone,
+            type: "image",
+            image: {
+              link: imageUrl,
+              caption: caption
+            }
+          };
+          await fetch(url, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(fallbackImagePayload)
+          });
+
+          await new Promise(r => setTimeout(r, 200));
+
+          const fallbackTextPayload = {
             messaging_product: "whatsapp",
             to: toPhone,
             type: "text",
@@ -403,15 +400,15 @@ export async function sendWhatsAppProductCards(toPhone: string, cards: any[]) {
           await fetch(url, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(fallbackPayload)
+            body: JSON.stringify(fallbackTextPayload)
           });
         } else {
-          console.error("[sendWhatsAppProductCards Button Error]:", errorText);
+          console.error("[sendWhatsAppProductCards Combined Error]:", errorText);
         }
       }
       await new Promise(r => setTimeout(r, 400));
     } catch (err: any) {
-      console.error("[sendWhatsAppProductCards Button Catch]:", err.message);
+      console.error("[sendWhatsAppProductCards Combined Catch]:", err.message);
     }
   }
 }
