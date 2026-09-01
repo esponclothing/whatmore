@@ -119,7 +119,7 @@ export default function OwnerClientsPage() {
     c.contactEmail.toLowerCase().includes(search.toLowerCase())
   );
 
-  const webhookBase = typeof window !== "undefined" ? window.location.origin : "https://whatsapp.esponsports.com";
+  const webhookBase = "https://whatmore-production.up.railway.app";
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0a0a0f 0%, #0f0f1a 100%)" }}>

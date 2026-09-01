@@ -15,7 +15,7 @@ export async function GET() {
         phoneNumber: account?.phoneNumber || "",
         shopifyDomain: "",
         shopifyToken: "",
-        webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://whatsapp.esponsports.com"}/api/whatsapp/webhook`,
+        webhookUrl: `https://whatmore-production.up.railway.app/api/whatsapp/webhook`,
         isClientBound: false,
       });
     }
@@ -27,7 +27,7 @@ export async function GET() {
       phoneNumber: client.phoneNumber || "",
       shopifyDomain: client.shopifyDomain || "",
       shopifyToken: client.shopifyToken || "",
-      webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://whatsapp.esponsports.com"}/api/whatsapp/webhook/${client.webhookClientId}`,
+      webhookUrl: `https://whatmore-production.up.railway.app/api/whatsapp/webhook/${client.webhookClientId}`,
       isClientBound: true,
       clientId: client.id,
     });
