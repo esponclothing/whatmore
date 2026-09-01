@@ -984,17 +984,64 @@ export default function WhatsAppChatbotBuilderPage() {
   };
 
   const validateWorkflow = () => {
+    const errors: string[] = [];
     const triggerNode = nodes.find((n) => (n.type || '').toUpperCase() === "TRIGGER");
+    
     if (!triggerNode) {
-      return { isValid: false, error: "Workflow lacks a Flow Trigger block. Please add a Flow Trigger block to start the chat." };
+      errors.push("Missing 'Flow Trigger' block. You must have a trigger block to start the flow.");
+    } else {
+      if (!triggerKeyword || !triggerKeyword.trim()) {
+        errors.push("Flow Trigger keywords cannot be empty. Please configure keywords in the top bar.");
+      }
+      if (!triggerNode.outputPort) {
+        errors.push("Flow Trigger block is not connected to any starting block. Drag a wire from its output.");
+      }
     }
-    if (!triggerKeyword || !triggerKeyword.trim()) {
-      return { isValid: false, error: "Flow Trigger keywords cannot be empty. Please configure keywords in the trigger block." };
+
+    // Node-specific validation
+    nodes.forEach(node => {
+      if (node.type === "TEXT" && (!node.text || !node.text.trim())) {
+        errors.push(`Text block "${node.title || 'Text'}" has no message content.`);
+      }
+      if (node.type === "IMAGE" || node.type === "VIDEO" || node.type === "FILE" || node.type === "AUDIO") {
+        if (!node.mediaUrl || !node.mediaUrl.trim()) {
+          errors.push(`Media block "${node.title || node.type}" is missing a valid URL.`);
+        }
+      }
+      if (node.type === "CHOICE" || node.type === "BUTTONS" || node.type === "LIST_MENU") {
+        if (!node.choices || node.choices.length === 0) {
+          errors.push(`Interactive block "${node.title || 'Choices'}" has no options configured.`);
+        } else {
+          node.choices.forEach((choice: any, index: number) => {
+            if (!choice.text || !choice.text.trim()) {
+              errors.push(`Option ${index + 1} in "${node.title}" has empty text.`);
+            }
+            if (!choice.targetNode) {
+              errors.push(`Option "${choice.text || 'Unnamed'}" in "${node.title}" is not connected to any next step.`);
+            }
+          });
+        }
+      }
+      if (node.type === "CRM_ROUNDROBIN") {
+        if (!node.distributionMethod) {
+          errors.push(`Agent Routing block "${node.title}" has no distribution method selected.`);
+        }
+        if (!node.routingTargets || node.routingTargets.length === 0) {
+          errors.push(`Agent Routing block "${node.title}" has no agents or teams assigned.`);
+        }
+      }
+    });
+
+    return { isValid: errors.length === 0, errors };
+  };
+
+  const handleRunValidation = () => {
+    const validation = validateWorkflow();
+    if (validation.isValid) {
+      alert("✅ Your Flow looks great! No errors found.");
+    } else {
+      alert(`⚠️ Flow Validation Failed:\n\n- ${validation.errors.join("\\n- ")}\n\nPlease fix these errors before publishing.`);
     }
-    if (!triggerNode.outputPort) {
-      return { isValid: false, error: "Flow Trigger block is not connected to any starting block. Please drag a line from the trigger output dot." };
-    }
-    return { isValid: true };
   };
 
   const handleSaveFlowWithStatus = async (wantsPublish: boolean) => {
@@ -1006,7 +1053,7 @@ export default function WhatsAppChatbotBuilderPage() {
       const validation = validateWorkflow();
       if (!validation.isValid) {
         targetActive = false;
-        alert(`Cannot Publish Live: ${validation.error}\n\nSaving your chatbot as a DRAFT instead.`);
+        alert(`Cannot Publish Live due to the following errors:\n\n- ${validation.errors.join("\\n- ")}\n\nSaving your chatbot as a DRAFT instead.`);
       }
     }
 
@@ -1686,6 +1733,10 @@ export default function WhatsAppChatbotBuilderPage() {
 
           <button className="studio-btn test-btn" onClick={handleStartSimTest} disabled={nodes.length === 0}>
             <Play size={14} /> Preview & Test
+          </button>
+
+          <button className="studio-btn" onClick={handleRunValidation} disabled={nodes.length === 0} style={{ background: "#475569", color: "white" }}>
+            <ShieldCheck size={14} /> Validate Flow
           </button>
 
           <button 

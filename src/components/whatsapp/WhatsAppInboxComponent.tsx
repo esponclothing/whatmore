@@ -60,7 +60,8 @@ import {
   XCircle,
   CheckCircle2,
   Pause,
-  Settings
+  Settings,
+  CheckCircle
 } from "lucide-react";
 import {
   getWhatsAppConversations,
@@ -1181,15 +1182,18 @@ export default function WhatsAppInboxComponent() {
               ))}
             </div>
           ) : conversations.length === 0 ? (
-            <div className="inbox-empty-state" style={{ textAlign: "center", padding: "30px 16px" }}>
-              <MessageSquare size={32} color="#9ca3af" style={{ marginBottom: "8px" }} />
-              <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 12px 0" }}>No conversations found matching filters.</p>
+          ) : conversations.length === 0 ? (
+            <div className="inbox-empty-state modern-empty">
+              <div className="modern-empty-icon-wrapper">
+                <Search size={28} color="#8b5cf6" />
+              </div>
+              <p className="modern-empty-title">No conversations found</p>
+              <p className="modern-empty-subtitle">Try adjusting your filters or search query to find what you're looking for.</p>
               <button
-                className="filter-pill active"
+                className="modern-empty-btn"
                 onClick={handleResetFilters}
-                style={{ padding: "6px 14px", fontSize: "12px", margin: "0 auto" }}
               >
-                Reset Search & Filters
+                Reset Filters
               </button>
             </div>
           ) : (
@@ -1302,10 +1306,17 @@ export default function WhatsAppInboxComponent() {
             </div>
           </div>
         ) : !activeConvDetail ? (
-          <div className="chat-empty-selection">
-            <MessageSquare size={48} color="#d1d5db" />
-            <h3>Select a Conversation to Start Chatting</h3>
-            <p>Every WhatsApp chat connects seamlessly to CRM profiles, orders, and quotes.</p>
+          <div className="chat-empty-selection premium-empty">
+            <div className="premium-empty-graphics">
+              <div className="floating-bubble bubble-1"><MessageSquare size={20} color="#fff" /></div>
+              <div className="floating-bubble bubble-2"><Sparkles size={20} color="#fff" /></div>
+              <div className="floating-bubble bubble-3"><CheckCircle size={20} color="#fff" /></div>
+              <div className="main-empty-icon">
+                <MessageSquare size={54} color="#6d28d9" strokeWidth={1.5} />
+              </div>
+            </div>
+            <h3 className="premium-empty-title">Select a Conversation</h3>
+            <p className="premium-empty-desc">Choose a chat from the left sidebar to start messaging. Every conversation connects seamlessly to your CRM profiles, orders, and quotes.</p>
           </div>
         ) : (
           <>
