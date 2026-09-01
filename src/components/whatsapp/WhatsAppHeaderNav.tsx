@@ -85,12 +85,14 @@ export default function WhatsAppHeaderNav() {
       try {
         const registration = await navigator.serviceWorker.register("/sw.js");
         let subscription = await registration.pushManager.getSubscription();
-        if (!subscription) {
-          subscription = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-          });
+        if (subscription) {
+          await subscription.unsubscribe();
         }
+        
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
         const sub = subscription.toJSON();
         
         // Save it
