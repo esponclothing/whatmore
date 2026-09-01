@@ -695,7 +695,8 @@ export async function generateWhatsAppPaymentLinkAction(data: {
   try {
     const creds = await prisma.whatsAppSettings.findFirst();
     const gw = creds?.activeGateway;
-    let paymentUrl = `https://whatmore-production.up.railway.app/pay/wa_${Date.now()}`;
+    const domain = process.env.NEXTAUTH_URL || 'https://whatmore-production.up.railway.app';
+    let paymentUrl = `${domain}/`;
 
     const customer = await prisma.customer.findUnique({ where: { id: data.customerId } });
     const contactPhone = customer?.whatsappNumber ? customer.whatsappNumber.replace(/\D/g, '') : (customer?.mobile || '').replace(/\D/g, '').slice(-10) || '9999999999';
