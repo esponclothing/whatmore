@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import {
   GitBranch, Plus, Search, RefreshCw, CheckCircle2, Clock, AlertCircle,
-  X, Send, Trash2, Eye, Info, HelpCircle, MessageSquare, Edit, Link
+  X, Send, Trash2, Eye, Info, HelpCircle, MessageSquare, Edit, Link, ImagePlus
 } from "lucide-react";
 import { 
   getWhatsAppMetaFlows, 
@@ -13,7 +13,8 @@ import {
   getWhatsAppCannedResponsesAction,
   createWhatsAppCannedResponseAction,
   updateWhatsAppCannedResponseAction,
-  deleteWhatsAppCannedResponseAction
+  deleteWhatsAppCannedResponseAction,
+  uploadMediaToMetaAction
 } from "@/app/actions/whatsAppPlatformActions";
 
 const PREBUILT_TEMPLATES = [
@@ -89,6 +90,7 @@ export default function WhatsAppFlowsPage() {
   const [newReplyButtons, setNewReplyButtons] = useState<any[]>([]);
   const [editingReply, setEditingReply] = useState<any>(null);
   const [savingCanned, setSavingCanned] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const showToast = (text: string, type: "success" | "error" = "success") => {
     setToastMsg({ text, type });
@@ -202,6 +204,41 @@ export default function WhatsAppFlowsPage() {
     const arr = [...newReplyButtons];
     arr.splice(index, 1);
     setNewReplyButtons(arr);
+  };
+
+  const handleImageUpload = async (file: File) => {
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const dataUrl = e.target?.result as string;
+        const res = await uploadMediaToMetaAction(dataUrl, file.name, file.type);
+        if (res.success) {
+          setNewReplyMediaUrl(res.mediaId);
+          showToast("Image uploaded successfully!");
+        } else {
+          showToast(res.error || "Failed to upload image", "error");
+        }
+        setUploadingImage(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (e: any) {
+      showToast(e.message, "error");
+      setUploadingImage(false);
+    }
+  };
+
+  const handlePasteImage = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const file = items[i].getAsFile();
+        if (file) handleImageUpload(file);
+        e.preventDefault();
+        break;
+      }
+    }
   };
 
   const selectPrebuiltTemplate = (tpl: typeof PREBUILT_TEMPLATES[0]) => {
@@ -444,30 +481,26 @@ export default function WhatsAppFlowsPage() {
               />
             </div>
 
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#64748b", marginBottom: "6px" }}>REPLY BODY CONTENT *</label>
-              <textarea
-                rows={4}
-                placeholder="Type the message body..."
-                value={newReplyContent}
-                onChange={(e) => setNewReplyContent(e.target.value)}
-                style={{ width: "100%", padding: "10px 14px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13.5px", resize: "vertical", outline: "none" }}
-                required
-              />
-            </div>
-            
             {/* Rich Fields */}
             <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
               <div style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" }}>Rich Media & Interactive (Optional)</div>
               
               <div>
-                <input
-                  type="text"
-                  placeholder="Image URL (https://...)"
-                  value={newReplyMediaUrl}
-                  onChange={(e) => setNewReplyMediaUrl(e.target.value)}
-                  style={{ width: "100%", padding: "8px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13px", outline: "none", marginBottom: "8px" }}
-                />
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <input
+                    type="text"
+                    placeholder="Image URL or Paste Image here..."
+                    value={uploadingImage ? "Uploading..." : newReplyMediaUrl}
+                    onChange={(e) => setNewReplyMediaUrl(e.target.value)}
+                    onPaste={handlePasteImage}
+                    disabled={uploadingImage}
+                    style={{ flex: 1, padding: "8px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13px", outline: "none" }}
+                  />
+                  <label style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "8px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "8px", cursor: "pointer", color: "#475569" }}>
+                    <ImagePlus size={16} />
+                    <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => e.target.files && handleImageUpload(e.target.files[0])} />
+                  </label>
+                </div>
               </div>
 
               <div>
@@ -478,6 +511,18 @@ export default function WhatsAppFlowsPage() {
                   onChange={(e) => setNewReplyHeader(e.target.value)}
                   maxLength={60}
                   style={{ width: "100%", padding: "8px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13px", outline: "none", marginBottom: "8px" }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#64748b", marginBottom: "6px" }}>REPLY BODY CONTENT *</label>
+                <textarea
+                  rows={4}
+                  placeholder="Type the message body..."
+                  value={newReplyContent}
+                  onChange={(e) => setNewReplyContent(e.target.value)}
+                  style={{ width: "100%", padding: "10px 14px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13.5px", resize: "vertical", outline: "none" }}
+                  required
                 />
               </div>
 

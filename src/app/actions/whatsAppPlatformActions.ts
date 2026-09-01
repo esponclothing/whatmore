@@ -410,6 +410,34 @@ export async function sendWhatsAppMessageAction(data: {
              body: { text: data.content },
              action: { name: 'cta_url', parameters: { display_text: '💳 Pay Now', url: data.mediaUrl } }
            };
+        } else if (data.messageType === 'INTERACTIVE') {
+           payload.type = 'interactive';
+           let interactiveData: any = {
+             type: 'button',
+             body: { text: data.content }
+           };
+           
+           if (data.metadata) {
+             try {
+               const meta = JSON.parse(data.metadata);
+               if (meta.headerText) interactiveData.header = { type: 'text', text: meta.headerText };
+               if (meta.footerText) interactiveData.footer = { text: meta.footerText };
+               
+               // If there's an image in the mediaUrl for the interactive message
+               if (data.mediaUrl) {
+                 const isMediaId = data.mediaUrl && !data.mediaUrl.includes('://') && !data.mediaUrl.startsWith('/');
+                 interactiveData.header = { type: 'image', image: isMediaId ? { id: data.mediaUrl } : { link: absoluteMediaUrl } };
+               }
+
+               if (meta.buttons && meta.buttons.length > 0) {
+                 const buttons = meta.buttons.map((b: any, idx: number) => {
+                   return { type: 'reply', reply: { id: `btn_${idx}`, title: (b.text || '').substring(0, 20) } };
+                 });
+                 interactiveData.action = { buttons };
+               }
+             } catch(e) {}
+           }
+           payload.interactive = interactiveData;
         } else {
            payload.type = 'text';
            payload.text = { body: data.content };
