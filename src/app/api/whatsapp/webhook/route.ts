@@ -245,15 +245,23 @@ export async function POST(req: NextRequest) {
           }
         });
       } else {
+        const wasClosed = conversation.status === "CLOSED";
+        const preservedAgentId = conversation.assignedEmployeeId || customer.assignedSalespersonId;
+
         await prisma.whatsAppConversation.update({
           where: { id: conversation.id },
           data: {
             lastMessageText: textContent,
             lastMessageAt: messageTimestamp,
             unreadCount: conversation.unreadCount + 1,
-            status: "OPEN"
+            status: "OPEN",
+            ...(preservedAgentId ? { assignedEmployeeId: preservedAgentId } : {})
           }
         });
+
+        if (wasClosed && preservedAgentId) {
+          console.log(`[Webhook Reopen] Reopened closed chat ${conversation.id} and retained assigned agent ${preservedAgentId}`);
+        }
       }
 
       // Step D: Store Incoming Message

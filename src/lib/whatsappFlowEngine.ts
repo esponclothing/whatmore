@@ -392,6 +392,16 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
           }
 
           if (conv) {
+            // If already assigned to an agent, retain them on reopen unless node explicitly overrides via DIRECT mode
+            if (conv.assignedEmployeeId && node.assignmentMode !== 'DIRECT') {
+              console.log(`[Flow Assign] Chat ${conv.id} already assigned to ${conv.assignedEmployeeId}. Retaining existing assigned agent.`);
+              await prisma.whatsAppConversation.update({
+                where: { id: conv.id },
+                data: { status: 'OPEN' }
+              });
+              return;
+            }
+
             if (node.assignmentMode === 'DIRECT' && node.agentId) {
               await prisma.whatsAppConversation.update({ 
                 where: { id: conv.id }, 
@@ -414,6 +424,11 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
                 where: agentQuery,
                 include: {
                   user: true,
+                  assignedWhatsAppConversations: {
+                    orderBy: { updatedAt: 'desc' },
+                    take: 1,
+                    select: { updatedAt: true }
+                  },
                   _count: {
                     select: {
                       assignedWhatsAppConversations: {
@@ -424,16 +439,31 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
                 }
               });
 
-              console.log(`[Round Robin] Query:`, JSON.stringify(agentQuery), `Found agents: ${activeAgents.length}`);
+              console.log(`[Round Robin] Method: ${node.distributionMethod || 'WORKLOAD_BALANCE'} Query:`, JSON.stringify(agentQuery), `Found agents: ${activeAgents.length}`);
 
               if (activeAgents.length > 0) {
-                activeAgents.sort((a: any, b: any) => (a._count?.assignedWhatsAppConversations || 0) - (b._count?.assignedWhatsAppConversations || 0));
+                if (node.distributionMethod === 'EQUAL_DISTRIBUTION') {
+                  // Pure cyclic round robin: Agent with the oldest (or no) recent chat assignment gets next
+                  activeAgents.sort((a: any, b: any) => {
+                    const timeA = a.assignedWhatsAppConversations?.[0]?.updatedAt 
+                      ? new Date(a.assignedWhatsAppConversations[0].updatedAt).getTime() 
+                      : 0;
+                    const timeB = b.assignedWhatsAppConversations?.[0]?.updatedAt 
+                      ? new Date(b.assignedWhatsAppConversations[0].updatedAt).getTime() 
+                      : 0;
+                    return timeA - timeB;
+                  });
+                } else {
+                  // Workload balancing (default): Agent with lowest number of currently OPEN chats gets next
+                  activeAgents.sort((a: any, b: any) => (a._count?.assignedWhatsAppConversations || 0) - (b._count?.assignedWhatsAppConversations || 0));
+                }
+
                 const selectedAgent = activeAgents[0];
                 await prisma.whatsAppConversation.update({ 
                   where: { id: conv.id }, 
                   data: { assignedEmployeeId: selectedAgent.id, status: 'OPEN' } 
                 });
-                console.log(`[Round Robin] Successfully assigned chat ${conv.id} to agent ${selectedAgent.user?.name || selectedAgent.id}`);
+                console.log(`[Round Robin] Successfully assigned chat ${conv.id} to agent ${selectedAgent.user?.name || selectedAgent.id} (Method: ${node.distributionMethod || 'WORKLOAD_BALANCE'}, Open load: ${selectedAgent._count?.assignedWhatsAppConversations || 0})`);
               } else {
                 console.log(`[Round Robin] No agents matched query:`, agentQuery);
               }

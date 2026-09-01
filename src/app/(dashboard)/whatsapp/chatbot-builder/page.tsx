@@ -2080,11 +2080,13 @@ export default function WhatsAppChatbotBuilderPage() {
                           <span>Assign: {
                             node.assignmentMode === 'DIRECT' && node.agentId
                               ? (availableAgents.find((a: any) => a.id === node.agentId)?.user?.name || 'Agent')
-                              : (node.assignmentMode !== 'DIRECT' && node.roundRobinTarget === 'TEAM' && node.teamId)
-                                ? `Team: ${availableTeams.find((t: any) => t.id === node.teamId)?.name || 'Unknown'}`
-                                : (node.assignmentMode !== 'DIRECT' && node.roundRobinTarget === 'AGENTS' && node.agentIds?.length > 0)
-                                  ? `${node.agentIds.length} Agents (Round Robin)`
-                                  : 'Auto (Round Robin)'
+                              : (
+                                  (node.assignmentMode !== 'DIRECT' && node.roundRobinTarget === 'TEAM' && node.teamId)
+                                    ? `Team: ${availableTeams.find((t: any) => t.id === node.teamId)?.name || 'Unknown'}`
+                                    : (node.assignmentMode !== 'DIRECT' && node.roundRobinTarget === 'AGENTS' && node.agentIds?.length > 0)
+                                      ? `${node.agentIds.length} Agents`
+                                      : 'Auto (Round Robin)'
+                                ) + (node.assignmentMode !== 'DIRECT' ? (node.distributionMethod === 'EQUAL_DISTRIBUTION' ? ' • Equal' : ' • Workload') : '')
                           }</span>
                         </div>
                       </div>
@@ -2854,6 +2856,23 @@ export default function WhatsAppChatbotBuilderPage() {
                                 </div>
                               </div>
                             )}
+
+                            <div>
+                              <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Distribution Method</label>
+                              <select
+                                value={selectedNode.distributionMethod || "WORKLOAD_BALANCE"}
+                                onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, distributionMethod: e.target.value } : n)))}
+                                style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                              >
+                                <option value="WORKLOAD_BALANCE">Workload Balance (Lowest Open Chats)</option>
+                                <option value="EQUAL_DISTRIBUTION">Equal Distribution (Turn-by-Turn Sequential)</option>
+                              </select>
+                              <span style={{ fontSize: "10px", color: "#64748b", marginTop: "4px", display: "block" }}>
+                                {selectedNode.distributionMethod === "EQUAL_DISTRIBUTION" 
+                                  ? "Chats are evenly rotated turn-by-turn among agents."
+                                  : "Assigns to whoever currently has the lowest active open chat load."}
+                              </span>
+                            </div>
                           </>
                         )}
                       </div>

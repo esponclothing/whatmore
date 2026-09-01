@@ -1569,6 +1569,62 @@ export async function toggleConversationAIAction(conversationId: string, enabled
 }
 
 // ---------------------------------------------------------
+// TOGGLE CONVERSATION STATUS (OPEN / CLOSED)
+// ---------------------------------------------------------
+export async function toggleConversationStatusAction(conversationId: string, status: 'OPEN' | 'CLOSED') {
+  try {
+    const updated = await prisma.whatsAppConversation.update({
+      where: { id: conversationId },
+      data: { status }
+    });
+    revalidatePath('/whatsapp/inbox');
+    revalidatePath('/whatsapp/team-inbox');
+    return { success: true, status: updated.status };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+// ---------------------------------------------------------
+// UNASSIGN CONVERSATION (Returns chat to Unassigned tab)
+// ---------------------------------------------------------
+export async function unassignWhatsAppConversationAction(conversationId: string) {
+  try {
+    const conv = await prisma.whatsAppConversation.findUnique({
+      where: { id: conversationId },
+      include: { assignedEmployee: { include: { user: true } } }
+    });
+    if (!conv) return { success: false, error: "Conversation not found" };
+
+    const prevName = conv.assignedEmployee?.user?.name || "Agent";
+
+    await prisma.whatsAppConversation.update({
+      where: { id: conversationId },
+      data: { assignedEmployeeId: null }
+    });
+
+    await prisma.whatsAppMessage.create({
+      data: {
+        conversationId,
+        senderType: 'SYSTEM',
+        senderName: 'System Assignment',
+        messageType: 'TEXT',
+        content: `Internal Note: Conversation unassigned from ${prevName}. Moved to Unassigned queue.`,
+        isInternalNote: true,
+        status: 'SENT',
+        sentAt: new Date()
+      }
+    });
+
+    revalidatePath('/whatsapp/inbox');
+    revalidatePath('/whatsapp/team-inbox');
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+// ---------------------------------------------------------
 // NEW: REAL BROADCAST DISPATCH (calls Meta API for each contact)
 // ---------------------------------------------------------
 export async function launchWhatsAppBroadcastAction(data: {

@@ -72,6 +72,8 @@ import {
   assignWhatsAppLeadAction,
   getAllEmployeesAndTeams,
   toggleConversationAIAction,
+  toggleConversationStatusAction,
+  unassignWhatsAppConversationAction,
   createFollowUpTaskAction,
   uploadMediaToMetaAction,
   getWhatsAppCannedResponsesAction,
@@ -199,6 +201,7 @@ export default function WhatsAppInboxComponent() {
   const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
   const [showAssignModal, setShowAssignModal] = useState<boolean>(false);
   const [assigningLead, setAssigningLead] = useState<boolean>(false);
+  const [statusToggleLoading, setStatusToggleLoading] = useState<boolean>(false);
 
   // Tags State
   const [showTagsModal, setShowTagsModal] = useState<boolean>(false);
@@ -975,10 +978,47 @@ export default function WhatsAppInboxComponent() {
     });
     if (res.success) {
       setShowAssignModal(false);
+      setToastMsg(`Lead assigned successfully.`);
+      setTimeout(() => setToastMsg(null), 3000);
       await fetchConversationDetail(selectedConvId, true);
       await fetchConversationsList(true);
+    } else {
+      setToastMsg(`Failed to assign lead: ${res.error || ""}`);
+      setTimeout(() => setToastMsg(null), 3000);
     }
     setAssigningLead(false);
+  };
+
+  // Handle Lead Unassignment (Moves back to Unassigned tab)
+  const handleUnassignLead = async () => {
+    if (!selectedConvId) return;
+    setAssigningLead(true);
+    const res = await unassignWhatsAppConversationAction(selectedConvId);
+    if (res.success) {
+      setShowAssignModal(false);
+      setToastMsg("Chat unassigned and moved to Unassigned queue.");
+      setTimeout(() => setToastMsg(null), 3000);
+      await fetchConversationDetail(selectedConvId, true);
+      await fetchConversationsList(true);
+    } else {
+      setToastMsg(`Failed to unassign: ${res.error || ""}`);
+      setTimeout(() => setToastMsg(null), 3000);
+    }
+    setAssigningLead(false);
+  };
+
+  const handleToggleConversationStatus = async (status: string) => {
+    if (!selectedConvId) return;
+    const res = await toggleConversationStatusAction(selectedConvId, status);
+    if (res.success) {
+      setToastMsg(`Chat status updated to ${status}.`);
+      setTimeout(() => setToastMsg(null), 3000);
+      await fetchConversationDetail(selectedConvId, true);
+      await fetchConversationsList(true);
+    } else {
+      setToastMsg(`Failed to update status: ${res.error || ""}`);
+      setTimeout(() => setToastMsg(null), 3000);
+    }
   };
 
   const handleResetFilters = () => {
@@ -1213,6 +1253,12 @@ export default function WhatsAppInboxComponent() {
                           <span className="badge-human-pill">Human</span>
                         )}
 
+                        {conv.status === 'CLOSED' && (
+                          <span style={{ fontSize: "9px", padding: "1px 5px", borderRadius: "4px", background: "#f1f5f9", color: "#64748b", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "2px", border: "1px solid #cbd5e1" }}>
+                            ✓ Closed
+                          </span>
+                        )}
+
                         {isExpired && (
                           <span style={{ fontSize: "9px", padding: "1px 5px", borderRadius: "4px", background: "#fee2e2", color: "#ef4444", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "2px", border: "1px solid rgba(239,68,68,0.2)" }}>
                             🔒 Expired
@@ -1394,6 +1440,33 @@ export default function WhatsAppInboxComponent() {
                 >
                   <Bot size={14} />
                   <span>{aiToggleLoading ? "..." : activeConvDetail.aiHandled ? "AI: ON" : "AI: OFF"}</span>
+                </button>
+                <button
+                  className="chat-action-btn"
+                  disabled={statusToggleLoading}
+                  onClick={async () => {
+                    if (!activeConvDetail?.id) return;
+                    setStatusToggleLoading(true);
+                    const newStatus = activeConvDetail.status === 'CLOSED' ? 'OPEN' : 'CLOSED';
+                    const res = await toggleConversationStatusAction(activeConvDetail.id, newStatus);
+                    if (res.success) {
+                      setActiveConvDetail((prev: any) => ({ ...prev, status: newStatus }));
+                      setToastMsg(newStatus === 'CLOSED' ? "✅ Chat Closed — Active workload reduced" : "🔓 Chat Reopened");
+                      setTimeout(() => setToastMsg(null), 3000);
+                      fetchConversationsList(true);
+                    }
+                    setStatusToggleLoading(false);
+                  }}
+                  title={activeConvDetail.status === 'CLOSED' ? "Click to Reopen Chat" : "Click to Close Chat (Reduces agent active open chat count)"}
+                  style={{
+                    background: activeConvDetail.status === 'CLOSED' ? "#f1f5f9" : "#fff1f2",
+                    border: `1px solid ${activeConvDetail.status === 'CLOSED' ? "#cbd5e1" : "#fecdd3"}`,
+                    color: activeConvDetail.status === 'CLOSED' ? "#475569" : "#e11d48",
+                    fontWeight: 600
+                  }}
+                >
+                  <CheckCircle2 size={14} />
+                  <span>{statusToggleLoading ? "..." : activeConvDetail.status === 'CLOSED' ? "Reopen Chat" : "Close Chat"}</span>
                 </button>
                 <button
                   className={`chat-action-btn ${isFullScreen ? "active-fullscreen" : ""}`}
@@ -2560,6 +2633,35 @@ export default function WhatsAppInboxComponent() {
               <button onClick={() => setShowAssignModal(false)}>×</button>
             </div>
             <div className="modal-form-body">
+              {activeConvDetail?.assignedEmployee && (
+                <div style={{ marginBottom: "14px", padding: "10px 12px", background: "#fef2f2", border: "1px solid #fee2e2", borderRadius: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <span style={{ fontSize: "12px", color: "#991b1b", fontWeight: 700, display: "block" }}>
+                      Assigned to: {activeConvDetail.assignedEmployee.user?.name || "Agent"}
+                    </span>
+                    <span style={{ fontSize: "11px", color: "#b91c1c" }}>
+                      Return this conversation to the Unassigned queue.
+                    </span>
+                  </div>
+                  <button
+                    disabled={assigningLead}
+                    onClick={handleUnassignLead}
+                    style={{
+                      background: "#ef4444",
+                      color: "#ffffff",
+                      border: "none",
+                      padding: "6px 12px",
+                      borderRadius: "5px",
+                      fontSize: "11.5px",
+                      fontWeight: 700,
+                      cursor: "pointer"
+                    }}
+                  >
+                    Unassign Chat
+                  </button>
+                </div>
+              )}
+
               <div style={{ marginBottom: "12px" }}>
                 <span style={{ fontSize: "12px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>
                   Select Agent to Assign
