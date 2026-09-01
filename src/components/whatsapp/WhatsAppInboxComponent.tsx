@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import TemplatePickerModal from "./TemplatePickerModal";
 import FlowPickerModal from "./FlowPickerModal";
@@ -206,6 +206,13 @@ export default function WhatsAppInboxComponent() {
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#e2e8f0");
   const [isCreatingTag, setIsCreatingTag] = useState(false);
+
+  // Unified active tags (merged between conversation and customer)
+  const activeTagsList = useMemo(() => {
+    const t1 = (activeConvDetail?.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
+    const t2 = (activeConvDetail?.customer?.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
+    return Array.from(new Set([...t1, ...t2]));
+  }, [activeConvDetail?.tags, activeConvDetail?.customer?.tags]);
 
   // Quote Form State
   const [quoteItems, setQuoteItems] = useState([
@@ -855,7 +862,7 @@ export default function WhatsAppInboxComponent() {
   const handleToggleConversationTag = async (tagName: string) => {
     if (!selectedConvId) return;
     
-    let currentTags = (activeConvDetail?.tags || "").split(",").map((t: string) => t.trim()).filter(Boolean);
+    let currentTags = [...activeTagsList];
     const hasTag = currentTags.includes(tagName);
     const action = hasTag ? "remove" : "add";
 
@@ -867,7 +874,12 @@ export default function WhatsAppInboxComponent() {
     }
     
     // Temporarily update activeConvDetail
-    const updatedConv = { ...activeConvDetail, tags: currentTags.join(", ") };
+    const updatedConv = { 
+      ...activeConvDetail, 
+      tags: currentTags.join(", "),
+      customer: activeConvDetail?.customer ? { ...activeConvDetail.customer, tags: currentTags.join(", ") } : activeConvDetail?.customer 
+    };
+    setActiveConvDetail(updatedConv);
     
     try {
       const res = await fetch('/api/whatsapp/tags', {
@@ -1344,7 +1356,7 @@ export default function WhatsAppInboxComponent() {
 {/* Call button removed */}
                 <button className="chat-action-btn highlight-tags" onClick={() => setShowTagsModal(true)} title="Manage Tags">
                   <Tag size={14} />
-                  <span>Tags ({activeConvDetail.tags ? activeConvDetail.tags.split(',').length : 0})</span>
+                  <span>Tags ({activeTagsList.length})</span>
                 </button>
                 <button className="chat-action-btn highlight-assign" onClick={() => setShowAssignModal(true)} title="Assign WhatsApp Lead">
                   <UserCheck size={14} />
@@ -2467,13 +2479,13 @@ export default function WhatsAppInboxComponent() {
                   Current Tags
                 </span>
                 <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "8px" }}>
-                  {(activeConvDetail?.tags || "").split(",").filter(Boolean).map((t: string) => (
+                  {activeTagsList.map((t: string) => (
                     <span key={t} className="tag-pill" style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#e0f2fe', color: '#0369a1', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 600 }}>
-                      {t.trim()}
-                      <X size={12} style={{ cursor: 'pointer' }} onClick={() => handleToggleConversationTag(t.trim())} />
+                      {t}
+                      <X size={12} style={{ cursor: 'pointer' }} onClick={() => handleToggleConversationTag(t)} />
                     </span>
                   ))}
-                  {!(activeConvDetail?.tags || "").split(",").filter(Boolean).length && (
+                  {!activeTagsList.length && (
                     <span style={{ fontSize: "12px", color: "#94a3b8" }}>No tags assigned yet.</span>
                   )}
                 </div>
@@ -2485,7 +2497,7 @@ export default function WhatsAppInboxComponent() {
                 </span>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px", maxHeight: "200px", overflowY: "auto" }}>
                   {availableTags.map((tag) => {
-                    const isAssigned = (activeConvDetail?.tags || "").includes(tag.name);
+                    const isAssigned = activeTagsList.includes(tag.name);
                     return (
                       <div key={tag.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

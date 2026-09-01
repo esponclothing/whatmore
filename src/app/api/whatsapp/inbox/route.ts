@@ -110,9 +110,10 @@ export async function GET(req: NextRequest) {
           is_within_24h: hoursElapsed <= 24,
           hours_elapsed: Math.round(hoursElapsed * 10) / 10,
           ai_paused: !conv.aiHandled,
-          chat_status: conv.status === "OPEN" ? "open" : "closed",
-          tags: conv.customer?.tags?.split(",").map((t: string) => t.trim()).filter(Boolean) || [],
-          has_order: (conv.customer?.totalOrders || 0) > 0,
+          tags: Array.from(new Set([
+            ...(conv.tags || '').split(','),
+            ...(conv.customer?.tags || '').split(',')
+          ])).map((t: string) => t.trim()).filter(Boolean),
           order_count: conv.customer?.totalOrders || 0,
           order_status: "unknown",
           message_count: conv.unreadCount || 0,
@@ -260,8 +261,24 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      // Consolidate and sync tags between conversation and customer
+      const mergedTagsList = Array.from(new Set([
+        ...(conversation.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean),
+        ...(conversation.customer?.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean),
+      ]));
+      const mergedTagsStr = mergedTagsList.join(', ');
+
+      // If conversation.tags was missing tags from customer, persist it back
+      if (conversation.tags !== mergedTagsStr) {
+        await prisma.whatsAppConversation.update({
+          where: { id: convId },
+          data: { tags: mergedTagsStr }
+        }).catch(() => {});
+      }
+
       const formatted = {
         ...conversation,
+        tags: mergedTagsStr,
         slaStatus: conversation.slaStatus || 'GREEN'
       };
 
