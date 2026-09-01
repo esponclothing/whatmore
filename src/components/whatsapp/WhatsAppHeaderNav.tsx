@@ -4,10 +4,24 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  MessageSquare, LayoutDashboard, Bot, ShoppingBag, Key, Activity, Box, GitBranch, FileCode, Zap
+  MessageSquare, LayoutDashboard, Bot, ShoppingBag, Key, Activity, Box, GitBranch, FileCode, Zap, Bell
 } from "lucide-react";
 import "./WhatsAppHeaderNav.css";
 import { getWhatsAppDashboardMetrics } from "@/app/actions/whatsAppPlatformActions";
+
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 
+  "BB-KZlpv_rpNWxWRhy0qmhKvmRPSD54y7BKlbA07xsuRbUlEbDLASekDIHTFgX-au3sAOSG4WJ5ZaHgk9tJ0HEg";
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
 
 const subNavItems = [
   { name: "Dashboard", path: "/whatsapp/dashboard", icon: LayoutDashboard },
@@ -61,6 +75,63 @@ export default function WhatsAppHeaderNav() {
       }
     } catch {}
   }, []);
+  const handleTestNotification = async () => {
+    if (!("Notification" in window)) {
+      alert("This browser does not support desktop notification");
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      try {
+        const registration = await navigator.serviceWorker.register("/sw.js");
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+          });
+        }
+        const sub = subscription.toJSON();
+        
+        // Save it
+        await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            endpoint: sub.endpoint,
+            p256dh: sub.keys?.p256dh,
+            auth: sub.keys?.auth
+          })
+        });
+
+        // Trigger test push
+        await fetch("/api/push/send", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "x-internal-secret": "crm_internal_2026"
+          },
+          body: JSON.stringify({
+            subscription: {
+              endpoint: sub.endpoint,
+              keys: { p256dh: sub.keys?.p256dh, auth: sub.keys?.auth }
+            },
+            payload: JSON.stringify({
+              title: "Test Notification",
+              body: "Web Push Notifications are working!",
+              data: { url: "/whatsapp/inbox" }
+            })
+          })
+        });
+      } catch (err) {
+        console.error(err);
+        alert("Failed to subscribe or test notifications. Check console.");
+      }
+    } else {
+      alert("Notification permission denied.");
+    }
+  };
+
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.href = "/login";
@@ -87,6 +158,9 @@ export default function WhatsAppHeaderNav() {
           <span>WhatsApp API: {accountInfo.status}</span>
         </Link>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginLeft: "12px" }}>
+          <button onClick={handleTestNotification} title="Test Notifications" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "32px", height: "32px", borderRadius: "50%", background: "rgba(99, 102, 241, 0.1)", color: "#6366f1", border: "none", cursor: "pointer" }}>
+            <Bell size={16} />
+          </button>
           {userName && <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>{userName}</span>}
           <button onClick={handleLogout} style={{ padding: "5px 12px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "#f87171", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>Sign Out</button>
         </div>
