@@ -508,6 +508,167 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
         }
     }
 
+    // ── SET_VAR: store a value in flow variables
+    if (type === 'SET_VAR') {
+      if (node.variableName) {
+        vars[node.variableName] = node.variableValue || '';
+      }
+    }
+
+    // ── CONDITION: branch based on variable value
+    if (type === 'CONDITION') {
+      const varVal = (vars[node.variableName] || '').toLowerCase();
+      const cmpVal = (node.compareValue || '').toLowerCase();
+      let conditionMet = false;
+      if (node.operator === 'EQUALS') conditionMet = varVal === cmpVal;
+      else if (node.operator === 'CONTAINS') conditionMet = varVal.includes(cmpVal);
+      else if (node.operator === 'GREATER_THAN') conditionMet = parseFloat(varVal) > parseFloat(cmpVal);
+      else if (node.operator === 'LESS_THAN') conditionMet = parseFloat(varVal) < parseFloat(cmpVal);
+
+      if (conditionMet && node.truePort) {
+        nextNodeId = node.truePort;
+        continue;
+      } else if (!conditionMet && node.falsePort) {
+        nextNodeId = node.falsePort;
+        continue;
+      }
+      nextNodeId = node.outputPort || null;
+      continue;
+    }
+
+    // ── JUMP: redirect flow to another node
+    if (type === 'JUMP') {
+      if (node.targetNodeId) {
+        nextNodeId = node.targetNodeId;
+        continue;
+      }
+    }
+
+    // ── SPLIT_TEST: random A/B routing
+    if (type === 'SPLIT_TEST') {
+      const [aRatio] = (node.splitRatio || '50/50').split('/').map(Number);
+      const rand = Math.random() * 100;
+      if (rand < aRatio && node.branchAPort) {
+        nextNodeId = node.branchAPort;
+        continue;
+      } else if (node.branchBPort) {
+        nextNodeId = node.branchBPort;
+        continue;
+      }
+    }
+
+    // ── PAY_LINK / PAY_COLLECT: generate real payment link
+    if (type === 'PAY_LINK' || type === 'PAY_COLLECT' || type === 'CATALOG_PAYMENT') {
+      try {
+        const creds = await prisma.whatsAppSettings.findFirst();
+        const gw = creds?.activeGateway;
+        const amount = parseFloat(node.amount) || 1500;
+        const desc = node.paymentDescription || 'Payment';
+        const cleanPhone = toPhone.replace(/\D/g, '').slice(-10);
+        const cust = await prisma.customer.findFirst({
+          where: { OR: [{ mobile: { contains: cleanPhone } }, { whatsappNumber: { contains: cleanPhone } }] }
+        });
+        let payUrl: string | null = null;
+
+        if (gw === 'RAZORPAY' && creds?.razorpayKeyId && creds?.razorpayKeySecret) {
+          const auth = Buffer.from(`${creds.razorpayKeyId}:${creds.razorpayKeySecret}`).toString('base64');
+          const rzpRes = await fetch('https://api.razorpay.com/v1/payment_links', {
+            method: 'POST',
+            headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              amount: Math.round(amount * 100), // paise
+              currency: node.currency || 'INR',
+              description: desc,
+              customer: { name: cust?.contactPerson || 'Customer', contact: `+91${cleanPhone}` },
+              notify: { sms: false, email: false },
+              reminder_enable: false
+            })
+          });
+          const rzpData = await rzpRes.json();
+          if (rzpData.short_url) payUrl = rzpData.short_url;
+        } else if (gw === 'CASHFREE' && creds?.cashfreeAppId && creds?.cashfreeSecretKey) {
+          const cfRes = await fetch('https://api.cashfree.com/pg/links', {
+            method: 'POST',
+            headers: { 'x-api-version': '2023-08-01', 'x-client-id': creds.cashfreeAppId, 'x-client-secret': creds.cashfreeSecretKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              link_id: `wm_${Date.now()}`,
+              link_amount: amount,
+              link_currency: node.currency || 'INR',
+              link_purpose: desc,
+              customer_details: { customer_phone: cleanPhone, customer_name: cust?.contactPerson || 'Customer' }
+            })
+          });
+          const cfData = await cfRes.json();
+          if (cfData.link_url) payUrl = cfData.link_url;
+        }
+
+        if (payUrl) {
+          // Send CTA button with payment link
+          const acct = await getCreds();
+          if (acct) {
+            const msgText = `💳 *Payment Request*\n\nAmount: ₹${amount}\nDescription: ${desc}\n\nClick below to pay securely:`;
+            const ctaPayload = {
+              messaging_product: 'whatsapp', recipient_type: 'individual',
+              to: `91${cleanPhone}`,
+              type: 'interactive',
+              interactive: {
+                type: 'cta_url',
+                body: { text: msgText },
+                action: { name: 'cta_url', parameters: { display_text: '💳 Pay Now', url: payUrl } }
+              }
+            };
+            await fetch(`https://graph.facebook.com/v20.0/${acct.phoneId}/messages`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${acct.token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(ctaPayload)
+            });
+
+            // Log as BOT message
+            const resolvedConvId = conversationId || (await prisma.whatsAppConversation.findFirst({ where: { customer: { OR: [{ mobile: { contains: cleanPhone } }, { whatsappNumber: { contains: cleanPhone } }] } }, orderBy: { updatedAt: 'desc' } }))?.id;
+            if (resolvedConvId) {
+              await prisma.whatsAppMessage.create({
+                data: {
+                  conversationId: resolvedConvId, senderType: 'BOT', senderName: 'Chatbot',
+                  messageType: 'TEXT', content: `${msgText}\n\n${payUrl}`, status: 'SENT', sentAt: new Date()
+                }
+              });
+            }
+          }
+        } else {
+          console.warn(`[PAY_LINK] No active payment gateway configured. Set one in Settings > Integrations.`);
+        }
+      } catch (e: any) {
+        console.error('[PAY_LINK Error]:', e.message);
+      }
+    }
+
+    // ── UPI_QR: send UPI deep-link QR as text message
+    if (type === 'UPI_QR') {
+      try {
+        const acct = await getCreds();
+        const cleanPhone = toPhone.replace(/\D/g, '').slice(-10);
+        const upiId = node.upiId || '';
+        const amount = node.amount || '';
+        const payeeName = node.payeeName || 'Espon';
+        const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${amount}&cu=INR`;
+        const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(upiLink)}`;
+        const msgText = `${node.text || 'Scan to pay via UPI'}\n\n🏦 UPI ID: *${upiId}*\n💰 Amount: ₹${amount}\n\nOr open GPay/PhonePe/Paytm and pay to:\n*${upiId}*`;
+
+        if (acct) {
+          const imgPayload = {
+            messaging_product: 'whatsapp', to: `91${cleanPhone}`, type: 'image',
+            image: { link: qrApiUrl, caption: msgText.slice(0, 1024) }
+          };
+          await fetch(`https://graph.facebook.com/v20.0/${acct.phoneId}/messages`, {
+            method: 'POST', headers: { 'Authorization': `Bearer ${acct.token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(imgPayload)
+          });
+        }
+      } catch (e: any) {
+        console.error('[UPI_QR Error]:', e.message);
+      }
+    }
+
     // Pause at interactive nodes
     const isPause = ['CHOICE', 'INPUT_PHONE', 'INPUT_NAME', 'INPUT_EMAIL', 'INPUT_DATE'].includes(type);
     if (isPause) {
