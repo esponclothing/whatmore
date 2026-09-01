@@ -734,6 +734,19 @@ export async function generateWhatsAppPaymentLinkAction(data: {
     } else if (gw === 'UPI' && creds?.merchantUpiId) {
       const domain = process.env.NEXTAUTH_URL || 'https://whatmore-production.up.railway.app';
       paymentUrl = `${domain}/pay?pa=${encodeURIComponent(creds.merchantUpiId)}&pn=${encodeURIComponent(creds.merchantUpiName || 'Espon')}&am=${data.amount}&tn=${encodeURIComponent(data.description)}`;
+
+      const upiLink = `upi://pay?pa=${encodeURIComponent(creds.merchantUpiId)}&pn=${encodeURIComponent(creds.merchantUpiName || 'Espon')}&am=${data.amount}&cu=INR&tn=${encodeURIComponent(data.description)}`;
+      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(upiLink)}`;
+      const qrMsgText = `🏦 UPI ID: *${creds.merchantUpiId}*\n\nScan this QR to pay, or click the Pay Now button below.`;
+
+      await sendWhatsAppMessageAction({
+        conversationId: data.conversationId,
+        senderType: 'AGENT',
+        senderName: 'Billing System',
+        messageType: 'IMAGE',
+        content: qrMsgText,
+        mediaUrl: qrApiUrl,
+      });
     }
     
     const paymentLink = await prisma.whatsAppPaymentLink.create({

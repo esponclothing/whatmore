@@ -605,6 +605,24 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
           const payeeName = creds.merchantUpiName || 'Espon';
           const domain = process.env.NEXTAUTH_URL || 'https://whatmore-production.up.railway.app';
           payUrl = `${domain}/pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${amount}&tn=${encodeURIComponent(desc)}`;
+
+          const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(desc)}`;
+          const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(upiLink)}`;
+          const qrMsgText = `🏦 UPI ID: *${upiId}*\n\nScan this QR to pay, or click the Pay Now button below.`;
+
+          const acct = await getCreds();
+          if (acct) {
+            const imgPayload = {
+              messaging_product: 'whatsapp', to: `91${cleanPhone}`, type: 'image',
+              image: { link: qrApiUrl, caption: qrMsgText.slice(0, 1024) }
+            };
+            try {
+              await fetch(`https://graph.facebook.com/v20.0/${acct.phoneId}/messages`, {
+                method: 'POST', headers: { 'Authorization': `Bearer ${acct.token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(imgPayload)
+              });
+            } catch (e) {}
+          }
         }
 
         if (payUrl) {
