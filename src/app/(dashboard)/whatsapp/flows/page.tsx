@@ -210,21 +210,19 @@ export default function WhatsAppFlowsPage() {
     if (!file) return;
     setUploadingImage(true);
     try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const dataUrl = e.target?.result as string;
-        const res = await uploadMediaToMetaAction(dataUrl, file.name, file.type);
-        if (res.success) {
-          setNewReplyMediaUrl(res.mediaId);
-          showToast("Image uploaded successfully!");
-        } else {
-          showToast(res.error || "Failed to upload image", "error");
-        }
-        setUploadingImage(false);
-      };
-      reader.readAsDataURL(file);
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const res = await uploadMediaToMetaAction(formData);
+      if (res.success) {
+        setNewReplyMediaUrl(res.mediaId);
+        showToast("Image uploaded successfully!");
+      } else {
+        showToast(res.error || "Failed to upload image", "error");
+      }
     } catch (e: any) {
       showToast(e.message, "error");
+    } finally {
       setUploadingImage(false);
     }
   };

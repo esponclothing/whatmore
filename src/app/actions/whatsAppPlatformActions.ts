@@ -1935,21 +1935,20 @@ export async function saveWhatsAppSettingsAction(data: {
 // ---------------------------------------------------------
 // 15. SECURE UPLOAD MEDIA TO META
 // ---------------------------------------------------------
-export async function uploadMediaToMetaAction(base64DataUrl: string, filename: string, mimeType: string) {
+export async function uploadMediaToMetaAction(formData: FormData) {
   try {
     const account = await prisma.whatsAppAccount.findFirst();
     const token = account?.accessToken;
     const phoneId = account?.phoneId;
     if (!token || !phoneId) return { success: false, error: "Missing WhatsApp credentials" };
 
-    const base64Data = base64DataUrl.split(',')[1];
-    const buffer = Buffer.from(base64Data, 'base64');
-    const blob = new Blob([buffer], { type: mimeType });
+    const file = formData.get('file') as File;
+    if (!file) return { success: false, error: "No file provided" };
 
-    const formData = new FormData();
-    formData.append('file', blob, filename);
-    formData.append('type', mimeType);
-    formData.append('messaging_product', 'whatsapp');
+    const metaFormData = new FormData();
+    metaFormData.append('file', file);
+    metaFormData.append('type', file.type);
+    metaFormData.append('messaging_product', 'whatsapp');
 
     const url = `https://graph.facebook.com/v20.0/${phoneId}/media`;
     const response = await fetch(url, {
