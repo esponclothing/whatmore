@@ -507,7 +507,7 @@ export default function WhatsAppFlowsPage() {
                   <div key={i} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "10px", marginBottom: "8px", position: "relative" }}>
                     <button type="button" onClick={() => removeReplyButton(i)} style={{ position: "absolute", top: "6px", right: "6px", background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}><X size={14} /></button>
                     
-                    <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "8px", position: "relative" }}>
                       <select 
                         value={btn.type} 
                         onChange={(e) => updateReplyButton(i, "type", e.target.value)}
@@ -516,14 +516,19 @@ export default function WhatsAppFlowsPage() {
                         <option value="reply">Quick Reply</option>
                         <option value="url">URL Link</option>
                       </select>
-                      <input 
-                        type="text" 
-                        placeholder="Button Text" 
-                        value={btn.text} 
-                        onChange={(e) => updateReplyButton(i, "text", e.target.value)}
-                        maxLength={20}
-                        style={{ flex: 1, padding: "6px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px", outline: "none" }}
-                      />
+                      <div style={{ flex: 1, position: "relative" }}>
+                        <input 
+                          type="text" 
+                          placeholder="Button Text" 
+                          value={btn.text} 
+                          onChange={(e) => updateReplyButton(i, "text", e.target.value)}
+                          maxLength={20}
+                          style={{ width: "100%", padding: "6px", paddingRight: "40px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px", outline: "none" }}
+                        />
+                        <span style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", fontSize: "10px", color: (btn.text?.length || 0) >= 20 ? "#ef4444" : "#94a3b8" }}>
+                          {(btn.text?.length || 0)}/20
+                        </span>
+                      </div>
                     </div>
                     {btn.type === "url" && (
                       <input 
