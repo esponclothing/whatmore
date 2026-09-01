@@ -1022,12 +1022,26 @@ export default function WhatsAppChatbotBuilderPage() {
           });
         }
       }
-      if (node.type === "CRM_ROUNDROBIN") {
-        if (!node.distributionMethod) {
-          errors.push(`Agent Routing block "${node.title}" has no distribution method selected.`);
-        }
-        if (!node.routingTargets || node.routingTargets.length === 0) {
-          errors.push(`Agent Routing block "${node.title}" has no agents or teams assigned.`);
+      const type = (node.type || "").toUpperCase();
+      if (type === "CRM_ROUNDROBIN") {
+        if (node.assignmentMode === "DIRECT") {
+          if (!node.agentId) {
+            errors.push(`Agent Routing block "${node.title}" has no specific agent selected.`);
+          }
+        } else {
+          if (!node.distributionMethod) {
+            errors.push(`Agent Routing block "${node.title}" has no distribution method selected.`);
+          }
+          if (node.roundRobinTarget === "AGENTS") {
+            if (!node.agentIds || node.agentIds.length === 0) {
+              errors.push(`Agent Routing block "${node.title}" has no agents selected.`);
+            }
+          } else {
+            // Default to TEAM
+            if (!node.teamId) {
+              errors.push(`Agent Routing block "${node.title}" has no team selected.`);
+            }
+          }
         }
       }
     });
