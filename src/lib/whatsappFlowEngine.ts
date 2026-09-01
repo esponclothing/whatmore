@@ -603,7 +603,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
         } else if (gw === 'UPI' && creds?.merchantUpiId) {
           const upiId = creds.merchantUpiId;
           const payeeName = creds.merchantUpiName || 'Espon';
-          const domain = process.env.NEXTAUTH_URL || 'https://whatmore-production.up.railway.app';
+          const domain = process.env.NEXTAUTH_URL || 'https://whatsapp.esponsports.com';
           payUrl = `${domain}/pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${amount}&tn=${encodeURIComponent(desc)}`;
 
           const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(desc)}`;

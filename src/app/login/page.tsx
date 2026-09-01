@@ -105,6 +105,18 @@ function LoginForm() {
         <p style={{ textAlign: "center", color: "#334155", fontSize: "12px", marginTop: "20px" }}>
           Contact your administrator for access credentials
         </p>
+        
+        <div style={{ textAlign: "center", marginTop: "16px" }}>
+          <button
+            type="button"
+            onClick={() => router.push("/owner/login")}
+            style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", padding: "8px 16px", borderRadius: "8px", fontSize: "12px", cursor: "pointer", transition: "all 0.2s" }}
+            onMouseOver={e => { e.currentTarget.style.color = "#f8fafc"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)"; }}
+            onMouseOut={e => { e.currentTarget.style.color = "#94a3b8"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; }}
+          >
+            Are you the owner? Owner Login
+          </button>
+        </div>
       </div>
     </div>
   );

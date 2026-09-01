@@ -695,7 +695,7 @@ export async function generateWhatsAppPaymentLinkAction(data: {
   try {
     const creds = await prisma.whatsAppSettings.findFirst();
     const gw = creds?.activeGateway;
-    const domain = process.env.NEXTAUTH_URL || 'https://whatmore-production.up.railway.app';
+    const domain = process.env.NEXTAUTH_URL || 'https://whatsapp.esponsports.com';
     let paymentUrl = `${domain}/pay`;
 
     const customer = await prisma.customer.findUnique({ where: { id: data.customerId } });
@@ -732,7 +732,7 @@ export async function generateWhatsAppPaymentLinkAction(data: {
       const cfData = await cfRes.json();
       if (cfData.link_url) paymentUrl = cfData.link_url;
     } else if (gw === 'UPI' && creds?.merchantUpiId) {
-      const domain = process.env.NEXTAUTH_URL || 'https://whatmore-production.up.railway.app';
+      const domain = process.env.NEXTAUTH_URL || 'https://whatsapp.esponsports.com';
       paymentUrl = `${domain}/pay?pa=${encodeURIComponent(creds.merchantUpiId)}&pn=${encodeURIComponent(creds.merchantUpiName || 'Espon')}&am=${data.amount}&tn=${encodeURIComponent(data.description)}`;
 
       const upiLink = `upi://pay?pa=${encodeURIComponent(creds.merchantUpiId)}&pn=${encodeURIComponent(creds.merchantUpiName || 'Espon')}&am=${data.amount}&cu=INR&tn=${encodeURIComponent(data.description)}`;
