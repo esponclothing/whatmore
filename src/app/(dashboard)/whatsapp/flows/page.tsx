@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import {
   GitBranch, Plus, Search, RefreshCw, CheckCircle2, Clock, AlertCircle,
-  X, Send, Trash2, Eye, Info, HelpCircle, MessageSquare, Edit
+  X, Send, Trash2, Eye, Info, HelpCircle, MessageSquare, Edit, Link
 } from "lucide-react";
 import { 
   getWhatsAppMetaFlows, 
@@ -564,6 +564,32 @@ export default function WhatsAppFlowsPage() {
               </button>
             </div>
           </form>
+
+          {/* Live Preview Side Panel */}
+          <div style={{ flex: "0 0 300px", background: "#e5ddd5", padding: "16px", borderRadius: "16px", position: "sticky", top: "20px", border: "1px solid #cbd5e1", display: "flex", flexDirection: "column", gap: "10px", backgroundImage: "url('https://i.ibb.co/37jM3K9/bg-chat.png')", backgroundSize: "cover" }}>
+            <h4 style={{ fontSize: "14px", fontWeight: 700, color: "#111827", margin: "0 0 8px", textAlign: "center", background: "rgba(255,255,255,0.9)", padding: "6px", borderRadius: "8px" }}>
+              Live Preview
+            </h4>
+            <div style={{ background: "white", borderRadius: "0 8px 8px 8px", padding: "8px", maxWidth: "90%", boxShadow: "0 1px 2px rgba(0,0,0,0.1)", display: "flex", flexDirection: "column", gap: "6px" }}>
+              {newReplyMediaUrl && (
+                <img src={newReplyMediaUrl} alt="Preview" style={{ width: "100%", height: "140px", objectFit: "cover", borderRadius: "6px" }} onError={(e) => e.currentTarget.style.display = 'none'} />
+              )}
+              {newReplyHeader && <strong style={{ fontSize: "12px", color: "#334155" }}>{newReplyHeader}</strong>}
+              <div style={{ fontSize: "13.5px", color: "#0f172a", whiteSpace: "pre-wrap", lineHeight: 1.4 }}>
+                {newReplyContent || "Type a message body..."}
+              </div>
+              {newReplyFooter && <span style={{ fontSize: "11px", color: "#94a3b8" }}>{newReplyFooter}</span>}
+            </div>
+            {newReplyButtons.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px", maxWidth: "90%" }}>
+                {newReplyButtons.map((btn, i) => (
+                  <div key={i} style={{ background: "white", padding: "8px", borderRadius: "8px", textAlign: "center", fontSize: "13px", fontWeight: 600, color: "#00a884", boxShadow: "0 1px 2px rgba(0,0,0,0.1)", cursor: "default", display: "flex", justifyContent: "center", alignItems: "center", gap: "6px" }}>
+                    {btn.type === "url" ? <><Link size={14} />{btn.text || "URL Link"}</> : btn.text || "Quick Reply"}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* List */}
           <div style={{ flex: 1 }}>
