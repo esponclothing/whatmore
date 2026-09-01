@@ -237,7 +237,6 @@ export async function POST(req: NextRequest) {
           data: {
             accountId: account.id,
             customerId: customer.id,
-            assignedEmployeeId: customer.assignedSalespersonId,
             status: "OPEN",
             leadStatus: customer.leadStage || "New Lead",
             lastMessageText: textContent,
@@ -248,7 +247,6 @@ export async function POST(req: NextRequest) {
         });
       } else {
         wasClosed = conversation.status === "CLOSED";
-        const preservedAgentId = conversation.assignedEmployeeId || customer.assignedSalespersonId;
 
         await prisma.whatsAppConversation.update({
           where: { id: conversation.id },
@@ -257,12 +255,11 @@ export async function POST(req: NextRequest) {
             lastMessageAt: messageTimestamp,
             unreadCount: conversation.unreadCount + 1,
             status: "OPEN",
-            ...(preservedAgentId ? { assignedEmployeeId: preservedAgentId } : {})
           }
         });
 
-        if (wasClosed && preservedAgentId) {
-          console.log(`[Webhook Reopen] Reopened closed chat ${conversation.id} and retained assigned agent ${preservedAgentId}`);
+        if (wasClosed && conversation.assignedEmployeeId) {
+          console.log(`[Webhook Reopen] Reopened closed chat ${conversation.id} and retained assigned agent ${conversation.assignedEmployeeId}`);
         }
       }
 
