@@ -2171,6 +2171,27 @@ export default function WhatsAppChatbotBuilderPage() {
                       </div>
                     )}
 
+                    {node.type === "SET_VAR" && (
+                      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", marginBottom: "6px" }}>
+                        <Sliders size={13} style={{ marginRight: "4px" }} />
+                        <span>Set <strong>{node.variableName || 'variable'}</strong> = "{node.variableValue || ''}"</span>
+                      </div>
+                    )}
+
+                    {node.type === "SPLIT_TEST" && (
+                      <div style={{ background: "#fdf4ff", border: "1px solid #e9d5ff", color: "#6b21a8", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", marginBottom: "6px" }}>
+                        <Shuffle size={13} style={{ marginRight: "4px" }} />
+                        <span>A/B Split: {node.splitRatio || '50/50'}</span>
+                      </div>
+                    )}
+
+                    {node.type === "JUMP" && (
+                      <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", marginBottom: "6px" }}>
+                        <CornerDownRight size={13} style={{ marginRight: "4px" }} />
+                        <span>Jump to: {node.targetNodeId ? nodes.find((n: any) => n.id === node.targetNodeId)?.title || node.targetNodeId : 'Not set'}</span>
+                      </div>
+                    )}
+
                     {node.type === "WEBHOOK" && (
                       <div style={{ background: "#fdf4ff", border: "1px solid #f5d0fe", color: "#86198f", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", marginBottom: "6px" }}>
                         <Globe size={13} />
@@ -2983,14 +3004,89 @@ export default function WhatsAppChatbotBuilderPage() {
 
                 {selectedNode.type === "DELAY" && (
                   <div>
-                    <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Delay Duration (Minutes)</label>
-                    <input
-                      type="number"
-                      value={selectedNode.delayValue || 5}
-                      onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, delayValue: parseInt(e.target.value) || 1 } : n)))}
-                      style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px" }}
-                    />
+                    <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Delay Duration</label>
+                    <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                      <input
+                        type="number"
+                        value={selectedNode.delayValue || 5}
+                        onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, delayValue: parseInt(e.target.value) || 1 } : n)))}
+                        style={{ width: "70px", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px" }}
+                      />
+                      <select
+                        value={selectedNode.delayUnit || "MINUTES"}
+                        onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, delayUnit: e.target.value } : n)))}
+                        style={{ flex: 1, padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", background: "#fff" }}
+                      >
+                        <option value="SECONDS">Seconds</option>
+                        <option value="MINUTES">Minutes</option>
+                        <option value="HOURS">Hours</option>
+                      </select>
+                    </div>
                   </div>
+                )}
+
+                {selectedNode.type === "SET_VAR" && (
+                  <>
+                    <div>
+                      <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Variable Name</label>
+                      <input
+                        type="text"
+                        value={selectedNode.variableName || ""}
+                        placeholder="e.g. lead_status"
+                        onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, variableName: e.target.value } : n)))}
+                        style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Variable Value</label>
+                      <input
+                        type="text"
+                        value={selectedNode.variableValue || ""}
+                        placeholder="e.g. Qualified"
+                        onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, variableValue: e.target.value } : n)))}
+                        style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px" }}
+                      />
+                    </div>
+                    <p style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>This stores a value in a flow variable for use in Condition nodes.</p>
+                  </>
+                )}
+
+                {selectedNode.type === "SPLIT_TEST" && (
+                  <>
+                    <div>
+                      <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Split Ratio (A/B)</label>
+                      <select
+                        value={selectedNode.splitRatio || "50/50"}
+                        onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, splitRatio: e.target.value } : n)))}
+                        style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                      >
+                        <option value="50/50">50% / 50%</option>
+                        <option value="70/30">70% / 30%</option>
+                        <option value="80/20">80% / 20%</option>
+                        <option value="30/70">30% / 70%</option>
+                      </select>
+                    </div>
+                    <p style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>Randomly routes customers between Branch A and Branch B to A/B test messages.</p>
+                  </>
+                )}
+
+                {selectedNode.type === "JUMP" && (
+                  <>
+                    <div>
+                      <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Jump to Block</label>
+                      <select
+                        value={selectedNode.targetNodeId || ""}
+                        onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, targetNodeId: e.target.value } : n)))}
+                        style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                      >
+                        <option value="">— Select a block —</option>
+                        {nodes.filter((n: any) => n.id !== selectedNode.id).map((n: any) => (
+                          <option key={n.id} value={n.id}>{n.title || n.type} ({n.id.slice(-6)})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <p style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>Redirects the flow to another block anywhere in the canvas.</p>
+                  </>
                 )}
 
                 {selectedNode.type === "WEBHOOK" && (
