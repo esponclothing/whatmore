@@ -822,9 +822,56 @@ export default function WhatsAppInboxComponent() {
   };
 
   // Handle Quick Command Shortcut Insert
-  const applyQuickShortcut = (text: string) => {
-    setMessageInput((prev) => (prev ? `${prev} ${text}` : text));
-    setShowReplyLibraryModal(false);
+  const applyQuickShortcut = async (r: any) => {
+    // If it's a rich message with buttons or media or header/footer, send it immediately
+    const hasRichElements = r.buttons || r.mediaUrl || r.headerText || r.footerText;
+    
+    if (hasRichElements) {
+      if (!selectedConvId) {
+        alert("Please select a conversation first.");
+        return;
+      }
+      setSending(true);
+      setShowReplyLibraryModal(false);
+      setToastMsg("Sending rich quick reply...");
+      
+      try {
+        let buttonsParsed = r.buttons;
+        if (typeof buttonsParsed === 'string') {
+          buttonsParsed = JSON.parse(buttonsParsed);
+        }
+
+        const payload: any = {
+          conversationId: selectedConvId,
+          senderType: 'AGENT',
+          senderName: 'Sales Agent', // Handled properly on backend
+          messageType: buttonsParsed && buttonsParsed.length > 0 ? 'INTERACTIVE' : (r.mediaUrl ? 'IMAGE' : 'TEXT'),
+          content: r.content,
+          mediaUrl: r.mediaUrl || undefined,
+          metadata: JSON.stringify({
+            headerText: r.headerText,
+            footerText: r.footerText,
+            buttons: buttonsParsed
+          })
+        };
+
+        const res = await sendWhatsAppMessageAction(payload);
+        if (res.success) {
+          setToastMsg("Rich quick reply sent!");
+        } else {
+          alert("Failed to send rich quick reply: " + res.error);
+        }
+      } catch (error: any) {
+        alert("Error sending rich reply: " + error.message);
+      } finally {
+        setSending(false);
+        setTimeout(() => setToastMsg(null), 3000);
+      }
+    } else {
+      // Just plain text, insert into input
+      setMessageInput((prev) => (prev ? `${prev} ${r.content}` : r.content));
+      setShowReplyLibraryModal(false);
+    }
   };
 
   const handleInsertEmoji = (emoji: string) => {
@@ -2325,8 +2372,7 @@ export default function WhatsAppInboxComponent() {
                           key={r.id}
                           className="shortcut-item-card"
                           onClick={() => {
-                            applyQuickShortcut(r.content);
-                            setShowReplyLibraryModal(false);
+                            applyQuickShortcut(r);
                           }}
                           style={{
                             display: "flex",

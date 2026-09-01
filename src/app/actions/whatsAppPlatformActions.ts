@@ -2255,35 +2255,62 @@ export async function registerWhatsAppPhoneNumberAction(pin: string) {
 }
 
 // Canned Response Management Server Actions
-export async function createWhatsAppCannedResponseAction(data: { title: string; shortcut: string; content: string }) {
+export async function createWhatsAppCannedResponseAction(data: { 
+  title: string; 
+  shortcut: string; 
+  content: string;
+  headerText?: string;
+  footerText?: string;
+  mediaUrl?: string;
+  mediaType?: string;
+  buttons?: any;
+}) {
   try {
     const res = await prisma.whatsAppCannedResponse.create({
       data: {
         title: data.title,
         shortcut: data.shortcut.startsWith('/') ? data.shortcut : `/${data.shortcut}`,
         content: data.content,
-        category: "General"
+        headerText: data.headerText || null,
+        footerText: data.footerText || null,
+        mediaUrl: data.mediaUrl || null,
+        mediaType: data.mediaType || null,
+        buttons: data.buttons ? JSON.stringify(data.buttons) : null,
       }
     });
     return { success: true, response: res };
-  } catch (e: any) {
-    return { success: false, error: e.message };
+  } catch (error: any) {
+    return { success: false, error: error.message };
   }
 }
 
-export async function updateWhatsAppCannedResponseAction(id: string, data: { title: string; shortcut: string; content: string }) {
+export async function updateWhatsAppCannedResponseAction(id: string, data: { 
+  title: string; 
+  shortcut: string; 
+  content: string;
+  headerText?: string;
+  footerText?: string;
+  mediaUrl?: string;
+  mediaType?: string;
+  buttons?: any;
+}) {
   try {
     const res = await prisma.whatsAppCannedResponse.update({
       where: { id },
       data: {
         title: data.title,
         shortcut: data.shortcut.startsWith('/') ? data.shortcut : `/${data.shortcut}`,
-        content: data.content
+        content: data.content,
+        headerText: data.headerText || null,
+        footerText: data.footerText || null,
+        mediaUrl: data.mediaUrl || null,
+        mediaType: data.mediaType || null,
+        buttons: data.buttons ? JSON.stringify(data.buttons) : null,
       }
     });
     return { success: true, response: res };
-  } catch (e: any) {
-    return { success: false, error: e.message };
+  } catch (error: any) {
+    return { success: false, error: error.message };
   }
 }
 

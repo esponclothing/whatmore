@@ -83,6 +83,10 @@ export default function WhatsAppFlowsPage() {
   const [newReplyTitle, setNewReplyTitle] = useState("");
   const [newReplyShortcut, setNewReplyShortcut] = useState("");
   const [newReplyContent, setNewReplyContent] = useState("");
+  const [newReplyHeader, setNewReplyHeader] = useState("");
+  const [newReplyFooter, setNewReplyFooter] = useState("");
+  const [newReplyMediaUrl, setNewReplyMediaUrl] = useState("");
+  const [newReplyButtons, setNewReplyButtons] = useState<any[]>([]);
   const [editingReply, setEditingReply] = useState<any>(null);
   const [savingCanned, setSavingCanned] = useState(false);
 
@@ -118,27 +122,26 @@ export default function WhatsAppFlowsPage() {
     }
 
     setSavingCanned(true);
+    const payload = {
+      title: newReplyTitle,
+      shortcut: newReplyShortcut,
+      content: newReplyContent,
+      headerText: newReplyHeader,
+      footerText: newReplyFooter,
+      mediaUrl: newReplyMediaUrl,
+      buttons: newReplyButtons
+    };
+
     let res;
     if (editingReply) {
-      res = await updateWhatsAppCannedResponseAction(editingReply.id, {
-        title: newReplyTitle,
-        shortcut: newReplyShortcut,
-        content: newReplyContent
-      });
+      res = await updateWhatsAppCannedResponseAction(editingReply.id, payload);
     } else {
-      res = await createWhatsAppCannedResponseAction({
-        title: newReplyTitle,
-        shortcut: newReplyShortcut,
-        content: newReplyContent
-      });
+      res = await createWhatsAppCannedResponseAction(payload);
     }
 
     if (res.success) {
       showToast(editingReply ? "Canned reply updated!" : "Canned reply created!");
-      setNewReplyTitle("");
-      setNewReplyShortcut("");
-      setNewReplyContent("");
-      setEditingReply(null);
+      handleCancelEdit(); // Clears all fields
       await fetchCanned();
     } else {
       showToast(res.error || "Failed to save canned reply.", "error");
@@ -162,6 +165,14 @@ export default function WhatsAppFlowsPage() {
     setNewReplyTitle(reply.title);
     setNewReplyShortcut(reply.shortcut || "");
     setNewReplyContent(reply.content);
+    setNewReplyHeader(reply.headerText || "");
+    setNewReplyFooter(reply.footerText || "");
+    setNewReplyMediaUrl(reply.mediaUrl || "");
+    try {
+      setNewReplyButtons(reply.buttons ? (typeof reply.buttons === 'string' ? JSON.parse(reply.buttons) : reply.buttons) : []);
+    } catch(e) {
+      setNewReplyButtons([]);
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -170,6 +181,27 @@ export default function WhatsAppFlowsPage() {
     setNewReplyTitle("");
     setNewReplyShortcut("");
     setNewReplyContent("");
+    setNewReplyHeader("");
+    setNewReplyFooter("");
+    setNewReplyMediaUrl("");
+    setNewReplyButtons([]);
+  };
+
+  const addReplyButton = () => {
+    if (newReplyButtons.length >= 3) return;
+    setNewReplyButtons([...newReplyButtons, { type: "reply", text: "New Button" }]);
+  };
+
+  const updateReplyButton = (index: number, field: string, value: string) => {
+    const arr = [...newReplyButtons];
+    arr[index] = { ...arr[index], [field]: value };
+    setNewReplyButtons(arr);
+  };
+
+  const removeReplyButton = (index: number) => {
+    const arr = [...newReplyButtons];
+    arr.splice(index, 1);
+    setNewReplyButtons(arr);
   };
 
   const selectPrebuiltTemplate = (tpl: typeof PREBUILT_TEMPLATES[0]) => {
@@ -415,13 +447,96 @@ export default function WhatsAppFlowsPage() {
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#64748b", marginBottom: "6px" }}>REPLY BODY CONTENT *</label>
               <textarea
-                rows={5}
-                placeholder="Type the message to send when shortcut is typed..."
+                rows={4}
+                placeholder="Type the message body..."
                 value={newReplyContent}
                 onChange={(e) => setNewReplyContent(e.target.value)}
                 style={{ width: "100%", padding: "10px 14px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13.5px", resize: "vertical", outline: "none" }}
                 required
               />
+            </div>
+            
+            {/* Rich Fields */}
+            <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" }}>Rich Media & Interactive (Optional)</div>
+              
+              <div>
+                <input
+                  type="text"
+                  placeholder="Image URL (https://...)"
+                  value={newReplyMediaUrl}
+                  onChange={(e) => setNewReplyMediaUrl(e.target.value)}
+                  style={{ width: "100%", padding: "8px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13px", outline: "none", marginBottom: "8px" }}
+                />
+              </div>
+
+              <div>
+                <input
+                  type="text"
+                  placeholder="Header Text (max 60 chars)"
+                  value={newReplyHeader}
+                  onChange={(e) => setNewReplyHeader(e.target.value)}
+                  maxLength={60}
+                  style={{ width: "100%", padding: "8px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13px", outline: "none", marginBottom: "8px" }}
+                />
+              </div>
+
+              <div>
+                <input
+                  type="text"
+                  placeholder="Footer Text (max 60 chars)"
+                  value={newReplyFooter}
+                  onChange={(e) => setNewReplyFooter(e.target.value)}
+                  maxLength={60}
+                  style={{ width: "100%", padding: "8px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13px", outline: "none", marginBottom: "8px" }}
+                />
+              </div>
+
+              {/* Buttons Builder */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <label style={{ fontSize: "12px", fontWeight: 700, color: "#64748b" }}>INTERACTIVE BUTTONS ({newReplyButtons.length}/3)</label>
+                  {newReplyButtons.length < 3 && (
+                    <button type="button" onClick={addReplyButton} style={{ background: "none", border: "none", color: "#6d28d9", fontSize: "11px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+                      <Plus size={12} /> Add Button
+                    </button>
+                  )}
+                </div>
+                
+                {newReplyButtons.map((btn, i) => (
+                  <div key={i} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "10px", marginBottom: "8px", position: "relative" }}>
+                    <button type="button" onClick={() => removeReplyButton(i)} style={{ position: "absolute", top: "6px", right: "6px", background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}><X size={14} /></button>
+                    
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                      <select 
+                        value={btn.type} 
+                        onChange={(e) => updateReplyButton(i, "type", e.target.value)}
+                        style={{ padding: "6px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px", outline: "none" }}
+                      >
+                        <option value="reply">Quick Reply</option>
+                        <option value="url">URL Link</option>
+                      </select>
+                      <input 
+                        type="text" 
+                        placeholder="Button Text" 
+                        value={btn.text} 
+                        onChange={(e) => updateReplyButton(i, "text", e.target.value)}
+                        maxLength={20}
+                        style={{ flex: 1, padding: "6px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px", outline: "none" }}
+                      />
+                    </div>
+                    {btn.type === "url" && (
+                      <input 
+                        type="text" 
+                        placeholder="https://example.com" 
+                        value={btn.url || ""} 
+                        onChange={(e) => updateReplyButton(i, "url", e.target.value)}
+                        style={{ width: "100%", padding: "6px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px", outline: "none" }}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
@@ -480,12 +595,14 @@ export default function WhatsAppFlowsPage() {
                       </div>
                       <div style={{ display: "flex", gap: "6px" }}>
                         <button
+                          type="button"
                           onClick={() => handleEditClick(cr)}
                           style={{ background: "#eff6ff", border: "none", color: "#3b82f6", padding: "6px", borderRadius: "6px", cursor: "pointer" }}
                         >
                           <Edit size={14} />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDeleteCannedResponse(cr.id)}
                           style={{ background: "#fef2f2", border: "none", color: "#ef4444", padding: "6px", borderRadius: "6px", cursor: "pointer" }}
                         >
@@ -493,9 +610,32 @@ export default function WhatsAppFlowsPage() {
                         </button>
                       </div>
                     </div>
-                    <p style={{ fontSize: "13px", color: "#475569", margin: 0, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
-                      {cr.content}
-                    </p>
+                    
+                    {cr.mediaUrl && (
+                      <img src={cr.mediaUrl} alt="Media" style={{ width: "100%", height: "120px", objectFit: "cover", borderRadius: "6px" }} />
+                    )}
+                    
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      {cr.headerText && <strong style={{ fontSize: "12px", color: "#334155" }}>{cr.headerText}</strong>}
+                      <p style={{ fontSize: "13px", color: "#475569", margin: 0, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                        {cr.content}
+                      </p>
+                      {cr.footerText && <span style={{ fontSize: "11px", color: "#94a3b8" }}>{cr.footerText}</span>}
+                    </div>
+
+                    {cr.buttons && (() => {
+                      const btns = typeof cr.buttons === 'string' ? JSON.parse(cr.buttons) : cr.buttons;
+                      if (btns.length === 0) return null;
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "4px" }}>
+                          {btns.map((btn: any, i: number) => (
+                            <div key={i} style={{ padding: "6px", textAlign: "center", background: "#f1f5f9", borderRadius: "6px", fontSize: "12px", fontWeight: 600, color: "#3b82f6" }}>
+                              {btn.type === "url" ? `🔗 ${btn.text}` : btn.text}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
