@@ -1669,6 +1669,8 @@ model WhatsAppSettings {
   razorpayKeySecret    String?
   cashfreeAppId        String?
   cashfreeSecretKey    String?
+  merchantUpiId        String?
+  merchantUpiName      String?
 
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt

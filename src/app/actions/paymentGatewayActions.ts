@@ -10,6 +10,8 @@ export async function getPaymentGatewaySettings() {
     razorpayKeySecret: settings?.razorpayKeySecret || '',
     cashfreeAppId: settings?.cashfreeAppId || '',
     cashfreeSecretKey: settings?.cashfreeSecretKey || '',
+    merchantUpiId: settings?.merchantUpiId || '',
+    merchantUpiName: settings?.merchantUpiName || '',
   };
 }
 
@@ -19,6 +21,8 @@ export async function savePaymentGatewaySettings(data: {
   razorpayKeySecret?: string;
   cashfreeAppId?: string;
   cashfreeSecretKey?: string;
+  merchantUpiId?: string;
+  merchantUpiName?: string;
 }) {
   const existing = await prisma.whatsAppSettings.findFirst();
   if (existing) {
@@ -30,6 +34,8 @@ export async function savePaymentGatewaySettings(data: {
         razorpayKeySecret: data.razorpayKeySecret,
         cashfreeAppId: data.cashfreeAppId,
         cashfreeSecretKey: data.cashfreeSecretKey,
+        merchantUpiId: data.merchantUpiId,
+        merchantUpiName: data.merchantUpiName,
       },
     });
   } else {
@@ -40,6 +46,8 @@ export async function savePaymentGatewaySettings(data: {
         razorpayKeySecret: data.razorpayKeySecret,
         cashfreeAppId: data.cashfreeAppId,
         cashfreeSecretKey: data.cashfreeSecretKey,
+        merchantUpiId: data.merchantUpiId,
+        merchantUpiName: data.merchantUpiName,
       },
     });
   }
@@ -56,5 +64,7 @@ export async function getActiveGateway() {
     razorpayKeySecret: settings.razorpayKeySecret,
     cashfreeAppId: settings.cashfreeAppId,
     cashfreeSecretKey: settings.cashfreeSecretKey,
+    merchantUpiId: settings.merchantUpiId,
+    merchantUpiName: settings.merchantUpiName,
   };
 }

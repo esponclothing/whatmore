@@ -31,6 +31,8 @@ export default function WhatsAppAPISettingsPage() {
   const [razorpayKeySecret, setRazorpayKeySecret] = useState("");
   const [cashfreeAppId, setCashfreeAppId] = useState("");
   const [cashfreeSecretKey, setCashfreeSecretKey] = useState("");
+  const [merchantUpiId, setMerchantUpiId] = useState("");
+  const [merchantUpiName, setMerchantUpiName] = useState("");
   const [savingPg, setSavingPg] = useState(false);
   const [pgMsg, setPgMsg] = useState<string | null>(null);
   const [showRzpSecret, setShowRzpSecret] = useState(false);
@@ -153,6 +155,8 @@ export default function WhatsAppAPISettingsPage() {
       setRazorpayKeySecret(pg.razorpayKeySecret);
       setCashfreeAppId(pg.cashfreeAppId);
       setCashfreeSecretKey(pg.cashfreeSecretKey);
+      setMerchantUpiId(pg.merchantUpiId);
+      setMerchantUpiName(pg.merchantUpiName);
     }).catch(() => {});
   };
 
@@ -660,7 +664,7 @@ export default function WhatsAppAPISettingsPage() {
               }`}>{pgMsg}</div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Razorpay Card */}
               <div className={`rounded-2xl border-2 p-5 transition-all ${
                 pgActiveGateway === 'RAZORPAY' ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-500/5' : 'border-gray-100 dark:border-slate-700'
@@ -745,8 +749,50 @@ export default function WhatsAppAPISettingsPage() {
                       <button type="button" onClick={() => setShowCfSecret(!showCfSecret)} className="absolute right-3 top-2.5 text-gray-400">{showCfSecret ? <EyeOff size={16}/> : <Eye size={16}/>}</button>
                     </div>
                   </div>
-                  <button onClick={async () => { setSavingPg(true); await savePaymentGatewaySettings({ activeGateway: pgActiveGateway, razorpayKeyId, razorpayKeySecret, cashfreeAppId, cashfreeSecretKey }); setSavingPg(false); setPgMsg('✅ Cashfree credentials saved'); setTimeout(() => setPgMsg(null), 3000); }} disabled={savingPg} className="w-full py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-bold transition-all flex items-center justify-center gap-2">
+                  <button onClick={async () => { setSavingPg(true); await savePaymentGatewaySettings({ activeGateway: pgActiveGateway, razorpayKeyId, razorpayKeySecret, cashfreeAppId, cashfreeSecretKey, merchantUpiId, merchantUpiName }); setSavingPg(false); setPgMsg('✅ Cashfree credentials saved'); setTimeout(() => setPgMsg(null), 3000); }} disabled={savingPg} className="w-full py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-bold transition-all flex items-center justify-center gap-2">
                     {savingPg ? <RefreshCw size={14} className="animate-spin"/> : <Save size={14}/>} Save Cashfree Keys
+                  </button>
+                </div>
+              </div>
+
+              {/* Direct UPI Card */}
+              <div className={`rounded-2xl border-2 p-5 transition-all ${
+                pgActiveGateway === 'UPI' ? 'border-orange-500 bg-orange-50/50 dark:bg-orange-500/5' : 'border-gray-100 dark:border-slate-700'
+              }`}>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-orange-600 flex items-center justify-center text-white font-bold text-xs">UPI</div>
+                    <div>
+                      <h3 className="font-bold text-gray-900 dark:text-white">Direct UPI</h3>
+                      <p className="text-xs text-gray-500">Zero fees via direct QR/Link</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const next = pgActiveGateway === 'UPI' ? null : 'UPI';
+                      setPgActiveGateway(next);
+                      await savePaymentGatewaySettings({ activeGateway: next, razorpayKeyId, razorpayKeySecret, cashfreeAppId, cashfreeSecretKey, merchantUpiId, merchantUpiName });
+                      setPgMsg(next ? '✅ Direct UPI set as active gateway' : '✅ Gateway deactivated');
+                      setTimeout(() => setPgMsg(null), 3000);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      pgActiveGateway === 'UPI' ? 'bg-orange-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-orange-50 hover:text-orange-600'
+                    }`}
+                  >
+                    {pgActiveGateway === 'UPI' ? '✅ Active' : 'Set Active'}
+                  </button>
+                </div>
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-gray-600 dark:text-gray-400 block mb-1">UPI ID (VPA)</label>
+                    <input type="text" value={merchantUpiId} onChange={(e) => setMerchantUpiId(e.target.value)} placeholder="e.g. yourname@okicici" className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-orange-500 outline-none" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-600 dark:text-gray-400 block mb-1">Payee Name</label>
+                    <input type="text" value={merchantUpiName} onChange={(e) => setMerchantUpiName(e.target.value)} placeholder="e.g. Your Business Name" className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-orange-500 outline-none" />
+                  </div>
+                  <button onClick={async () => { setSavingPg(true); await savePaymentGatewaySettings({ activeGateway: pgActiveGateway, razorpayKeyId, razorpayKeySecret, cashfreeAppId, cashfreeSecretKey, merchantUpiId, merchantUpiName }); setSavingPg(false); setPgMsg('✅ Direct UPI details saved'); setTimeout(() => setPgMsg(null), 3000); }} disabled={savingPg} className="w-full py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-sm font-bold transition-all flex items-center justify-center gap-2">
+                    {savingPg ? <RefreshCw size={14} className="animate-spin"/> : <Save size={14}/>} Save UPI Details
                   </button>
                 </div>
               </div>
@@ -755,7 +801,7 @@ export default function WhatsAppAPISettingsPage() {
             {pgActiveGateway && (
               <div className="mt-4 px-4 py-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 rounded-xl text-sm text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
                 <CheckCircle2 size={16}/>
-                <span><strong>{pgActiveGateway === 'RAZORPAY' ? 'Razorpay' : 'Cashfree'}</strong> is the active gateway — auto-synced to all Payment blocks in the Chatbot Builder.</span>
+                <span><strong>{pgActiveGateway === 'RAZORPAY' ? 'Razorpay' : pgActiveGateway === 'CASHFREE' ? 'Cashfree' : 'Direct UPI'}</strong> is the active gateway — auto-synced to all Payment blocks in the Chatbot Builder.</span>
               </div>
             )}
           </div>
