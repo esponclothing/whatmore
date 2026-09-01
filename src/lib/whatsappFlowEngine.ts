@@ -400,6 +400,17 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
                 where: { id: conv.id }, 
                 data: { assignedEmployeeId: node.agentId, status: 'OPEN' } 
               });
+              await prisma.whatsAppMessage.create({
+                data: {
+                  conversationId: conv.id,
+                  senderType: "SYSTEM",
+                  senderName: "System",
+                  messageType: "TEXT",
+                  content: `Internal Note: Conversation auto-assigned to agent ID ${node.agentId} by Chatbot Flow.`,
+                  status: "SENT",
+                  sentAt: new Date()
+                }
+              });
               console.log(`[Flow Assign] Direct assigned chat ${conv.id} to agent ${node.agentId}`);
             } else {
               let agentQuery: any = { 
@@ -456,9 +467,35 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
                   where: { id: conv.id }, 
                   data: { assignedEmployeeId: selectedAgent.id, status: 'OPEN' } 
                 });
+                await prisma.whatsAppMessage.create({
+                  data: {
+                    conversationId: conv.id,
+                    senderType: "SYSTEM",
+                    senderName: "System",
+                    messageType: "TEXT",
+                    content: `Internal Note: Conversation auto-assigned to ${selectedAgent.user?.name || 'Agent'} by Chatbot Flow.`,
+                    status: "SENT",
+                    sentAt: new Date()
+                  }
+                });
                 console.log(`[Round Robin] Successfully assigned chat ${conv.id} to agent ${selectedAgent.user?.name || selectedAgent.id} (Method: ${node.distributionMethod || 'WORKLOAD_BALANCE'}, Open load: ${selectedAgent._count?.assignedWhatsAppConversations || 0})`);
               } else {
                 console.log(`[Round Robin] No agents matched query:`, agentQuery);
+                await prisma.whatsAppConversation.update({ 
+                  where: { id: conv.id }, 
+                  data: { assignedEmployeeId: null, status: 'OPEN' } 
+                });
+                await prisma.whatsAppMessage.create({
+                  data: {
+                    conversationId: conv.id,
+                    senderType: "SYSTEM",
+                    senderName: "System",
+                    messageType: "TEXT",
+                    content: `Internal Note: Chatbot tried to assign conversation but no agents were available. Moved to Unassigned queue.`,
+                    status: "SENT",
+                    sentAt: new Date()
+                  }
+                });
               }
             }
           }
