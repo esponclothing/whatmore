@@ -1182,7 +1182,6 @@ export default function WhatsAppInboxComponent() {
               ))}
             </div>
           ) : conversations.length === 0 ? (
-          ) : conversations.length === 0 ? (
             <div className="inbox-empty-state modern-empty">
               <div className="modern-empty-icon-wrapper">
                 <Search size={28} color="#8b5cf6" />
