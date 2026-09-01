@@ -1625,14 +1625,19 @@ export default function WhatsAppInboxComponent() {
 
                       {/* Image Message Renderer */}
                       {msg.messageType === "IMAGE" && (
-                        <div style={{ marginTop: "4px" }}>
+                        <div style={{ marginTop: "4px", position: "relative" }}>
                           {msg.mediaUrl ? (
-                            <img
-                              src={msg.mediaUrl}
-                              alt="Media Image"
-                              style={{ width: "100%", maxHeight: "220px", objectFit: "cover", borderRadius: "8px", cursor: "pointer" }}
-                              onClick={() => window.open(msg.mediaUrl, "_blank")}
-                            />
+                            <div style={{ position: "relative", display: "inline-block", width: "100%" }}>
+                              <img
+                                src={msg.mediaUrl}
+                                alt="Media Image"
+                                style={{ width: "100%", maxHeight: "220px", objectFit: "cover", borderRadius: "8px", cursor: "pointer" }}
+                                onClick={() => window.open(msg.mediaUrl, "_blank")}
+                              />
+                              <button onClick={(e) => { e.stopPropagation(); window.open(msg.mediaUrl, "_blank"); }} style={{ position: "absolute", bottom: "8px", right: "8px", background: "rgba(0,0,0,0.5)", color: "white", border: "none", borderRadius: "50%", width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }} title="Download Image">
+                                <Download size={14} />
+                              </button>
+                            </div>
                           ) : (
                             <div style={{ padding: "12px", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "8px", fontSize: "11.5px", color: "#64748b", textAlign: "center" }}>
                               📷 Image expired (Stored only for 30 days)
@@ -1644,8 +1649,13 @@ export default function WhatsAppInboxComponent() {
 
                       {/* Video Message Renderer */}
                       {msg.messageType === "VIDEO" && (
-                        <div style={{ marginTop: "4px" }}>
+                        <div style={{ marginTop: "4px", position: "relative" }}>
                           <video src={msg.mediaUrl || ""} controls style={{ width: "100%", maxHeight: "220px", borderRadius: "8px" }} />
+                          {msg.mediaUrl && (
+                            <button onClick={() => window.open(msg.mediaUrl, "_blank")} style={{ position: "absolute", top: "8px", right: "8px", background: "rgba(0,0,0,0.5)", color: "white", border: "none", borderRadius: "50%", width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 10 }} title="Download Video">
+                              <Download size={14} />
+                            </button>
+                          )}
                           {msg.content && msg.content !== "[IMAGE]" && !msg.content.startsWith("Attached file:") && <p className="message-text-content" style={{ marginTop: "4px" }}>{msg.content}</p>}
                         </div>
                       )}
@@ -1653,7 +1663,14 @@ export default function WhatsAppInboxComponent() {
                       {/* Audio Message Renderer */}
                       {msg.messageType === "AUDIO" && (
                         <div style={{ marginTop: "4px", background: "#f3f4f6", padding: "8px", borderRadius: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                          <span style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280" }}>Voice Message</span>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280" }}>Voice Message</span>
+                            {msg.mediaUrl && (
+                              <button onClick={() => window.open(msg.mediaUrl, "_blank")} style={{ background: "transparent", color: "#6b7280", border: "none", cursor: "pointer", padding: "2px" }} title="Download Audio">
+                                <Download size={14} />
+                              </button>
+                            )}
+                          </div>
                           {msg.mediaUrl ? (
                             <audio src={msg.mediaUrl} controls style={{ width: "100%", height: "36px" }} />
                           ) : (
