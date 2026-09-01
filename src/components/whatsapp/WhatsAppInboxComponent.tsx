@@ -1740,7 +1740,7 @@ export default function WhatsAppInboxComponent() {
                   <Calendar size={12} /> + Follow Up
                 </button>
                 <button className="quick-chip highlight" onClick={() => setShowReplyLibraryModal(true)}>
-                  <Zap size={12} /> Reply Library
+                  <MessageSquare size={12} /> Reply Library
                 </button>
                 <button className="quick-chip ai-suggest" onClick={handleSuggestReply} disabled={aiSuggesting} style={{ background: '#f0fdf4', color: '#15803d', borderColor: '#bbf7d0' }}>
                   <Sparkles size={12} /> {aiSuggesting ? "Generating..." : "Suggest Reply AI"}
@@ -1869,7 +1869,7 @@ export default function WhatsAppInboxComponent() {
                         title="Quick Replies / Canned Responses"
                         onClick={() => setShowCannedResponses(!showCannedResponses)}
                       >
-                        <Zap size={18} color={showCannedResponses ? "#f59e0b" : "#64748b"} />
+                        <MessageSquare size={18} color={showCannedResponses ? "#f59e0b" : "#64748b"} />
                       </button>
 
                       {/* Canned Responses Popup Menu */}
