@@ -399,10 +399,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
                 where: { id: conv.id },
                 data: { status: 'OPEN' }
               });
-              return;
-            }
-
-            if (node.assignmentMode === 'DIRECT' && node.agentId) {
+            } else if (node.assignmentMode === 'DIRECT' && node.agentId) {
               await prisma.whatsAppConversation.update({ 
                 where: { id: conv.id }, 
                 data: { assignedEmployeeId: node.agentId, status: 'OPEN' } 
