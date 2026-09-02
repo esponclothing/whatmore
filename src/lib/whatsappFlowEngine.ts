@@ -369,6 +369,55 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
           } else {
             console.error(`[CRM Node] Customer NOT FOUND for phone: ${toPhone}`);
           }
+
+          // Webhook Logic for CRM_LEAD
+          if (type === 'CRM_LEAD' && node.webhookUrl) {
+            try {
+              const headers: Record<string, string> = {
+                'Content-Type': 'application/json'
+              };
+              if (node.webhookAuth) {
+                headers['Authorization'] = node.webhookAuth;
+              }
+              
+              const payload = {
+                name: vars['name'] || customer?.name || 'Unknown',
+                whatsappNumber: cleanPhone,
+                shopName: vars['shopName'] || customer?.shopName || ''
+              };
+
+              console.log(`[CRM_LEAD Webhook] Triggering webhook: ${node.webhookUrl}`);
+              const whRes = await fetch(node.webhookUrl, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(payload)
+              });
+
+              if (whRes.status === 409) {
+                console.log(`[CRM_LEAD Webhook] 409 Conflict. Lead exists.`);
+                // Send fallback message
+                await dispatchNode(toPhone, { type: 'TEXT', text: 'Lead with this mobile number already exists and is assigned to an agent. Routing you to a live agent...' }, vars, conv?.id);
+                
+                // Route to live agent
+                if (conv) {
+                  await prisma.whatsAppConversation.update({
+                    where: { id: conv.id },
+                    data: { status: 'OPEN' } 
+                  });
+                }
+                
+                // Halt the flow
+                break;
+              } else if (whRes.status === 201) {
+                console.log(`[CRM_LEAD Webhook] 201 Created.`);
+              } else {
+                console.log(`[CRM_LEAD Webhook] Unhandled status code: ${whRes.status}`);
+              }
+            } catch (err) {
+              console.error(`[CRM_LEAD Webhook] Error:`, err);
+            }
+          }
+
         } catch (e) {
           console.error("CRM Update Node Error:", e);
         }
