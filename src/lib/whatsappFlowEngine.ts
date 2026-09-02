@@ -312,9 +312,24 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
     const node = nodes.find((n: any) => n.id === nextNodeId);
     if (!node) break;
 
-    await dispatchNode(toPhone, node, vars, conversationId);
-
     const type = (node.type || '').toUpperCase();
+
+    // Log node execution to trace the session
+    try {
+      await prisma.whatsAppChatbotLog.create({
+        data: {
+          phone: toPhone.replace(/\D/g, '').slice(-10),
+          conversationId: conversationId || null,
+          nodeId: node.id || "UNKNOWN",
+          nodeType: type || "MESSAGE",
+          actionDesc: `Executed block: ${node.title || type}`,
+          payload: null,
+          responseStatus: 200,
+        }
+      });
+    } catch(e) {}
+
+    await dispatchNode(toPhone, node, vars, conversationId);
 
     // CRM Logic
     if (type === 'CRM_CONTACT' || type === 'CRM_LEAD') {
