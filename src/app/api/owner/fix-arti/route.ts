@@ -9,25 +9,25 @@ export async function GET() {
     // 1. Find the new user and employee
     const newUser = await prisma.user.findFirst({
       where: { email: newEmail },
-      include: { Employee: true }
+      include: { employee: true }
     });
 
     // 2. Find the old user and employee
     const oldUser = await prisma.user.findFirst({
       where: { email: oldEmail },
-      include: { Employee: true }
+      include: { employee: true }
     });
 
-    if (!newUser || !newUser.Employee || newUser.Employee.length === 0) {
+    if (!newUser || !newUser.employee) {
       return NextResponse.json({ error: "New employee not found for " + newEmail });
     }
     
-    const newEmpId = newUser.Employee[0].id;
+    const newEmpId = newUser.employee.id;
     let oldEmpId = null;
     let transferred = 0;
 
-    if (oldUser && oldUser.Employee && oldUser.Employee.length > 0) {
-      oldEmpId = oldUser.Employee[0].id;
+    if (oldUser && oldUser.employee) {
+      oldEmpId = oldUser.employee.id;
       
       // Transfer chats
       if (oldEmpId !== newEmpId) {
@@ -42,12 +42,12 @@ export async function GET() {
       // Let's search by name
       const otherUsers = await prisma.user.findMany({
         where: { name: { contains: "arti", mode: 'insensitive' } },
-        include: { Employee: true }
+        include: { employee: true }
       });
       
       for (const u of otherUsers) {
-        if (u.id !== newUser.id && u.Employee.length > 0) {
-          const empId = u.Employee[0].id;
+        if (u.id !== newUser.id && u.employee) {
+          const empId = u.employee.id;
           const updateRes = await prisma.whatsAppConversation.updateMany({
             where: { assignedEmployeeId: empId },
             data: { assignedEmployeeId: newEmpId }
