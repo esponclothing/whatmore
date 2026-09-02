@@ -1,8 +1,20 @@
-"use server";
+﻿"use server";
 
 import { prisma } from "@/lib/prisma";
 import { seedWhatsAppPlatformData } from "@/lib/seedWhatsApp";
 import { revalidatePath } from "next/cache";
+
+export async function getWhatsAppChatbotLogsAction(phone: string) {
+  try {
+    const logs = await prisma.whatsAppChatbotLog.findMany({
+      where: { phone },
+      orderBy: { createdAt: 'desc' }
+    });
+    return { success: true, logs };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
 
 // Ensure seed data is initialized automatically if database is fresh
 async function ensureSeeded() {
@@ -3042,5 +3054,3 @@ export async function syncSessionRoleAction() {
     return null;
   }
 }
-e x p o r t   a s y n c   f u n c t i o n   g e t W h a t s A p p C h a t b o t L o g s A c t i o n ( p h o n e :   s t r i n g )   {   t r y   {   c o n s t   l o g s   =   a w a i t   p r i s m a . w h a t s A p p C h a t b o t L o g . f i n d M a n y ( {   w h e r e :   {   p h o n e   } ,   o r d e r B y :   {   c r e a t e d A t :   ' d e s c '   }   } ) ;   r e t u r n   {   s u c c e s s :   t r u e ,   l o g s   } ;   }   c a t c h   ( e :   a n y )   {   r e t u r n   {   s u c c e s s :   f a l s e ,   e r r o r :   e . m e s s a g e   } ;   }   }  
- 
