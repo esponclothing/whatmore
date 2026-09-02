@@ -2879,30 +2879,31 @@ export default function WhatsAppChatbotBuilderPage() {
                             ))}
                           </select>
                         </div>
-                        {(selectedNode.type || "").toUpperCase() === "CRM_LEAD" && (
-                          <>
-                            <div style={{ marginTop: "12px" }}>
-                              <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>CRM Webhook URL</label>
-                              <input
-                                type="text"
-                                placeholder="https://api.yourcrm.com/leads"
-                                value={selectedNode.webhookUrl || ""}
-                                onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, webhookUrl: e.target.value } : n)))}
-                                style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px" }}
-                              />
-                            </div>
-                            <div style={{ marginTop: "8px" }}>
-                              <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Authorization Header</label>
-                              <input
-                                type="text"
-                                placeholder="Bearer <token>"
-                                value={selectedNode.webhookAuth || ""}
-                                onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, webhookAuth: e.target.value } : n)))}
-                                style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px" }}
-                              />
-                            </div>
-                          </>
-                        )}
+                      </>
+                    )}
+
+                    {(selectedNode.type || "").toUpperCase() === "CRM_LEAD" && (
+                      <>
+                        <div style={{ marginTop: "12px" }}>
+                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>CRM Webhook URL</label>
+                          <input
+                            type="text"
+                            placeholder="https://api.yourcrm.com/leads"
+                            value={selectedNode.webhookUrl || ""}
+                            onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, webhookUrl: e.target.value } : n)))}
+                            style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px" }}
+                          />
+                        </div>
+                        <div style={{ marginTop: "8px" }}>
+                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Authorization Header</label>
+                          <input
+                            type="text"
+                            placeholder="Bearer <token>"
+                            value={selectedNode.webhookAuth || ""}
+                            onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, webhookAuth: e.target.value } : n)))}
+                            style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px" }}
+                          />
+                        </div>
                       </>
                     )}
 
