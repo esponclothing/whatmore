@@ -643,76 +643,6 @@ export async function updateCRMProfileFromWhatsApp(data: {
 // 4. QUICK COMMERCE ACTIONS (CREATE QUOTE, ORDER, PAYMENT LINK)
 // ---------------------------------------------------------
 
-export async function createWhatsAppQuotation(data: {
-  conversationId: string;
-  customerId: string;
-  items: Array<{ name: string; quantity: number; rate: number }>;
-  notes?: string;
-}) {
-  try {
-    const customer = await prisma.customer.findUnique({ where: { id: data.customerId } });
-    const employee = await prisma.employee.findFirst({ include: { user: true } });
-
-    if (!customer || !employee) {
-      return { success: false, error: "Customer or Employee record missing" };
-    }
-
-    const subtotal = data.items.reduce((sum, item) => sum + (item.quantity * item.rate), 0);
-    const taxTotal = subtotal * 0.12; // 12% GST
-    const totalValue = subtotal + taxTotal;
-    const qNum = `QT-WA-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    const firstProduct = await prisma.product.findFirst();
-    if (!firstProduct) {
-      return { success: false, error: "No products in database to link quotation item" };
-    }
-
-    const quotation = await prisma.quotation.create({
-      data: {
-        quotationNumber: qNum,
-        customerId: customer.id,
-        salespersonId: employee.id,
-        subtotal,
-        taxTotal,
-        totalValue,
-        status: 'Sent',
-        notes: data.notes || 'Created directly from WhatsApp Conversation',
-        items: {
-          create: data.items.map(item => ({
-            productId: firstProduct.id,
-            description: item.name,
-            quantity: item.quantity,
-            rate: item.rate,
-            taxableAmount: item.quantity * item.rate,
-            total: item.quantity * item.rate * 1.12
-          }))
-        }
-      }
-    });
-
-    // Send Quotation Message Card into WhatsApp Chat
-    await sendWhatsAppMessageAction({
-      conversationId: data.conversationId,
-      senderType: 'AGENT',
-      senderName: employee.user?.name || 'Sales Agent',
-      messageType: 'DOCUMENT',
-      content: `Quotation ${qNum} generated for ₹${totalValue.toLocaleString('en-IN')}.\nItems: ${data.items.map(i => `${i.name} x${i.quantity}`).join(', ')}.`,
-      mediaUrl: `/samples/Quotation-${qNum}.pdf`,
-      mediaFilename: `${qNum}.pdf`,
-      metadata: JSON.stringify({ quotationId: quotation.id, totalValue })
-    });
-
-    // Update conversation lead stage
-    await prisma.whatsAppConversation.update({
-      where: { id: data.conversationId },
-      data: { leadStatus: 'Quotation Shared', orderStatus: 'Quotation Sent' }
-    });
-
-    return { success: true, quotation };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
 
 export async function generateWhatsAppPaymentLinkAction(data: {
   conversationId: string;
@@ -1852,41 +1782,6 @@ export async function exportWhatsAppConversationsCSV() {
 // ---------------------------------------------------------
 // 13. QUICK CREATE FOLLOW-UP TASK FROM INBOX
 // ---------------------------------------------------------
-export async function createFollowUpTaskAction(data: {
-  customerId: string;
-  notes: string;
-  days: number;
-}) {
-  try {
-    const customer = await prisma.customer.findUnique({ where: { id: data.customerId } });
-    const employee = await prisma.employee.findFirst();
-    
-    if (!customer || !employee) return { success: false, error: "Missing records" };
-
-    const followUpDate = new Date();
-    followUpDate.setDate(followUpDate.getDate() + data.days);
-
-    const followUp = await prisma.followUp.create({
-      data: {
-        customerId: customer.id,
-        employeeId: employee.id,
-        date: followUpDate,
-        followUpType: 'WhatsApp Chat',
-        notes: data.notes
-      }
-    });
-
-    // Also update Customer's nextFollowUp
-    await prisma.customer.update({
-      where: { id: customer.id },
-      data: { nextFollowUp: followUpDate }
-    });
-
-    return { success: true, followUp };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
 
 // ---------------------------------------------------------
 // 14. WHATSAPP SETTINGS PERSISTENCE

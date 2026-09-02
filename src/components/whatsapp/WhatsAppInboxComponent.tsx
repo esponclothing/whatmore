@@ -68,14 +68,14 @@ import {
   getWhatsAppConversationById,
   sendWhatsAppMessageAction,
   updateCRMProfileFromWhatsApp,
-  createWhatsAppQuotation,
+
   generateWhatsAppPaymentLinkAction,
   assignWhatsAppLeadAction,
   getAllEmployeesAndTeams,
   toggleConversationAIAction,
   toggleConversationStatusAction,
   unassignWhatsAppConversationAction,
-  createFollowUpTaskAction,
+
   uploadMediaToMetaAction,
   getWhatsAppCannedResponsesAction,
   createWhatsAppCannedResponseAction,
@@ -1036,20 +1036,7 @@ export default function WhatsAppInboxComponent() {
     }
   };
 
-  // Handle Create Quotation Submit
-  const handleCreateQuoteSubmit = async () => {
-    if (!selectedConvId || !activeConvDetail?.customer?.id) return;
-    const res = await createWhatsAppQuotation({
-      conversationId: selectedConvId,
-      customerId: activeConvDetail.customer.id,
-      items: quoteItems
-    });
-    if (res.success) {
-      setShowQuoteModal(false);
-      await fetchConversationDetail(selectedConvId, true);
-      await fetchConversationsList(true);
-    }
-  };
+
 
   // Handle Send Payment Link Submit
   const handleSendPaymentSubmit = async () => {
@@ -1068,24 +1055,7 @@ export default function WhatsAppInboxComponent() {
     }
   };
 
-  // Handle Create FollowUp Submit
-  const handleCreateFollowUpSubmit = async () => {
-    if (!activeConvDetail?.customer?.id) return;
-    const res = await createFollowUpTaskAction({
-      customerId: activeConvDetail.customer.id,
-      notes: followUpNotes,
-      days: followUpDays
-    });
-    if (res.success) {
-      setShowFollowUpModal(false);
-      setToastMsg(`Follow-up scheduled for ${followUpDays} days from now.`);
-      setTimeout(() => setToastMsg(null), 3000);
-      await fetchConversationDetail(selectedConvId!, true);
-    } else {
-      setToastMsg(`Failed to schedule follow-up.`);
-      setTimeout(() => setToastMsg(null), 3000);
-    }
-  };
+
 
   // Handle Lead Assignment (Manual or Round-Robin)
   const handleAssignLead = async (employeeId?: string, method: 'MANUAL' | 'ROUND_ROBIN' = 'MANUAL') => {
