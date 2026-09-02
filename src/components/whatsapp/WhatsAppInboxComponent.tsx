@@ -262,8 +262,11 @@ export default function WhatsAppInboxComponent() {
   useEffect(() => {
     const checkPaymentSettings = async () => {
       const res = await getWhatsAppSettingsAction();
-      if (res.success && res.settings?.activeGateway) {
+      const gateway = res.success ? res.settings?.activeGateway : null;
+      if (gateway && gateway !== "NONE" && gateway !== "false" && gateway !== "none") {
         setPaymentConfigured(true);
+      } else {
+        setPaymentConfigured(false);
       }
     };
     checkPaymentSettings();
@@ -387,6 +390,11 @@ export default function WhatsAppInboxComponent() {
         // Apply Unread Only Filter
         if (unreadOnly) {
           filtered = filtered.filter((c) => c.unreadCount > 0);
+        }
+
+        // Apply Employee Filter (Dropdown)
+        if (filterEmployeeId) {
+          filtered = filtered.filter((c) => c._raw.assignedEmployeeId === filterEmployeeId);
         }
 
         setConversations(filtered);

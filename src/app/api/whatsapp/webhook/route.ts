@@ -282,12 +282,13 @@ export async function POST(req: NextRequest) {
       console.log(`[WhatsApp Webhook] Incoming message from +91 ${cleanPhone}: "${textContent.slice(0, 50)}"`);
 
       // Removed old global auto-assignment logic to rely purely on Chatbot Engine routing.
-      // Feature 1: Send Web Push Notification to all subscribed agents
-      sendPushNotificationToAgents(
-        `💬 ${customer.contactPerson || '+91 ' + cleanPhone}`,
-        textContent.slice(0, 100),
-        `/whatsapp/inbox`
-      ).catch((e) => console.error("[Push] Failed:", e.message));
+        // Feature 1: Send Web Push Notification to assigned agent or all if unassigned
+        sendPushNotificationToAgents(
+          `dY' ${customer.contactPerson || '+91 ' + cleanPhone}`,
+          textContent.slice(0, 100),
+          `/whatsapp/inbox`,
+          conversation.assignedEmployeeId
+        ).catch((e) => console.error("[Push] Failed:", e.message));
 
       // Feature 2: Chatbot Flow Engine — check if a flow should intercept
       const isTextMessage = msg.type === "text" || msg.type === "interactive";
@@ -373,14 +374,31 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Helper: Fire-and-forget Web Push to all subscribed agents
-async function sendPushNotificationToAgents(title: string, body: string, url: string) {
+// Helper: Fire-and-forget Web Push to agents (respects assignment)
+async function sendPushNotificationToAgents(title: string, body: string, url: string, assignedEmployeeId?: string | null) {
+  let targetEmails: string[] = [];
+
+  if (assignedEmployeeId) {
+    const emp = await prisma.employee.findUnique({
+      where: { id: assignedEmployeeId },
+      include: { user: true }
+    });
+    if (emp && emp.user) {
+      targetEmails.push(emp.user.email);
+    }
+  }
+
   const subs = await prisma.whatsAppPushSubscription.findMany();
   if (subs.length === 0) return;
 
   const payload = JSON.stringify({ title, body, data: { url } });
 
   for (const sub of subs) {
+    // If chat is assigned to someone, only notify them
+    if (targetEmails.length > 0 && !targetEmails.includes(sub.userId)) {
+      continue; 
+    }
+
     try {
       const subscription = {
         endpoint: sub.endpoint,
