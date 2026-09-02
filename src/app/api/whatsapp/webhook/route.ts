@@ -386,6 +386,16 @@ async function sendPushNotificationToAgents(title: string, body: string, url: st
     if (emp && emp.user) {
       targetEmails.push(emp.user.email);
     }
+  } else {
+    // Unassigned chat: only notify ADMINs
+    const [adminUsers, adminAgents] = await Promise.all([
+      prisma.user.findMany({ where: { role: "ADMIN" }, select: { email: true } }),
+      prisma.whatsAppAgentUser.findMany({ where: { role: "ADMIN" }, select: { email: true } })
+    ]);
+    targetEmails = [
+      ...adminUsers.map((u) => u.email),
+      ...adminAgents.map((a) => a.email)
+    ];
   }
 
   const subs = await prisma.whatsAppPushSubscription.findMany();
@@ -394,8 +404,8 @@ async function sendPushNotificationToAgents(title: string, body: string, url: st
   const payload = JSON.stringify({ title, body, data: { url } });
 
   for (const sub of subs) {
-    // If chat is assigned to someone, only notify them
-    if (targetEmails.length > 0 && !targetEmails.includes(sub.userId)) {
+    // If chat is assigned to someone, only notify them. If unassigned, only notify admins.
+    if (!targetEmails.includes(sub.userId)) {
       continue; 
     }
 
