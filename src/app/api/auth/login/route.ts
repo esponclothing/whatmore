@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         maxAge: 60 * 60 * 24 * 7, // 7 days
+        expires: new Date(Date.now() + 60 * 60 * 24 * 7 * 1000),
         path: "/",
         sameSite: "lax"
       });
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest) {
         httpOnly: false,
         secure: process.env.NODE_ENV === "production",
         maxAge: 60 * 60 * 24 * 7,
+        expires: new Date(Date.now() + 60 * 60 * 24 * 7 * 1000),
         path: "/",
         sameSite: "lax"
       });
@@ -42,6 +44,7 @@ export async function POST(req: NextRequest) {
           httpOnly: true,
           secure: process.env.NODE_ENV === "production",
           maxAge: 60 * 60 * 24 * 7,
+          expires: new Date(Date.now() + 60 * 60 * 24 * 7 * 1000),
           path: "/",
           sameSite: "lax"
         });
@@ -49,6 +52,7 @@ export async function POST(req: NextRequest) {
           httpOnly: false,
           secure: process.env.NODE_ENV === "production",
           maxAge: 60 * 60 * 24 * 7,
+          expires: new Date(Date.now() + 60 * 60 * 24 * 7 * 1000),
           path: "/",
           sameSite: "lax"
         });

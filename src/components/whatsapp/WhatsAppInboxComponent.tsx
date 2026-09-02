@@ -1546,10 +1546,7 @@ export default function WhatsAppInboxComponent() {
                   <UserCheck size={14} />
                   <span>{activeConvDetail.assignedEmployee?.user?.name ? `Assign (${activeConvDetail.assignedEmployee.user.name})` : "Assign"}</span>
                 </button>
-                <button className="chat-action-btn" onClick={() => setShowQuoteModal(true)} title="Generate Quotation">
-                  <FileText size={14} />
-                  <span>Quotation</span>
-                </button>
+
                 {paymentConfigured && (
                   <button className="chat-action-btn" onClick={() => setShowPaymentModal(true)} title="Send Payment Link">
                     <CreditCard size={14} />
@@ -1863,9 +1860,7 @@ export default function WhatsAppInboxComponent() {
               {/* Quick Action Shortcut Buttons */}
               <div className="chat-quick-actions-bar">
 
-                <button className="quick-chip" onClick={() => setShowFollowUpModal(true)}>
-                  <Calendar size={12} /> + Follow Up
-                </button>
+
                 <button className="quick-chip highlight" onClick={() => setShowReplyLibraryModal(true)}>
                   <MessageSquare size={12} /> Reply Library
                 </button>
@@ -2316,9 +2311,7 @@ export default function WhatsAppInboxComponent() {
             <div className="crm-section-box">
               <h5 className="crm-section-title">Quick Actions</h5>
               <div className="crm-quick-btns">
-                <button className="crm-action-tile" onClick={() => setShowQuoteModal(true)}>
-                  <FileText size={14} /> Send Quotation
-                </button>
+
                 {paymentConfigured && (
                   <button className="crm-action-tile" onClick={() => setShowPaymentModal(true)}>
                     <CreditCard size={14} /> Send Payment Link
