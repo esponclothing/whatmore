@@ -3,61 +3,42 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    const newEmail = "esponclothing105@gmail.com";
-    const oldEmail = "arti@espon.in";
-
-    // 1. Find the new user and employee
-    const newUser = await prisma.user.findFirst({
-      where: { email: newEmail },
+    const allUsers = await prisma.user.findMany({
+      where: {
+        OR: [
+          { email: { contains: "arti", mode: 'insensitive' } },
+          { email: { contains: "esponclothing", mode: 'insensitive' } },
+          { name: { contains: "arti", mode: 'insensitive' } }
+        ]
+      },
       include: { employee: true }
     });
 
-    // 2. Find the old user and employee
-    const oldUser = await prisma.user.findFirst({
-      where: { email: oldEmail },
-      include: { employee: true }
-    });
-
-    if (!newUser || !newUser.employee) {
-      return NextResponse.json({ error: "New employee not found for " + newEmail });
-    }
-    
-    const newEmpId = newUser.employee.id;
-    let oldEmpId = null;
-    let transferred = 0;
-
-    if (oldUser && oldUser.employee) {
-      oldEmpId = oldUser.employee.id;
-      
-      // Transfer chats
-      if (oldEmpId !== newEmpId) {
-        const updateRes = await prisma.whatsAppConversation.updateMany({
-          where: { assignedEmployeeId: oldEmpId },
-          data: { assignedEmployeeId: newEmpId }
+    const result: any[] = [];
+    for (const u of allUsers) {
+      if (u.employee) {
+        const count = await prisma.whatsAppConversation.count({
+          where: { assignedEmployeeId: u.employee.id }
         });
-        transferred = updateRes.count;
-      }
-    } else {
-      // If old user doesn't exist, maybe it was already renamed, but there's a third user?
-      // Let's search by name
-      const otherUsers = await prisma.user.findMany({
-        where: { name: { contains: "arti", mode: 'insensitive' } },
-        include: { employee: true }
-      });
-      
-      for (const u of otherUsers) {
-        if (u.id !== newUser.id && u.employee) {
-          const empId = u.employee.id;
-          const updateRes = await prisma.whatsAppConversation.updateMany({
-            where: { assignedEmployeeId: empId },
-            data: { assignedEmployeeId: newEmpId }
-          });
-          transferred += updateRes.count;
-        }
+        result.push({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          employeeId: u.employee.id,
+          chatCount: count
+        });
+      } else {
+        result.push({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          employeeId: null,
+          chatCount: 0
+        });
       }
     }
 
-    return NextResponse.json({ success: true, transferred, newEmpId, oldEmpId });
+    return NextResponse.json({ success: true, users: result });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
