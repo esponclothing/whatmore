@@ -2000,3 +2000,16 @@ model WhatsAppTag {
   createdAt DateTime @default(now())
 }
 
+model WhatsAppChatbotLog {
+  id             String   @id @default(uuid())
+  phone          String
+  conversationId String?
+  nodeId         String
+  nodeType       String
+  actionDesc     String
+  payload        Json?
+  responseStatus Int?
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+}
+

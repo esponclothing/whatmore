@@ -382,7 +382,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
               }
               
               const payload = {
-                name: vars['name'] || customer?.name || 'Unknown',
+                name: vars['name'] || customer?.contactPerson || customer?.businessName || 'Unknown',
                 whatsappNumber: cleanPhone,
                 shopName: vars['shopName'] || customer?.shopName || '',
                 agentEmail: conv?.assignedEmployee?.user?.email || ''
@@ -390,21 +390,20 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
 
               console.log(`[CRM_LEAD Webhook] Triggering webhook: ${node.webhookUrl}`);
               
-              // Helper to write internal logs
-              const writeLog = async (msg: string) => {
-                if (conv) {
-                  await prisma.whatsAppMessage.create({
-                    data: {
-                      conversationId: conv.id,
-                      senderType: "SYSTEM",
-                      senderName: "System Log",
-                      messageType: "TEXT",
-                      content: msg,
-                      isInternalNote: true,
-                      status: "SENT"
-                    }
-                  });
-                }
+              // Helper to write DB logs
+              const writeLog = async (status: number | null, desc: string, errMsg: string | null) => {
+                await prisma.whatsAppChatbotLog.create({
+                  data: {
+                    phone: cleanPhone,
+                    conversationId: conv?.id || null,
+                    nodeId: node.id || "CRM_LEAD_NODE",
+                    nodeType: "CRM_LEAD",
+                    actionDesc: desc,
+                    payload: payload,
+                    responseStatus: status,
+                    errorMessage: errMsg
+                  }
+                });
               };
 
               const whRes = await fetch(node.webhookUrl, {
@@ -415,7 +414,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
 
               if (whRes.status === 409) {
                 console.log(`[CRM_LEAD Webhook] 409 Conflict. Lead exists.`);
-                await writeLog(`⚠️ CRM Webhook: Lead already exists (409 Conflict).\nURL: ${node.webhookUrl}`);
+                await writeLog(409, `CRM Webhook: Lead already exists`, "409 Conflict");
                 
                 // Send fallback message
                 await dispatchNode(toPhone, { type: 'TEXT', text: 'Lead with this mobile number already exists and is assigned to an agent. Routing you to a live agent...' }, vars, conv?.id);
@@ -432,28 +431,27 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
                 break;
               } else if (whRes.status === 201 || whRes.status === 200) {
                 console.log(`[CRM_LEAD Webhook] ${whRes.status} Created.`);
-                await writeLog(`✅ CRM Webhook Success (${whRes.status})\nURL: ${node.webhookUrl}\nPayload: ${JSON.stringify(payload)}`);
+                await writeLog(whRes.status, `CRM Webhook Success`, null);
               } else {
                 let responseBody = "";
                 try { responseBody = await whRes.text(); } catch(e) {}
                 console.log(`[CRM_LEAD Webhook] Unhandled status code: ${whRes.status}`);
-                await writeLog(`🔴 CRM Webhook Failed (${whRes.status})\nURL: ${node.webhookUrl}\nResponse: ${responseBody.slice(0,200)}`);
+                await writeLog(whRes.status, `CRM Webhook Failed`, responseBody.slice(0, 500));
               }
             } catch (err: any) {
               console.error(`[CRM_LEAD Webhook] Error:`, err);
-              if (conv) {
-                await prisma.whatsAppMessage.create({
-                  data: {
-                    conversationId: conv.id,
-                    senderType: "SYSTEM",
-                    senderName: "System Log",
-                    messageType: "TEXT",
-                    content: `🔴 CRM Webhook Network Error\nURL: ${node.webhookUrl}\nError: ${err.message}`,
-                    isInternalNote: true,
-                    status: "SENT"
-                  }
-                });
-              }
+              await prisma.whatsAppChatbotLog.create({
+                data: {
+                  phone: toPhone.replace(/\D/g, '').slice(-10),
+                  conversationId: conversationId || null,
+                  nodeId: node.id || "CRM_LEAD_NODE",
+                  nodeType: "CRM_LEAD",
+                  actionDesc: `CRM Webhook Network Error`,
+                  payload: null,
+                  responseStatus: null,
+                  errorMessage: err.message
+                }
+              });
             }
           }
 
