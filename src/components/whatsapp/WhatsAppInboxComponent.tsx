@@ -683,56 +683,74 @@ export default function WhatsAppInboxComponent() {
   };
 
 
-    // Direct File Attachment Upload Handler
-  const handleDirectFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedConvId) return;
+  // Direct File Attachment Upload Handler
+  const handleDirectFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !selectedConvId) return;
 
     setSendingMsg(true);
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      const fileDataUrl = evt.target?.result as string;
-      const fileType = file.type.startsWith("image/")
-        ? "IMAGE"
-        : file.type.startsWith("video/")
-        ? "VIDEO"
-        : file.type.startsWith("audio/")
-        ? "AUDIO"
-        : "DOCUMENT";
 
-      const apiRes = await fetch('/api/whatsapp/upload-media', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileDataUrl, filename: file.name, mimeType: file.type })
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      await new Promise<void>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+          try {
+            const fileDataUrl = evt.target?.result as string;
+            const fileType = file.type.startsWith("image/")
+              ? "IMAGE"
+              : file.type.startsWith("video/")
+              ? "VIDEO"
+              : file.type.startsWith("audio/")
+              ? "AUDIO"
+              : "DOCUMENT";
+
+            const apiRes = await fetch('/api/whatsapp/upload-media', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fileDataUrl, filename: file.name, mimeType: file.type })
+            });
+            if (!apiRes.ok) throw new Error('Upload API error ' + apiRes.status);
+            const uploadRes = await apiRes.json();
+            if (!uploadRes.success || !uploadRes.mediaId) {
+              setToastMsg(`❌ Upload Failed: ${uploadRes.error}`);
+              setTimeout(() => setToastMsg(null), 4000);
+              resolve();
+              return;
+            }
+
+            const res = await sendWhatsAppMessageAction({
+              conversationId: selectedConvId,
+              content: fileType === "IMAGE" ? "[IMAGE]" : fileType === "DOCUMENT" ? "[DOCUMENT]" : fileType === "VIDEO" ? "[VIDEO]" : fileType === "AUDIO" ? "[AUDIO]" : `Attached file: ${file.name}`,
+              mediaUrl: uploadRes.mediaId, // passing the ID to Meta API
+              mediaFilename: file.name,
+              messageType: fileType,
+              senderType: "AGENT",
+              senderName: currentUserName
+            });
+
+            if (res.success) {
+              setToastMsg(`✓ Direct attachment "${file.name}" sent to customer!`);
+              setTimeout(() => setToastMsg(null), 3000);
+            }
+          } catch (err: any) {
+            setToastMsg(`❌ Failed to send ${file.name}: ${err.message}`);
+            setTimeout(() => setToastMsg(null), 4000);
+          }
+          resolve();
+        };
+        reader.readAsDataURL(file);
       });
-      if (!apiRes.ok) throw new Error('Upload API error ' + apiRes.status);
-      const uploadRes = await apiRes.json();
-      if (!uploadRes.success || !uploadRes.mediaId) {
-        setToastMsg(`❌ Upload Failed: ${uploadRes.error}`);
-        setSendingMsg(false);
-        setTimeout(() => setToastMsg(null), 4000);
-        return;
-      }
+    }
 
-      const res = await sendWhatsAppMessageAction({
-        conversationId: selectedConvId,
-        content: fileType === "IMAGE" ? "[IMAGE]" : fileType === "DOCUMENT" ? "[DOCUMENT]" : fileType === "VIDEO" ? "[VIDEO]" : fileType === "AUDIO" ? "[AUDIO]" : `Attached file: ${file.name}`,
-        mediaUrl: uploadRes.mediaId, // passing the ID to Meta API
-        mediaFilename: file.name,
-        messageType: fileType,
-        senderType: "AGENT",
-        senderName: currentUserName
-      });
-
-      if (res.success) {
-        setToastMsg(`✓ Direct attachment "${file.name}" sent to customer!`);
-        setTimeout(() => setToastMsg(null), 3000);
-        await fetchConversationDetail(selectedConvId, true);
-        await fetchConversationsList(true);
-      }
-      setSendingMsg(false);
-    };
-    reader.readAsDataURL(file);
+    await fetchConversationDetail(selectedConvId, true);
+    await fetchConversationsList(true);
+    setSendingMsg(false);
+    
+    // Reset file input so same file(s) can be selected again
+    if (e.target) {
+      e.target.value = '';
+    }
   };
 
   // Delete selected conversation handler
@@ -1865,6 +1883,7 @@ export default function WhatsAppInboxComponent() {
               {/* Hidden Direct File Upload Input */}
               <input
                 type="file"
+                multiple
                 ref={fileInputRef}
                 style={{ display: "none" }}
                 onChange={handleDirectFileUpload}
