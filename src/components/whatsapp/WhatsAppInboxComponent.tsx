@@ -374,13 +374,17 @@ export default function WhatsAppInboxComponent() {
           console.error("Error reading wm_user cookie", e);
         }
 
-        // Apply Tab Filter (All, Assigned, Unassigned)
+        // Apply Tab Filter (All, Assigned, Unassigned, Closed)
         let filtered = mapped;
         
         if (activeNavTab === 'assigned_to_me' || activeNavTab === 'assigned') {
-          filtered = mapped.filter((c) => c._raw.assignedEmployeeId !== null);
+          filtered = mapped.filter((c) => c._raw.assignedEmployeeId !== null && c.status === 'OPEN');
         } else if (activeNavTab === 'unassigned') {
-          filtered = mapped.filter((c) => c._raw.assignedEmployeeId === null);
+          filtered = mapped.filter((c) => c._raw.assignedEmployeeId === null && c.status === 'OPEN');
+        } else if (activeNavTab === 'closed') {
+          filtered = mapped.filter((c) => c.status === 'CLOSED');
+        } else {
+          filtered = mapped.filter((c) => c.status === 'OPEN'); // 'all'
         }
         // Apply Lead Status Filter
         if (leadStatusFilter) {
@@ -1212,6 +1216,15 @@ export default function WhatsAppInboxComponent() {
                     }}
                   >
                     <span>Unassigned</span>
+                  </button>
+                  <button
+                    className={`folder-tab ${activeNavTab === "closed" ? "active" : ""}`}
+                    onClick={() => {
+                      setActiveNavTab("closed");
+                      setFilterEmployeeId("");
+                    }}
+                  >
+                    <span>Closed</span>
                   </button>
                 </div>
                 )}
