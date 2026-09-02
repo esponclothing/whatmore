@@ -2393,7 +2393,7 @@ export default function WhatsAppChatbotBuilderPage() {
                         style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", resize: "none" }}
                       />
                     </div>
-                  ) : (
+                  ) : selectedNode.type !== "CRM_LEAD" ? (
                     <div>
                       <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Message / Description</label>
                       <textarea
@@ -2846,7 +2846,7 @@ export default function WhatsAppChatbotBuilderPage() {
 
                 {(selectedNode.type || "").toUpperCase().startsWith("CRM_") && (
                   <>
-                    {((selectedNode.type || "").toUpperCase() === "CRM_CONTACT" || (selectedNode.type || "").toUpperCase() === "CRM_LEAD") && (
+                    {(selectedNode.type || "").toUpperCase() === "CRM_CONTACT" && (
                       <>
                         <div>
                           <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>CRM Lead Stage</label>
