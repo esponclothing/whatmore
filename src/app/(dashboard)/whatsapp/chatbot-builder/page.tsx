@@ -2903,7 +2903,6 @@ export default function WhatsAppChatbotBuilderPage() {
                             </div>
                           </>
                         )}
-                      </div>
                       </>
                     )}
 
