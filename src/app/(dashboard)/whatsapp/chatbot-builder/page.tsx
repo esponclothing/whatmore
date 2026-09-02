@@ -2429,7 +2429,7 @@ export default function WhatsAppChatbotBuilderPage() {
                         </select>
                       </div>
                     </div>
-                  )}
+                  ) : null}
 
                 {(selectedNode.type || "").toUpperCase() === "CATALOG" && (
                   <div>

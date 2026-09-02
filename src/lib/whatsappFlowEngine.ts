@@ -321,8 +321,8 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
         try {
           const cleanPhone = toPhone.replace(/\D/g, '').slice(-10);
           console.log(`[CRM Node] toPhone="${toPhone}" cleanPhone="${cleanPhone}" node.tags="${node.tags}"`);
-          let conv = conversationId 
-            ? await prisma.whatsAppConversation.findUnique({ where: { id: conversationId }, include: { customer: true } })
+          let conv: any = conversationId 
+            ? await prisma.whatsAppConversation.findUnique({ where: { id: conversationId }, include: { customer: true, assignedEmployee: { include: { user: true } } } })
             : null;
           let customer = conv?.customer;
 
@@ -348,7 +348,8 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
             if (!conv) {
               conv = await prisma.whatsAppConversation.findFirst({ 
                 where: { customerId: customer.id }, 
-                orderBy: { updatedAt: 'desc' } 
+                orderBy: { updatedAt: 'desc' },
+                include: { assignedEmployee: { include: { user: true } } }
               });
             }
 
@@ -383,7 +384,8 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
               const payload = {
                 name: vars['name'] || customer?.name || 'Unknown',
                 whatsappNumber: cleanPhone,
-                shopName: vars['shopName'] || customer?.shopName || ''
+                shopName: vars['shopName'] || customer?.shopName || '',
+                agentEmail: conv?.assignedEmployee?.user?.email || ''
               };
 
               console.log(`[CRM_LEAD Webhook] Triggering webhook: ${node.webhookUrl}`);
