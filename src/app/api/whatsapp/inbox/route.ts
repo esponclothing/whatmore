@@ -54,6 +54,17 @@ export async function GET(req: NextRequest) {
           where.assignedEmployeeId = "00000000-0000-0000-0000-000000000000";
         }
       }
+      const search = searchParams.get("search");
+      if (search) {
+        where.customer = {
+          OR: [
+            { whatsappNumber: { contains: search } },
+            { mobile: { contains: search } },
+            { contactPerson: { contains: search, mode: 'insensitive' } },
+            { businessName: { contains: search, mode: 'insensitive' } }
+          ]
+        };
+      }
 
       const conversations = await prisma.whatsAppConversation.findMany({
         where,
