@@ -25,8 +25,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Sync to User and Employee
     try {
-      // Find user by old email or new email
-      let dbUser = await prisma.user.findFirst({ where: { email: existingAgent.email } });
+      // Find user by old email, new email, or fallback
+      let dbUser = await prisma.user.findFirst({ 
+        where: { 
+          OR: [
+            { email: existingAgent.email },
+            { email: email }
+          ]
+        } 
+      });
+
+      // Fallback: search by name if somehow emails got completely out of sync
+      if (!dbUser) {
+        dbUser = await prisma.user.findFirst({ where: { name: existingAgent.name } });
+      }
       
       if (dbUser) {
         const userUpdate: any = { name, email, role: (role === "ADMIN" || role === "SUPER_ADMIN" || role === "MANAGER") ? "ADMIN" : "SALES", isActive };
