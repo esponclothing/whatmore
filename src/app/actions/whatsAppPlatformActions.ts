@@ -1,4 +1,4 @@
-﻿"use server";
+"use server";
 
 import { prisma } from "@/lib/prisma";
 import { seedWhatsAppPlatformData } from "@/lib/seedWhatsApp";
@@ -6,9 +6,11 @@ import { revalidatePath } from "next/cache";
 
 export async function getWhatsAppChatbotLogsAction(phone: string) {
   try {
+    const whereClause = phone ? { phone } : {};
     const logs = await prisma.whatsAppChatbotLog.findMany({
-      where: { phone },
-      orderBy: { createdAt: 'desc' }
+      where: whereClause,
+      orderBy: { createdAt: 'desc' },
+      take: phone ? undefined : 50
     });
     return { success: true, logs };
   } catch (e: any) {

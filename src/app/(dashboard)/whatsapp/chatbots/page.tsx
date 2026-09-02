@@ -18,6 +18,8 @@ export default function ChatbotHubPage() {
 
   useEffect(() => {
     fetchBots();
+    // Also fetch recent logs by default
+    handleSearchLogs('');
   }, []);
 
   const fetchBots = async () => {
@@ -48,11 +50,11 @@ export default function ChatbotHubPage() {
     router.push(`/whatsapp/chatbot-builder?flowId=${id}`);
   };
 
-  const handleSearchLogs = async () => {
-    if (!searchPhone) return;
+  const handleSearchLogs = async (overridePhone?: string) => {
+    const phoneToSearch = typeof overridePhone === 'string' ? overridePhone : searchPhone;
     setLoadingLogs(true);
     // clean phone
-    const cleaned = searchPhone.replace(/\D/g, '').slice(-10);
+    const cleaned = phoneToSearch ? phoneToSearch.replace(/\D/g, '').slice(-10) : '';
     const res = await getWhatsAppChatbotLogsAction(cleaned);
     if (res.success && res.logs) {
       setLogs(res.logs);
@@ -195,7 +197,7 @@ export default function ChatbotHubPage() {
               ) : logs.length === 0 ? (
                 <div style={{ color: '#64748b', textAlign: 'center', padding: '40px' }}>
                   <Activity size={40} style={{ opacity: 0.2, marginBottom: '16px' }} />
-                  <div>No logs found for this number.</div>
+                  <div>No logs available yet.</div>
                 </div>
               ) : (
                 logs.map(log => (
