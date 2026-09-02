@@ -284,7 +284,7 @@ export async function POST(req: NextRequest) {
       // Removed old global auto-assignment logic to rely purely on Chatbot Engine routing.
         // Feature 1: Send Web Push Notification to assigned agent or all if unassigned
         sendPushNotificationToAgents(
-          `dY' ${customer.contactPerson || '+91 ' + cleanPhone}`,
+          `New Message from ${customer.contactPerson || '+91 ' + cleanPhone}`,
           textContent.slice(0, 100),
           `/whatsapp/inbox`,
           conversation.assignedEmployeeId
