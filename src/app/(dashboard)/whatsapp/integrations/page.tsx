@@ -157,6 +157,10 @@ export default function IntegrationsHubPage() {
       fetch('/api/whatsapp/client-status').then(r => r.json()).then(d => setClientInfo(d)).catch(() => {});
       fetch('/api/owner/agents').then(r => r.json()).then(d => { if (d.agents) setAgents(d.agents); }).catch(() => {});
 
+      if (resWebhooks && resWebhooks.success) {
+        setWebhookIntegrations(resWebhooks.integrations || []);
+      }
+      setLoadingWebhooks(false);
       setLoading(false);
     });
 
