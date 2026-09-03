@@ -387,13 +387,24 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
           }
 
           // Webhook Logic for CRM_LEAD
-          if (type === 'CRM_LEAD' && node.webhookUrl) {
+          let finalWebhookUrl = node.webhookUrl;
+          let finalWebhookAuth = node.webhookAuth;
+
+          if (type === 'CRM_LEAD' && node.integrationId) {
+            const integration = await prisma.whatsAppIntegration.findUnique({ where: { id: node.integrationId } });
+            if (integration && integration.isActive) {
+              finalWebhookUrl = integration.url;
+              finalWebhookAuth = integration.token;
+            }
+          }
+
+          if (type === 'CRM_LEAD' && finalWebhookUrl) {
             try {
               const headers: Record<string, string> = {
                 'Content-Type': 'application/json'
               };
-              if (node.webhookAuth) {
-                headers['Authorization'] = node.webhookAuth;
+              if (finalWebhookAuth) {
+                headers['Authorization'] = finalWebhookAuth;
               }
               
               const payload = {
@@ -403,7 +414,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
                 agentEmail: conv?.assignedEmployee?.user?.email || ''
               };
 
-              console.log(`[CRM_LEAD Webhook] Triggering webhook: ${node.webhookUrl}`);
+              console.log(`[CRM_LEAD Webhook] Triggering webhook: ${finalWebhookUrl}`);
               
               // Helper to write DB logs
               const writeLog = async (status: number | null, desc: string, errMsg: string | null) => {
@@ -421,7 +432,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
                 });
               };
 
-              const whRes = await fetch(node.webhookUrl, {
+              const whRes = await fetch(finalWebhookUrl, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(payload)

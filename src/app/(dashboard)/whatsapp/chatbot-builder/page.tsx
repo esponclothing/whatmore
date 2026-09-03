@@ -67,8 +67,10 @@ import {
   toggleWhatsAppChatbotFlowStatusAction,
   getAllEmployeesAndTeams,
   getTeamsWithMembersAction,
-  getProductsAction
+  getProductsAction,
+  getWhatsAppTemplatesAction
 } from "@/app/actions/whatsAppPlatformActions";
+import { getWhatsAppIntegrationsAction } from "@/app/actions/whatsAppIntegrationActions";
 import "@/components/whatsapp/ChatbotBuilder.css";
 
 // Block Library Categories
@@ -404,6 +406,8 @@ export default function WhatsAppChatbotBuilderPage() {
   const [availableTeams, setAvailableTeams] = useState<any[]>([]);
   const [availableTags, setAvailableTags] = useState<any[]>([]);
   const [availableCollections, setAvailableCollections] = useState<string[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [integrations, setIntegrations] = useState<any[]>([]);
 
   // JSON File Import/Export Ref
   const jsonFileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -446,6 +450,7 @@ export default function WhatsAppChatbotBuilderPage() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [historyStack, setHistoryStack] = useState<any[]>([BOT_TEMPLATES[0].nodes]);
   const [historyIndex, setHistoryIndex] = useState<number>(0);
+  const [activeTab, setActiveTab] = useState("builder"); 
 
   // Zoom & Pan State
   const [zoom, setZoom] = useState<number>(0.75);
@@ -483,7 +488,6 @@ export default function WhatsAppChatbotBuilderPage() {
   // Simulator Modal State
   const [showSimModal, setShowSimModal] = useState<boolean>(false);
   const [simMessages, setSimMessages] = useState<any[]>([]);
-  const [drawerTab, setDrawerTab] = useState<"basic" | "advanced">("basic");
   const [isMounted, setIsMounted] = useState<boolean>(false);
   useEffect(() => {
     // Recalculate port coordinates after DOM layout updates
@@ -756,7 +760,19 @@ export default function WhatsAppChatbotBuilderPage() {
 
   // Fetch Live Data for Dropdowns
   const fetchLiveData = async () => {
-    try {
+      // Fetch WhatsApp Templates for Meta block
+      const tRes = await getWhatsAppTemplatesAction();
+      if (tRes.success && tRes.templates) {
+        setTemplates(tRes.templates);
+      }
+      
+      // Fetch Integrations for CRM blocks
+      const iRes = await getWhatsAppIntegrationsAction();
+      if (iRes.success && iRes.integrations) {
+        setIntegrations(iRes.integrations);
+      }
+
+      try {
       const agentsRes = await getAllEmployeesAndTeams();
       if (agentsRes.success && agentsRes.employees) setAvailableAgents(agentsRes.employees);
 
@@ -2885,24 +2901,17 @@ export default function WhatsAppChatbotBuilderPage() {
                     {(selectedNode.type || "").toUpperCase() === "CRM_LEAD" && (
                       <>
                         <div style={{ marginTop: "12px" }}>
-                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>CRM Webhook URL</label>
-                          <input
-                            type="text"
-                            placeholder="https://api.yourcrm.com/leads"
-                            value={selectedNode.webhookUrl || ""}
-                            onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, webhookUrl: e.target.value } : n)))}
-                            style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px" }}
-                          />
-                        </div>
-                        <div style={{ marginTop: "8px" }}>
-                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Authorization Header</label>
-                          <input
-                            type="text"
-                            placeholder="Bearer <token>"
-                            value={selectedNode.webhookAuth || ""}
-                            onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, webhookAuth: e.target.value } : n)))}
-                            style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px" }}
-                          />
+                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>CRM Integration</label>
+                          <select
+                            value={selectedNode.integrationId || ""}
+                            onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, integrationId: e.target.value } : n)))}
+                            style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                          >
+                            <option value="">-- Select Integration --</option>
+                            {integrations.map(int => (
+                              <option key={int.id} value={int.id}>{int.name}</option>
+                            ))}
+                          </select>
                         </div>
                       </>
                     )}

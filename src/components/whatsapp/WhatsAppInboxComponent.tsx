@@ -86,6 +86,7 @@ import {
   sendWhatsAppFlowMessageAction,
   getWhatsAppSettingsAction
 } from "@/app/actions/whatsAppPlatformActions";
+import { getWhatsAppIntegrationsAction, pushLeadToIntegrationAction } from "@/app/actions/whatsAppIntegrationActions";
 import { useWhatsAppStore } from "@/store/whatsappStore";
 import "./WhatsAppInbox.css";
 
@@ -177,6 +178,13 @@ export default function WhatsAppInboxComponent() {
   // Mentions Autocomplete State
   const [showMentionsMenu, setShowMentionsMenu] = useState<boolean>(false);
   const [mentionSearch, setMentionSearch] = useState<string>("");
+  const [filterTag, setFilterTag] = useState<string>("ALL");
+  const [filterSearch, setFilterSearch] = useState<string>("");
+
+  // CRM Integrations
+  const [integrations, setIntegrations] = useState<any[]>([]);
+  const [pushingToCrm, setPushingToCrm] = useState(false);
+  const [showIntegrationsMenu, setShowIntegrationsMenu] = useState(false);
 
   // Toggle Full Screen Mode (Overlay + Native Fullscreen API)
   const toggleFullScreenMode = () => {
@@ -237,6 +245,20 @@ export default function WhatsAppInboxComponent() {
   const [isCreatingTag, setIsCreatingTag] = useState(false);
 
   // Unified active tags (merged between conversation and customer, excluding legacy auto-tags)
+  const handlePushToCrm = async (integrationId: string) => {
+    if (!activeConvDetail) return;
+    setPushingToCrm(true);
+    setShowIntegrationsMenu(false);
+    const res = await pushLeadToIntegrationAction(activeConvDetail.id, integrationId);
+    if (res.success) {
+      setToastMsg("Lead pushed to CRM successfully!");
+    } else {
+      setToastMsg("Failed to push lead: " + res.error);
+    }
+    setPushingToCrm(false);
+    setTimeout(() => setToastMsg(null), 3000);
+  };
+
   const activeTagsList = useMemo(() => {
     const isAuto = (t: string) => {
       const l = t.toLowerCase().trim();
@@ -327,7 +349,15 @@ export default function WhatsAppInboxComponent() {
       }
     };
     fetchCanned();
+    fetchIntegrations();
   }, []);
+
+  const fetchIntegrations = async () => {
+    const res = await getWhatsAppIntegrationsAction();
+    if (res.success && res.integrations) {
+      setIntegrations(res.integrations.filter((i: any) => i.isActive));
+    }
+  };
 
   // Fetch Conversations List — uses /api/whatsapp/inbox
   const fetchConversationsList = async (silent = false) => {
@@ -885,7 +915,7 @@ export default function WhatsAppInboxComponent() {
         alert("Please select a conversation first.");
         return;
       }
-      setSending(true);
+      setSendingMsg(true);
       setShowReplyLibraryModal(false);
       setToastMsg("Sending rich quick reply...");
       
@@ -918,7 +948,7 @@ export default function WhatsAppInboxComponent() {
       } catch (error: any) {
         alert("Error sending rich reply: " + error.message);
       } finally {
-        setSending(false);
+        setSendingMsg(false);
         setTimeout(() => setToastMsg(null), 3000);
       }
     } else {
@@ -1507,7 +1537,6 @@ export default function WhatsAppInboxComponent() {
               </div>
 
               <div className="chat-header-actions">
-{/* Call button removed */}
                 <button className="chat-action-btn highlight-tags" onClick={() => setShowTagsModal(true)} title="Manage Tags">
                   <Tag size={14} />
                   <span>Tags ({activeTagsList.length})</span>
@@ -1575,6 +1604,44 @@ export default function WhatsAppInboxComponent() {
                   <CheckCircle2 size={14} />
                   <span>{statusToggleLoading ? "..." : activeConvDetail.status === 'CLOSED' ? "Reopen Chat" : "Close Chat"}</span>
                 </button>
+
+                <div style={{ position: 'relative' }}>
+                  <button
+                    className="chat-action-btn"
+                    onClick={() => {
+                      if (integrations.length === 1) {
+                        handlePushToCrm(integrations[0].id);
+                      } else if (integrations.length > 1) {
+                        setShowIntegrationsMenu(!showIntegrationsMenu);
+                      } else {
+                        setToastMsg("No CRM integrations configured.");
+                        setTimeout(() => setToastMsg(null), 3000);
+                      }
+                    }}
+                    disabled={pushingToCrm}
+                    style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", fontWeight: 600 }}
+                  >
+                    <Activity size={14} />
+                    <span>{pushingToCrm ? "Pushing..." : "Push to CRM"}</span>
+                  </button>
+                  
+                  {showIntegrationsMenu && integrations.length > 1 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: '4px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', zIndex: 50, minWidth: '180px', overflow: 'hidden' }}>
+                      {integrations.map(int => (
+                        <div 
+                          key={int.id}
+                          onClick={() => handlePushToCrm(int.id)}
+                          style={{ padding: '8px 12px', fontSize: '12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', color: '#334155' }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                        >
+                          {int.name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <button
                   className={`chat-action-btn ${isFullScreen ? "active-fullscreen" : ""}`}
                   onClick={toggleFullScreenMode}
@@ -2124,20 +2191,6 @@ export default function WhatsAppInboxComponent() {
             const res = await sendWhatsAppTemplateAction(phone, templateName, language, components);
             if (res.success) { await fetchConversationDetail(selectedConvId!, true); }
             else { setToastMsg("Template failed: " + (res.error||"")); setTimeout(() => setToastMsg(null), 3000); }
-          }}
-        />
-      )}
-
-      {/* Flow Picker Modal */}
-      {showFlowPicker && (
-        <FlowPickerModal
-          onClose={() => setShowFlowPicker(false)}
-          onSendFlow={async (flowId) => {
-            const phone = (activeConvDetail?.customer?.whatsappNumber || activeConvDetail?.customer?.mobile || "").replace(/\D/g,"");
-            if (!phone) return;
-            const res = await sendWhatsAppFlowMessageAction(phone, flowId);
-            if (res.success) { await fetchConversationDetail(selectedConvId!, true); }
-            else { setToastMsg("Flow send failed: " + (res.error||"")); setTimeout(() => setToastMsg(null), 3000); }
           }}
         />
       )}

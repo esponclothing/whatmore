@@ -28,6 +28,7 @@ const subNavItems = [
   { name: "AI Automation", path: "/whatsapp/ai-automation", icon: Bot, highlight: true },
   { name: "Chatbots", path: "/whatsapp/chatbots", icon: Bot },
   { name: "Chatbot Builder", path: "/whatsapp/chatbot-builder", icon: GitBranch },
+  { name: "Integrations", path: "/whatsapp/integrations", icon: Zap },
   { name: "Meta Flows", path: "/whatsapp/flows", icon: Zap },
   { name: "Templates", path: "/whatsapp/templates", icon: FileCode },
   { name: "Products & Prices", path: "/whatsapp/commerce", icon: Box },
