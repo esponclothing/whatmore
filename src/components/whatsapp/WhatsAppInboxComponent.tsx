@@ -1331,7 +1331,7 @@ export default function WhatsAppInboxComponent() {
                 <div
                   key={conv.id}
                   className={`conversation-card ${isSelected ? "selected" : ""} ${isUnread ? "unread" : ""}`}
-                  onClick={() => setSelectedConvId(conv.id)}
+                  onClick={() => { if(selectedConvId !== conv.id) { setActiveConvDetail(null); setSelectedConvId(conv.id); } }}
                 >
                   <div className="conv-avatar">
                     <span>{(cust?.contactPerson || cust?.businessName || "C").slice(0, 2).toUpperCase()}</span>
