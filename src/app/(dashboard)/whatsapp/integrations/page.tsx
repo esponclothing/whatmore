@@ -21,6 +21,8 @@ import {
   getAllAgentsAction
 } from "@/app/actions/whatsAppPlatformActions";
 import { getPaymentGatewaySettings, savePaymentGatewaySettings } from "@/app/actions/paymentGatewayActions";
+import { getWhatsAppIntegrationsAction, createWhatsAppIntegrationAction, updateWhatsAppIntegrationAction, deleteWhatsAppIntegrationAction } from "@/app/actions/whatsAppIntegrationActions";
+
 
 export default function IntegrationsHubPage() {
   const [activeTab, setActiveTab] = useState("whatsapp");
@@ -52,6 +54,15 @@ export default function IntegrationsHubPage() {
   const [resultMsg, setResultMsg] = useState<{ success: boolean; text: string } | null>(null);
 
   // Shopify State
+  
+  // Webhooks State
+  const [webhookIntegrations, setWebhookIntegrations] = useState<any[]>([]);
+  const [loadingWebhooks, setLoadingWebhooks] = useState(true);
+  const [activeCategoryTab, setActiveCategoryTab] = useState<string>("ALL");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formData, setFormData] = useState({ name: "", url: "", token: "", type: "CRM_LEAD" });
+
   const [shopifyDomain, setShopifyDomain] = useState("");
   const [shopifyToken, setShopifyToken] = useState("");
   const [showShopifyToken, setShowShopifyToken] = useState(false);
