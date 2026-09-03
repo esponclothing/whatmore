@@ -68,7 +68,7 @@ import {
   getAllEmployeesAndTeams,
   getTeamsWithMembersAction,
   getProductsAction,
-  getWhatsAppTemplatesAction
+  getWhatsAppTemplates
 } from "@/app/actions/whatsAppPlatformActions";
 import { getWhatsAppIntegrationsAction } from "@/app/actions/whatsAppIntegrationActions";
 import "@/components/whatsapp/ChatbotBuilder.css";
@@ -761,7 +761,7 @@ export default function WhatsAppChatbotBuilderPage() {
   // Fetch Live Data for Dropdowns
   const fetchLiveData = async () => {
       // Fetch WhatsApp Templates for Meta block
-      const tRes = await getWhatsAppTemplatesAction();
+      const tRes = await getWhatsAppTemplates();
       if (tRes.success && tRes.templates) {
         setTemplates(tRes.templates);
       }
