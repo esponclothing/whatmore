@@ -451,6 +451,10 @@ export default function IntegrationsHubPage() {
     );
   }
 
+  const filteredWebhooks = activeCategoryTab === "ALL" 
+    ? webhookIntegrations 
+    : webhookIntegrations.filter(h => h.type === activeCategoryTab);
+
   return (
     <div className="p-8 w-full max-w-none flex flex-col gap-8">
       {/* Header title */}
