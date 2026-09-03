@@ -176,7 +176,47 @@ export default function IntegrationsHubPage() {
     }).catch(() => {});
   };
 
-  const reloadTeams = async () => {
+  
+  const handleOpenModal = (integration?: any) => {
+    if (integration) {
+      setEditingId(integration.id);
+      setFormData({ name: integration.name, url: integration.url, token: integration.token || "", type: integration.type || "CRM_LEAD" });
+    } else {
+      setEditingId(null);
+      setFormData({ name: "", url: "", token: "", type: "CRM_LEAD" });
+    }
+    setIsModalOpen(true);
+  };
+  
+  const handleCloseModal = () => { setIsModalOpen(false); setEditingId(null); setFormData({ name: "", url: "", token: "", type: "CRM_LEAD" }); };
+  
+  const handleSubmitIntegration = async (e: any) => {
+    e.preventDefault();
+    if (!formData.name || !formData.url) return alert("Name and URL required.");
+    if (editingId) {
+      const res = await updateWhatsAppIntegrationAction(editingId, formData);
+      if (res.success) { 
+        setWebhookIntegrations(webhookIntegrations.map(h => h.id === editingId ? { ...h, ...formData } : h));
+        handleCloseModal(); 
+      } else alert(res.error);
+    } else {
+      const res = await createWhatsAppIntegrationAction(formData);
+      if (res.success) { 
+        setWebhookIntegrations([...webhookIntegrations, res.integration || { id: Date.now().toString(), ...formData }]);
+        handleCloseModal(); 
+      } else alert(res.error);
+    }
+  };
+  
+  const handleDeleteIntegration = async (id: string) => {
+    if (!confirm('Delete this integration?')) return;
+    const res = await deleteWhatsAppIntegrationAction(id);
+    if (res.success) {
+      setWebhookIntegrations(webhookIntegrations.filter(h => h.id !== id));
+    } else alert(res.error);
+  };
+
+const reloadTeams = async () => {
     const [resTeams, resAgents] = await Promise.all([getTeamsWithMembersAction(), getAllAgentsAction()]);
     if (resTeams.success && resTeams.teams) setTeams(resTeams.teams);
     if (resAgents.success && resAgents.employees) setAllAgents(resAgents.employees);
