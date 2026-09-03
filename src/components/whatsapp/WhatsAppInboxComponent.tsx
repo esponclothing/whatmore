@@ -1800,7 +1800,7 @@ export default function WhatsAppInboxComponent() {
                             <img
                               src={msg.mediaUrl}
                               alt="Button Header"
-                              style={{ width: "100%", maxHeight: "150px", objectFit: "cover", borderRadius: "8px", cursor: "pointer" }}
+                              style={{ width: "100%", aspectRatio: "1.91 / 1", objectFit: "cover", borderRadius: "8px", cursor: "pointer" }}
                               onClick={() => window.open(msg.mediaUrl, "_blank")}
                             />
                           )}
