@@ -128,8 +128,9 @@ export default function IntegrationsHubPage() {
       getShopifyCredentialsAction(),
       getWhatsAppSettingsAction(),
       getTeamsWithMembersAction(),
-      getAllAgentsAction()
-    ]).then(([resWA, resShopify, resSettings, resTeams, resAgents]) => {
+      getAllAgentsAction(),
+      getWhatsAppIntegrationsAction()
+    ]).then(([resWA, resShopify, resSettings, resTeams, resAgents, resWebhooks]) => {
       if (resWA.success && resWA.credentials) {
         setWabaId(resWA.credentials.businessAccountId || "");
         setPhoneId(resWA.credentials.phoneId || "");
@@ -472,7 +473,7 @@ export default function IntegrationsHubPage() {
 
       {/* 1. Integrations tab */}
       {activeTab === "whatsapp" && (
-        <div className="flex flex-col gap-8 w-full max-w-4xl">
+        <div className="flex flex-col gap-8 w-full max-w-7xl">
           {!isConnected && (
             <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-5 rounded-2xl flex items-center gap-4 shadow-sm">
               <div className="p-3 bg-amber-100 dark:bg-amber-500/20 rounded-full"><AlertTriangle size={24} className="text-amber-600 dark:text-amber-400" /></div>
@@ -579,7 +580,7 @@ export default function IntegrationsHubPage() {
                   </div>
       )}
       {activeTab === "shopify" && (
-        <div className="flex flex-col gap-8 w-full max-w-4xl">
+        <div className="flex flex-col gap-8 w-full max-w-7xl">
           {/* Shopify Integration Card */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden mt-2">
             <div className="border-b border-gray-100 dark:border-slate-700 p-6 flex items-center gap-3">
@@ -629,7 +630,7 @@ export default function IntegrationsHubPage() {
                   </div>
       )}
       {activeTab === "payment" && (
-        <div className="flex flex-col gap-8 w-full max-w-4xl">
+        <div className="flex flex-col gap-8 w-full max-w-7xl">
           {/* Payment Gateway Integration */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
             <div className="flex items-center gap-3 mb-5">
@@ -793,7 +794,7 @@ export default function IntegrationsHubPage() {
       )}
 
       {activeTab === "webhooks" && (
-        <div className="flex flex-col gap-8 w-full max-w-5xl">
+        <div className="flex flex-col gap-8 w-full max-w-7xl">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             
             <div className="flex justify-between items-center mb-6">

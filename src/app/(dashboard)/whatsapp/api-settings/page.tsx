@@ -447,17 +447,7 @@ export default function WhatsAppAPISettingsPage() {
       <div className="flex border-b border-gray-200 dark:border-slate-700 gap-1">
         
 
-        <button
-          onClick={() => setActiveTab("gemini-ai")}
-          className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${
-            activeTab === "gemini-ai" 
-              ? "border-indigo-600 text-indigo-600" 
-              : "border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300"
-          }`}
-        >
-          <Bot size={16} />
-          <span>✨ Gemini AI API</span>
-        </button>
+
 
         <button
           onClick={() => setActiveTab("team-sla")}
@@ -484,78 +474,7 @@ export default function WhatsAppAPISettingsPage() {
         </button>
       </div>
 
-      {/* 2. Gemini AI API Tab */}
-      {activeTab === "gemini-ai" && (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-6 flex flex-col gap-6 w-full max-w-4xl">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">✨ Gemini AI Configuration</h2>
-            <p className="text-sm text-gray-500">Configure your Google Gemini API Key and system prompts to guide your AI responder chatbot.</p>
-          </div>
 
-          {aiResultMsg && (
-            <div className={`p-4 rounded-xl text-sm font-semibold flex items-center gap-2 ${aiResultMsg.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-              <CheckCircle2 size={18} />
-              <span>{aiResultMsg.text}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSaveAISettings} className="flex flex-col gap-5">
-            <div>
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Gemini API Key</label>
-              <input 
-                type="password" 
-                value={geminiKey} 
-                onChange={(e) => setGeminiKey(e.target.value)} 
-                placeholder="AIzaSy..." 
-                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
-              />
-              <p className="text-xs text-gray-400 mt-1">If blank, the system fallback environment variable will be used.</p>
-            </div>
-
-            <div>
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">AI Welcome Message</label>
-              <input 
-                type="text" 
-                value={welcomeMsg} 
-                onChange={(e) => setWelcomeMsg(e.target.value)} 
-                placeholder="Welcome! How can we help you today?" 
-                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">AI Model Selection</label>
-              <select 
-                value={activeModel} 
-                onChange={(e) => setActiveModel(e.target.value)} 
-                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-              >
-                <option value="gemini-2.0-flash">Gemini 3.6 Flash (Primary - Fastest)</option>
-                <option value="gemini-2.0-flash">Gemini 3.5 Flash (Fallback 1)</option>
-                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Fallback 2)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">AI Agent System Prompts / Instructions</label>
-              <textarea 
-                value={systemPrompt} 
-                onChange={(e) => setSystemPrompt(e.target.value)} 
-                rows={6}
-                placeholder="e.g. You are a helpful sales assistant for Espon Sports..." 
-                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
-              />
-            </div>
-
-            <div>
-              <button type="submit" disabled={savingAI} className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-xl text-sm font-bold shadow-md transition-all">
-                {savingAI ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
-                {savingAI ? "Saving..." : "Save AI Configuration"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
 
       {/* 3. Teams Tab */}
       {activeTab === "team-sla" && (
