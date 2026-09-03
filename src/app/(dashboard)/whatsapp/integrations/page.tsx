@@ -623,21 +623,21 @@ export default function IntegrationsHubPage() {
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
             <div className="flex items-center gap-3 mb-5">
               <div className="p-2 bg-violet-100 dark:bg-violet-500/20 rounded-xl">
-                <span className="text-2xl">≡ƒÆ│</span>
+                <span className="text-2xl">💳</span>
               </div>
               <div>
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">Payment Gateway Integration</h2>
-                <p className="text-sm text-gray-500">Connect Razorpay or Cashfree. Only 1 gateway can be active at a time ΓÇö it auto-syncs to all Payment blocks in the Chatbot Builder.</p>
+                <p className="text-sm text-gray-500">Connect Razorpay or Cashfree. Only 1 gateway can be active at a time — it auto-syncs to all Payment blocks in the Chatbot Builder.</p>
               </div>
             </div>
 
             {pgMsg && (
               <div className={`mb-4 px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 ${
-                pgMsg.includes('Γ£à') ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+                pgMsg.includes('✅') ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
               }`}>{pgMsg}</div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
               {/* Razorpay Card */}
               <div className={`rounded-2xl border-2 p-5 transition-all ${
                 pgActiveGateway === 'RAZORPAY' ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-500/5' : 'border-gray-100 dark:border-slate-700'
@@ -655,14 +655,14 @@ export default function IntegrationsHubPage() {
                       const next = pgActiveGateway === 'RAZORPAY' ? null : 'RAZORPAY';
                       setPgActiveGateway(next);
                       await savePaymentGatewaySettings({ activeGateway: next, razorpayKeyId, razorpayKeySecret, cashfreeAppId, cashfreeSecretKey });
-                      setPgMsg(next ? 'Γ£à Razorpay set as active gateway' : 'Γ£à Gateway deactivated');
+                      setPgMsg(next ? '✅ Razorpay set as active gateway' : '✅ Gateway deactivated');
                       setTimeout(() => setPgMsg(null), 3000);
                     }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       pgActiveGateway === 'RAZORPAY' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-blue-50 hover:text-blue-600'
                     }`}
                   >
-                    {pgActiveGateway === 'RAZORPAY' ? 'Γ£à Active' : 'Set Active'}
+                    {pgActiveGateway === 'RAZORPAY' ? '✅ Active' : 'Set Active'}
                   </button>
                 </div>
                 <div className="flex flex-col gap-3">
@@ -673,11 +673,11 @@ export default function IntegrationsHubPage() {
                   <div>
                     <label className="text-xs font-bold text-gray-600 dark:text-gray-400 block mb-1">Key Secret</label>
                     <div className="relative">
-                      <input type={showRzpSecret ? "text" : "password"} value={razorpayKeySecret} onChange={(e) => setRazorpayKeySecret(e.target.value)} placeholder="ΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇó" className="w-full pl-3 pr-10 py-2 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                      <input type={showRzpSecret ? "text" : "password"} value={razorpayKeySecret} onChange={(e) => setRazorpayKeySecret(e.target.value)} placeholder="••••••••••••••••" className="w-full pl-3 pr-10 py-2 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                       <button type="button" onClick={() => setShowRzpSecret(!showRzpSecret)} className="absolute right-3 top-2.5 text-gray-400">{showRzpSecret ? <EyeOff size={16}/> : <Eye size={16}/>}</button>
                     </div>
                   </div>
-                  <button onClick={async () => { setSavingPg(true); await savePaymentGatewaySettings({ activeGateway: pgActiveGateway, razorpayKeyId, razorpayKeySecret, cashfreeAppId, cashfreeSecretKey }); setSavingPg(false); setPgMsg('Γ£à Razorpay credentials saved'); setTimeout(() => setPgMsg(null), 3000); }} disabled={savingPg} className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-all flex items-center justify-center gap-2">
+                  <button onClick={async () => { setSavingPg(true); await savePaymentGatewaySettings({ activeGateway: pgActiveGateway, razorpayKeyId, razorpayKeySecret, cashfreeAppId, cashfreeSecretKey }); setSavingPg(false); setPgMsg('✅ Razorpay credentials saved'); setTimeout(() => setPgMsg(null), 3000); }} disabled={savingPg} className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-all flex items-center justify-center gap-2">
                     {savingPg ? <RefreshCw size={14} className="animate-spin"/> : <Save size={14}/>} Save Razorpay Keys
                   </button>
                 </div>
@@ -700,14 +700,14 @@ export default function IntegrationsHubPage() {
                       const next = pgActiveGateway === 'CASHFREE' ? null : 'CASHFREE';
                       setPgActiveGateway(next);
                       await savePaymentGatewaySettings({ activeGateway: next, razorpayKeyId, razorpayKeySecret, cashfreeAppId, cashfreeSecretKey });
-                      setPgMsg(next ? 'Γ£à Cashfree set as active gateway' : 'Γ£à Gateway deactivated');
+                      setPgMsg(next ? '✅ Cashfree set as active gateway' : '✅ Gateway deactivated');
                       setTimeout(() => setPgMsg(null), 3000);
                     }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       pgActiveGateway === 'CASHFREE' ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-green-50 hover:text-green-600'
                     }`}
                   >
-                    {pgActiveGateway === 'CASHFREE' ? 'Γ£à Active' : 'Set Active'}
+                    {pgActiveGateway === 'CASHFREE' ? '✅ Active' : 'Set Active'}
                   </button>
                 </div>
                 <div className="flex flex-col gap-3">
@@ -718,11 +718,11 @@ export default function IntegrationsHubPage() {
                   <div>
                     <label className="text-xs font-bold text-gray-600 dark:text-gray-400 block mb-1">Secret Key</label>
                     <div className="relative">
-                      <input type={showCfSecret ? "text" : "password"} value={cashfreeSecretKey} onChange={(e) => setCashfreeSecretKey(e.target.value)} placeholder="ΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇó" className="w-full pl-3 pr-10 py-2 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-green-500 outline-none" />
+                      <input type={showCfSecret ? "text" : "password"} value={cashfreeSecretKey} onChange={(e) => setCashfreeSecretKey(e.target.value)} placeholder="••••••••••••••••" className="w-full pl-3 pr-10 py-2 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-green-500 outline-none" />
                       <button type="button" onClick={() => setShowCfSecret(!showCfSecret)} className="absolute right-3 top-2.5 text-gray-400">{showCfSecret ? <EyeOff size={16}/> : <Eye size={16}/>}</button>
                     </div>
                   </div>
-                  <button onClick={async () => { setSavingPg(true); await savePaymentGatewaySettings({ activeGateway: pgActiveGateway, razorpayKeyId, razorpayKeySecret, cashfreeAppId, cashfreeSecretKey, merchantUpiId, merchantUpiName }); setSavingPg(false); setPgMsg('Γ£à Cashfree credentials saved'); setTimeout(() => setPgMsg(null), 3000); }} disabled={savingPg} className="w-full py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-bold transition-all flex items-center justify-center gap-2">
+                  <button onClick={async () => { setSavingPg(true); await savePaymentGatewaySettings({ activeGateway: pgActiveGateway, razorpayKeyId, razorpayKeySecret, cashfreeAppId, cashfreeSecretKey, merchantUpiId, merchantUpiName }); setSavingPg(false); setPgMsg('✅ Cashfree credentials saved'); setTimeout(() => setPgMsg(null), 3000); }} disabled={savingPg} className="w-full py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-bold transition-all flex items-center justify-center gap-2">
                     {savingPg ? <RefreshCw size={14} className="animate-spin"/> : <Save size={14}/>} Save Cashfree Keys
                   </button>
                 </div>
@@ -745,14 +745,14 @@ export default function IntegrationsHubPage() {
                       const next = pgActiveGateway === 'UPI' ? null : 'UPI';
                       setPgActiveGateway(next);
                       await savePaymentGatewaySettings({ activeGateway: next, razorpayKeyId, razorpayKeySecret, cashfreeAppId, cashfreeSecretKey, merchantUpiId, merchantUpiName });
-                      setPgMsg(next ? 'Γ£à Direct UPI set as active gateway' : 'Γ£à Gateway deactivated');
+                      setPgMsg(next ? '✅ Direct UPI set as active gateway' : '✅ Gateway deactivated');
                       setTimeout(() => setPgMsg(null), 3000);
                     }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       pgActiveGateway === 'UPI' ? 'bg-orange-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-orange-50 hover:text-orange-600'
                     }`}
                   >
-                    {pgActiveGateway === 'UPI' ? 'Γ£à Active' : 'Set Active'}
+                    {pgActiveGateway === 'UPI' ? '✅ Active' : 'Set Active'}
                   </button>
                 </div>
                 <div className="flex flex-col gap-3">
@@ -764,7 +764,7 @@ export default function IntegrationsHubPage() {
                     <label className="text-xs font-bold text-gray-600 dark:text-gray-400 block mb-1">Payee Name</label>
                     <input type="text" value={merchantUpiName} onChange={(e) => setMerchantUpiName(e.target.value)} placeholder="e.g. Your Business Name" className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-orange-500 outline-none" />
                   </div>
-                  <button onClick={async () => { setSavingPg(true); await savePaymentGatewaySettings({ activeGateway: pgActiveGateway, razorpayKeyId, razorpayKeySecret, cashfreeAppId, cashfreeSecretKey, merchantUpiId, merchantUpiName }); setSavingPg(false); setPgMsg('Γ£à Direct UPI details saved'); setTimeout(() => setPgMsg(null), 3000); }} disabled={savingPg} className="w-full py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-sm font-bold transition-all flex items-center justify-center gap-2">
+                  <button onClick={async () => { setSavingPg(true); await savePaymentGatewaySettings({ activeGateway: pgActiveGateway, razorpayKeyId, razorpayKeySecret, cashfreeAppId, cashfreeSecretKey, merchantUpiId, merchantUpiName }); setSavingPg(false); setPgMsg('✅ Direct UPI details saved'); setTimeout(() => setPgMsg(null), 3000); }} disabled={savingPg} className="w-full py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-sm font-bold transition-all flex items-center justify-center gap-2">
                     {savingPg ? <RefreshCw size={14} className="animate-spin"/> : <Save size={14}/>} Save UPI Details
                   </button>
                 </div>
@@ -774,7 +774,7 @@ export default function IntegrationsHubPage() {
             {pgActiveGateway && (
               <div className="mt-4 px-4 py-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 rounded-xl text-sm text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
                 <CheckCircle2 size={16}/>
-                <span><strong>{pgActiveGateway === 'RAZORPAY' ? 'Razorpay' : pgActiveGateway === 'CASHFREE' ? 'Cashfree' : 'Direct UPI'}</strong> is the active gateway ΓÇö auto-synced to all Payment blocks in the Chatbot Builder.</span>
+                <span><strong>{pgActiveGateway === 'RAZORPAY' ? 'Razorpay' : pgActiveGateway === 'CASHFREE' ? 'Cashfree' : 'Direct UPI'}</strong> is the active gateway — auto-synced to all Payment blocks in the Chatbot Builder.</span>
               </div>
             )}
           </div>
@@ -784,11 +784,109 @@ export default function IntegrationsHubPage() {
       {activeTab === "webhooks" && (
         <div className="flex flex-col gap-8 w-full max-w-5xl">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <h3 className="text-lg font-bold text-slate-800">Custom Webhooks</h3>
-            <p className="text-sm text-slate-500">Configure webhooks to push leads or data to your CRM, ERP or Zapier.</p>
-            <div className="p-4 mt-4 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-500">
-              Webhooks table and logic placeholder. (CRM/ERP Push targets are populated from the backend).
+            
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Custom Webhooks</h3>
+                <p className="text-sm text-slate-500">Configure webhooks to push leads or data to your CRM, ERP or Zapier.</p>
+              </div>
+              <button onClick={() => handleOpenModal()} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 text-sm">
+                <Plus size={16} /> Add Webhook
+              </button>
             </div>
+
+            <div className="flex gap-2 mb-6">
+              {['ALL', 'CRM_LEAD', 'ERP', 'PAYMENT', 'ZAPIER'].map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategoryTab(cat)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${activeCategoryTab === cat ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                >
+                  {cat === 'ALL' ? 'All Webhooks' : cat.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
+
+            <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Name</th>
+                    <th className="px-4 py-3 font-semibold">Category</th>
+                    <th className="px-4 py-3 font-semibold">URL</th>
+                    <th className="px-4 py-3 font-semibold">Token</th>
+                    <th className="px-4 py-3 font-semibold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingWebhooks ? (
+                    <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">Loading...</td></tr>
+                  ) : filteredWebhooks.length === 0 ? (
+                    <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">No webhooks found.</td></tr>
+                  ) : (
+                    filteredWebhooks.map(hook => (
+                      <tr key={hook.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+                        <td className="px-4 py-3 font-medium text-slate-800">{hook.name}</td>
+                        <td className="px-4 py-3">
+                          <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs font-bold">{hook.type}</span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 font-mono text-xs">{hook.url}</td>
+                        <td className="px-4 py-3 text-slate-500 font-mono text-xs">
+                           {hook.token ? (
+                             <span className="px-2 py-1 bg-green-50 text-green-700 rounded border border-green-200 text-xs font-medium">Secured</span>
+                           ) : (
+                             <span className="px-2 py-1 bg-gray-100 text-gray-500 rounded border border-gray-200 text-xs">None</span>
+                           )}
+                        </td>
+                        <td className="px-4 py-3 text-right flex justify-end gap-2">
+                          <button onClick={() => handleOpenModal(hook)} className="text-indigo-600 hover:bg-indigo-50 p-1.5 rounded"><Edit3 size={15} /></button>
+                          <button onClick={() => handleDeleteIntegration(hook.id)} className="text-red-600 hover:bg-red-50 p-1.5 rounded"><Trash2 size={15} /></button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {isModalOpen && (
+              <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+                  <div className="flex justify-between items-center p-4 border-b border-slate-100">
+                    <h3 className="font-bold text-slate-800">{editingId ? 'Edit Webhook' : 'Add Webhook'}</h3>
+                    <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+                  </div>
+                  <form onSubmit={handleSubmitIntegration} className="p-4 flex flex-col gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">Category</label>
+                      <select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500">
+                        <option value="CRM_LEAD">CRM (Lead Webhook)</option>
+                        <option value="ERP">ERP</option>
+                        <option value="PAYMENT">Payment</option>
+                        <option value="ZAPIER">Zapier / Webhook</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">Name</label>
+                      <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500" placeholder="e.g. ERP Push" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">Webhook URL</label>
+                      <input type="url" value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} required className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" placeholder="https://..." />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">Auth Token (Optional)</label>
+                      <input type="text" value={formData.token} onChange={e => setFormData({...formData, token: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" placeholder="Bearer ..." />
+                    </div>
+                    <div className="flex justify-end gap-2 mt-2">
+                      <button type="button" onClick={handleCloseModal} className="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 text-slate-600">Cancel</button>
+                      <button type="submit" className="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700">Save</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       )}
