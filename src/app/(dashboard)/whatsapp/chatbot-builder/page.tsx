@@ -417,6 +417,7 @@ export default function WhatsAppChatbotBuilderPage() {
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [showManageModal, setShowManageModal] = useState<boolean>(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("wati_lead_gen");
+  const [drawerTab, setDrawerTab] = useState<"basic" | "advanced">("basic");
   const [newBotNameInput, setNewBotNameInput] = useState<string>("");
   const [newBotKeywordInput, setNewBotKeywordInput] = useState<string>("");
 
