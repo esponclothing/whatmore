@@ -28,7 +28,7 @@ import {
   ShoppingBag,
   ShoppingCart,
   Globe,
-  UserPlus,
+  UserPlus, Target,
   UserCheck,
   Bot,
   Sparkles,
@@ -152,6 +152,7 @@ const blockCategories = [
     blocks: [
       { id: "crm_contact", name: "Update CRM Contact", icon: UserCheck },
       { id: "crm_lead", name: "Create Lead", icon: UserPlus },
+      { id: "meta_capi", name: "Meta CAPI Event", icon: Target },
       { id: "crm_roundrobin", name: "Assign Sales Rep", icon: Shuffle }
     ]
   },
@@ -1040,6 +1041,16 @@ export default function WhatsAppChatbotBuilderPage() {
         }
       }
       const type = (node.type || "").toUpperCase();
+      if (type === "CRM_LEAD" || type === "CRM_CONTACT") {
+        if (!node.integrationId && !integrations.some(i => i.type === "CRM_LEAD" && i.isActive)) {
+          errors.push(`CRM node "${node.title || 'Create Lead'}" requires an active CRM/Webhook integration. Save integration settings first.`);
+        }
+      }
+      if (type === "META_CAPI") {
+        if (!node.integrationId && !integrations.some(i => i.type === "META_CAPI" && i.isActive)) {
+          errors.push(`Meta CAPI node "${node.title || 'Meta CAPI Event'}" requires an active Meta integration. Save Meta credentials in Integrations first.`);
+        }
+      }
       if (type === "CRM_ROUNDROBIN") {
         if (node.assignmentMode === "DIRECT") {
           if (!node.agentId) {
@@ -1185,6 +1196,14 @@ export default function WhatsAppChatbotBuilderPage() {
   // RICH BLOCK INITIALIZATION FOR ALL 25+ BLOCK TYPES
   // ---------------------------------------------------------
   const handleAddBlockToCanvas = (block: any, x?: number, y?: number) => {
+    if (block.id === "meta_capi") {
+      const hasMeta = integrations.some(i => i.type === "META_CAPI" && i.isActive);
+      if (!hasMeta) {
+        setToastMsg("Error: Please save your Meta CAPI credentials in Integrations first!");
+        setTimeout(() => setToastMsg(null), 3000);
+        return;
+      }
+    }
     const selected = nodes.find((n) => n.id === selectedNodeId) || nodes[nodes.length - 1];
     const newNodeId = `node_${Date.now()}`;
     const basePos = {
@@ -1318,6 +1337,9 @@ export default function WhatsAppChatbotBuilderPage() {
         break;
       case "crm_lead":
         newNode = { ...newNode, category: "crm", title: "Create Lead", leadSource: "WhatsApp Bot", customerType: "Wholesaler" };
+        break;
+      case "meta_capi":
+        newNode = { ...newNode, category: "crm", title: "Meta CAPI Event", eventName: "Lead", integrationId: integrations.find(i => i.type === "META_CAPI" && i.isActive)?.id };
         break;
       case "crm_roundrobin":
         newNode = { ...newNode, category: "crm", title: "Assign Sales Rep", assignmentMode: "ROUND_ROBIN", department: "Wholesale Sales" };
@@ -2145,13 +2167,12 @@ export default function WhatsAppChatbotBuilderPage() {
                       </div>
                     )}
 
-                    {(node.type === "CRM_CONTACT" || node.type === "CRM_LEAD") && (
+                    {(node.type === "CRM_CONTACT" || node.type === "CRM_LEAD" || node.type === "META_CAPI") && (
                       <div style={{ background: "#e0e7ff", border: "1px solid #c7d2fe", color: "#3730a3", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, marginBottom: "6px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                          <UserCheck size={13} />
-                          <span>Stage: {node.leadStage || 'Qualified'}</span>
+                          {node.type === "META_CAPI" ? <Target size={13} /> : <UserCheck size={13} />}
+                          <span>{node.type === "META_CAPI" ? `Event: ${node.eventName || 'Lead'}` : `Stage: ${node.leadStage || 'Qualified'}`}</span>
                         </div>
-
                       </div>
                     )}
 
@@ -2910,6 +2931,39 @@ export default function WhatsAppChatbotBuilderPage() {
                           >
                             <option value="">-- Select Integration --</option>
                             {integrations.map(int => (
+                              <option key={int.id} value={int.id}>{int.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    )}
+
+                    {(selectedNode.type || "").toUpperCase() === "META_CAPI" && (
+                      <>
+                        <div style={{ marginTop: "12px" }}>
+                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Meta CAPI Event</label>
+                          <select
+                            value={selectedNode.eventName || "Lead"}
+                            onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, eventName: e.target.value } : n)))}
+                            style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                          >
+                            <option value="Lead">Lead</option>
+                            <option value="Contact">Contact</option>
+                            <option value="Purchase">Purchase</option>
+                            <option value="SubmitApplication">Submit Application</option>
+                            <option value="Schedule">Schedule</option>
+                            <option value="CompleteRegistration">Complete Registration</option>
+                          </select>
+                        </div>
+                        <div style={{ marginTop: "12px" }}>
+                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Meta Integration (Pixel & Token)</label>
+                          <select
+                            value={selectedNode.integrationId || ""}
+                            onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, integrationId: e.target.value } : n)))}
+                            style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                          >
+                            <option value="">-- Select Meta Integration --</option>
+                            {integrations.filter(i => i.type === "META_CAPI").map(int => (
                               <option key={int.id} value={int.id}>{int.name}</option>
                             ))}
                           </select>

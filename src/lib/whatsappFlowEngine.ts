@@ -323,7 +323,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
           nodeId: node.id || "UNKNOWN",
           nodeType: type || "MESSAGE",
           actionDesc: `Executed block: ${node.title || type}`,
-          payload: null,
+          payload: {},
           responseStatus: 200,
         }
       });
@@ -473,7 +473,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
                   nodeId: node.id || "CRM_LEAD_NODE",
                   nodeType: "CRM_LEAD",
                   actionDesc: `CRM Webhook Network Error`,
-                  payload: null,
+                  payload: {},
                   responseStatus: null,
                   errorMessage: err.message
                 }
@@ -484,6 +484,64 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
         } catch (e) {
           console.error("CRM Update Node Error:", e);
         }
+    } else if (type === 'META_CAPI') {
+      try {
+        const cleanPhone = toPhone.replace(/\D/g, '').slice(-10);
+        let integration = node.integrationId 
+          ? await prisma.whatsAppIntegration.findUnique({ where: { id: node.integrationId } })
+          : await prisma.whatsAppIntegration.findFirst({ where: { type: 'META_CAPI', isActive: true } });
+
+        if (integration && integration.isActive) {
+          const pixelId = integration.url ? integration.url.trim() : '';
+          const accessToken = integration.token ? integration.token.trim() : '';
+          const eventName = node.eventName || 'Lead';
+
+          if (pixelId && accessToken) {
+            const crypto = require('crypto');
+            const hashedPhone = crypto.createHash('sha256').update(cleanPhone).digest('hex');
+
+            const capiUrl = `https://graph.facebook.com/v18.0/${pixelId}/events`;
+            const payload = {
+              data: [
+                {
+                  event_name: eventName,
+                  event_time: Math.floor(Date.now() / 1000),
+                  action_source: "system_generated",
+                  user_data: {
+                    ph: [hashedPhone]
+                  }
+                }
+              ],
+              access_token: accessToken
+            };
+
+            console.log(`[Meta CAPI] Sending ${eventName} event to Meta Pixel: ${pixelId}`);
+            const capiRes = await fetch(capiUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+
+            const resData = await capiRes.json();
+            console.log(`[Meta CAPI] Response:`, resData);
+
+            await prisma.whatsAppChatbotLog.create({
+              data: {
+                phone: cleanPhone,
+                conversationId: conversationId || null,
+                nodeId: node.id || "META_CAPI_NODE",
+                nodeType: "META_CAPI",
+                actionDesc: `Meta CAPI ${eventName} event sent`,
+                payload: payload,
+                responseStatus: capiRes.status,
+                errorMessage: capiRes.ok ? null : JSON.stringify(resData)
+              }
+            });
+          }
+        }
+      } catch (err: any) {
+        console.error(`[Meta CAPI Node] Error:`, err);
+      }
     } else if (type === 'CRM_ROUNDROBIN' || type === 'START') {
         try {
           const cleanPhone = toPhone.replace(/\D/g, '').slice(-10);

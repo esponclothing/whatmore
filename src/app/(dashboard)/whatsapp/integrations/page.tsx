@@ -856,13 +856,13 @@ const reloadTeams = async () => {
             </div>
 
             <div className="flex gap-2 mb-6">
-              {['ALL', 'CRM_LEAD', 'ERP', 'PAYMENT', 'ZAPIER'].map(cat => (
+              {['ALL', 'CRM_LEAD', 'ERP', 'PAYMENT', 'ZAPIER', 'META_CAPI'].map(cat => (
                 <button
                   key={cat}
                   onClick={() => setActiveCategoryTab(cat)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${activeCategoryTab === cat ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
                 >
-                  {cat === 'ALL' ? 'All Webhooks' : cat.replace('_', ' ')}
+                  {cat === 'ALL' ? 'All Integrations' : cat === 'META_CAPI' ? 'Meta CAPI' : cat.replace('_', ' ')}
                 </button>
               ))}
             </div>
@@ -924,19 +924,20 @@ const reloadTeams = async () => {
                         <option value="ERP">ERP</option>
                         <option value="PAYMENT">Payment</option>
                         <option value="ZAPIER">Zapier / Webhook</option>
+                        <option value="META_CAPI">Meta Conversions API</option>
                       </select>
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-600 mb-1">Name</label>
-                      <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500" placeholder="e.g. ERP Push" />
+                      <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500" placeholder="e.g. ERP Push / Pixel 1" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">Webhook URL</label>
-                      <input type="url" value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} required className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" placeholder="https://..." />
+                      <label className="block text-xs font-bold text-slate-600 mb-1">{formData.type === 'META_CAPI' ? 'Meta Pixel ID' : 'Webhook URL'}</label>
+                      <input type={formData.type === 'META_CAPI' ? 'text' : 'url'} value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} required className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" placeholder={formData.type === 'META_CAPI' ? 'e.g. 1234567890' : 'https://...'} />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">Auth Token (Optional)</label>
-                      <input type="text" value={formData.token} onChange={e => setFormData({...formData, token: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" placeholder="Bearer ..." />
+                      <label className="block text-xs font-bold text-slate-600 mb-1">{formData.type === 'META_CAPI' ? 'Access Token' : 'Auth Token (Optional)'}</label>
+                      <input type="text" value={formData.token} onChange={e => setFormData({...formData, token: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" placeholder={formData.type === 'META_CAPI' ? 'EAAI...' : 'Bearer ...'} required={formData.type === 'META_CAPI'} />
                     </div>
                     <div className="flex justify-end gap-2 mt-2">
                       <button type="button" onClick={handleCloseModal} className="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 text-slate-600">Cancel</button>
