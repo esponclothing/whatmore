@@ -70,21 +70,26 @@ export async function POST(req: NextRequest) {
     };
 
     if (action === "create_all_audiences") {
-      // Auto-create standard audiences for WhatsApp campaign retargeting
-      const defaultAudiences = [
-        "Espon_Retailers_Custom_Audience",
-        "Espon_Wholesalers_Custom_Audience",
-        "Espon_Interested_Leads_Audience"
+      // Dynamic Business Name from database or payload
+      const account = await prisma.whatsAppAccount.findFirst();
+      const clientPrefix = (body.businessName || account?.name || "WhatsApp").replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+
+      // Dynamic audiences requested by client or default dynamic set
+      const targetAudiences = body.customAudiences || [
+        `${clientPrefix}_Retailers_Custom_Audience`,
+        `${clientPrefix}_Wholesalers_Custom_Audience`,
+        `${clientPrefix}_Interested_Leads_Audience`
       ];
 
       const results: Record<string, string> = {};
-      for (const name of defaultAudiences) {
+      for (const name of targetAudiences) {
         results[name] = await ensureMetaAudience(name);
       }
 
       return NextResponse.json({
         success: true,
-        message: "Successfully auto-created & connected Meta Custom Audiences!",
+        message: `Successfully auto-created & connected Meta Custom Audiences for ${clientPrefix}!`,
+        clientPrefix,
         audiences: results
       });
     }

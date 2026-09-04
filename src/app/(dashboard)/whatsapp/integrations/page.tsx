@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store, MessageSquare, Users, Bot, Layers, BookOpen, Edit3, X, Plus, Trash2, UserCheck, UserX, Shield, ExternalLink, Sparkles, HelpCircle } from "lucide-react";
+import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store, MessageSquare, Users, Bot, Layers, BookOpen, Edit3, X, Plus, Trash2, UserCheck, UserX, Shield, ExternalLink, Sparkles, HelpCircle, Target, Edit, Zap } from "lucide-react";
 import { 
   getWhatsAppApiCredentialsAction, 
   saveWhatsAppApiCredentialsAction, 
@@ -1073,7 +1073,7 @@ const reloadTeams = async () => {
                       });
                       const data = await res.json();
                       if (data.success) {
-                        alert("✨ Meta Custom Audiences Auto-Created & Connected Successfully!\n\nAudiences created:\n• Espon_Retailers_Custom_Audience\n• Espon_Wholesalers_Custom_Audience\n• Espon_Interested_Leads_Audience");
+                        alert(`✨ Meta Custom Audiences Auto-Created & Connected for ${data.clientPrefix || 'Client'}!\n\nAudiences created & synced:\n• ${data.clientPrefix || 'Business'}_Retailers_Custom_Audience\n• ${data.clientPrefix || 'Business'}_Wholesalers_Custom_Audience\n• ${data.clientPrefix || 'Business'}_Interested_Leads_Audience`);
                       } else {
                         alert("Note: " + (data.error || "Meta Audiences enabled for auto-sync on chatbot run"));
                       }

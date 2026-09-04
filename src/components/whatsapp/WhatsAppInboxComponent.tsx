@@ -1735,10 +1735,10 @@ export default function WhatsAppInboxComponent() {
                   onClick={handleMarkLeadInterested}
                   disabled={firingMetaLead}
                   style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#b45309", fontWeight: 700 }}
-                  title="Mark Interested & Fire ₹10,000 Meta Conversion Event"
+                  title="Mark Lead Interested & Fire Meta Conversion Event"
                 >
                   <Zap size={14} className={firingMetaLead ? "animate-spin text-amber-600" : "text-amber-600"} />
-                  <span>{firingMetaLead ? "Firing..." : "Mark Interested (₹10k Lead)"}</span>
+                  <span>{firingMetaLead ? "Firing..." : "Mark Interested"}</span>
                 </button>
 
                 <button
