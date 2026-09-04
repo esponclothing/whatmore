@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
 
     // Action 2: Scan all active Chatbot Workflows & Auto-Create every custom audience node specified by client
     if (action === "scan_and_sync_all_chatbot_audiences" || action === "create_all_audiences") {
-      const chatbots = await prisma.whatsAppChatbot.findMany({ where: { isActive: true } });
+      const chatbots = await prisma.whatsAppChatbotFlow.findMany({ where: { isActive: true } });
       const extractedAudienceNames = new Set<string>();
 
       if (customAudiences && Array.isArray(customAudiences)) {
