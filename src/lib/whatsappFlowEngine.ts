@@ -439,30 +439,17 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
               });
 
               if (whRes.status === 409) {
-                console.log(`[CRM_LEAD Webhook] 409 Conflict. Lead exists.`);
-                await writeLog(409, `CRM Webhook: Lead already exists`, "409 Conflict");
-                
-                // Send fallback message
-                await dispatchNode(toPhone, { type: 'TEXT', text: 'Lead with this mobile number already exists and is assigned to an agent. Routing you to a live agent...' }, vars, conv?.id);
-                
-                // Route to live agent
-                if (conv) {
-                  await prisma.whatsAppConversation.update({
-                    where: { id: conv.id },
-                    data: { status: 'OPEN' } 
-                  });
-                }
-                
-                // Halt the flow
-                break;
+                console.log(`[CRM_LEAD Webhook] 409 Conflict: Lead already exists in ERP. Continuing flow.`);
+                await writeLog(409, `CRM Webhook: Lead already exists in ERP (Continuing flow)`, null);
+                // Do NOT send internal error message to customer and do NOT break flow
               } else if (whRes.status === 201 || whRes.status === 200) {
                 console.log(`[CRM_LEAD Webhook] ${whRes.status} Created.`);
                 await writeLog(whRes.status, `CRM Webhook Success`, null);
               } else {
                 let responseBody = "";
                 try { responseBody = await whRes.text(); } catch(e) {}
-                console.log(`[CRM_LEAD Webhook] Unhandled status code: ${whRes.status}`);
-                await writeLog(whRes.status, `CRM Webhook Failed`, responseBody.slice(0, 500));
+                console.log(`[CRM_LEAD Webhook] Status code: ${whRes.status}`);
+                await writeLog(whRes.status, `CRM Webhook Response (${whRes.status})`, responseBody.slice(0, 500));
               }
             } catch (err: any) {
               console.error(`[CRM_LEAD Webhook] Error:`, err);

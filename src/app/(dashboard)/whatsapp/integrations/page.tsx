@@ -27,6 +27,11 @@ import { getWhatsAppIntegrationsAction, createWhatsAppIntegrationAction, updateW
 export default function IntegrationsHubPage() {
   const [activeTab, setActiveTab] = useState("whatsapp");
 
+  // Meta CAPI Lead Value State
+  const [metaCapiLeadValue, setMetaCapiLeadValue] = useState<number>(10000);
+  const [savingCapi, setSavingCapi] = useState(false);
+  const [capiResultMsg, setCapiResultMsg] = useState<{ success: boolean; text: string } | null>(null);
+
   // Payment Gateway State
   const [pgActiveGateway, setPgActiveGateway] = useState<string | null>(null);
   const [razorpayKeyId, setRazorpayKeyId] = useState("");
@@ -149,6 +154,9 @@ export default function IntegrationsHubPage() {
         setWelcomeMsg(resSettings.settings.welcomeMessage || "Welcome! How can we help you today?");
         setActiveModel(resSettings.settings.aiModel || "gemini-2.0-flash");
         setSystemPrompt(resSettings.settings.aiSystemPrompt || "");
+        if (resSettings.settings.metaCapiLeadValue) {
+          setMetaCapiLeadValue(resSettings.settings.metaCapiLeadValue);
+        }
       }
       if (resTeams.success && resTeams.teams) setTeams(resTeams.teams);
       if (resAgents.success && resAgents.employees) setAllAgents(resAgents.employees);
@@ -176,6 +184,27 @@ export default function IntegrationsHubPage() {
     }).catch(() => {});
   };
 
+  const handleSaveMetaCapi = async () => {
+    setSavingCapi(true);
+    setCapiResultMsg(null);
+    try {
+      const res = await saveWhatsAppSettingsAction({
+        geminiApiKey: geminiKey,
+        welcomeMessage: welcomeMsg,
+        aiModel: activeModel,
+        aiSystemPrompt: systemPrompt,
+        metaCapiLeadValue: Number(metaCapiLeadValue) || 10000
+      });
+      if (res.success) {
+        setCapiResultMsg({ success: true, text: "Lead value updated successfully!" });
+      } else {
+        setCapiResultMsg({ success: false, text: res.error || "Failed to save lead value." });
+      }
+    } catch (err: any) {
+      setCapiResultMsg({ success: false, text: err.message || "An unexpected error occurred." });
+    }
+    setSavingCapi(false);
+  };
   
   const handleOpenModal = (integration?: any) => {
     if (integration) {
