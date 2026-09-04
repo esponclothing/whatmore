@@ -299,6 +299,18 @@ export default function WhatsAppInboxComponent() {
     return Array.from(new Set([...t1, ...t2])).filter(t => !isAuto(t));
   }, [activeConvDetail?.tags, activeConvDetail?.customer?.tags]);
 
+  // Extract Meta Click-to-WhatsApp (CTWA) Ad Referral details
+  const ctwaReferral = useMemo(() => {
+    if (!activeConvDetail?.messages) return null;
+    const sysRefMsg = activeConvDetail.messages.find((m: any) => m.senderName === "META_CTWA_AD" || (m.metadata && (m.metadata.includes("headline") || m.metadata.includes("source_id"))));
+    if (!sysRefMsg) return null;
+    try {
+      return typeof sysRefMsg.metadata === "string" ? JSON.parse(sysRefMsg.metadata) : sysRefMsg.metadata;
+    } catch (_) {
+      return null;
+    }
+  }, [activeConvDetail?.messages]);
+
   // Quote Form State
   const [quoteItems, setQuoteItems] = useState([
     { name: "Cotton Polo T-Shirt (ESP-902)", quantity: 200, rate: 290 },
@@ -1756,6 +1768,33 @@ export default function WhatsAppInboxComponent() {
 
               </div>
             </div>
+
+            {/* Meta CTWA Ad Attribution Banner */}
+            {ctwaReferral && (
+              <div style={{ margin: "10px 16px 2px 16px", padding: "12px 16px", background: "linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%)", borderRadius: "12px", border: "1px solid #c7d2fe", display: "flex", alignItems: "center", justifyContent: "space-between", boxShadow: "0 2px 4px rgba(0,0,0,0.02)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#4f46e5", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "12px" }}>
+                    🎯 AD
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "11px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.5px", color: "#4338ca" }}>
+                      Meta Click-to-WhatsApp Ad Referral
+                    </div>
+                    <div style={{ fontSize: "13px", fontWeight: "700", color: "#1e1b4b" }}>
+                      "{ctwaReferral.headline || "Click-to-WhatsApp Ad"}"
+                    </div>
+                    <div style={{ fontSize: "11px", color: "#4338ca", marginTop: "2px" }}>
+                      Ad ID: <code style={{ fontWeight: "700", background: "#e0e7ff", padding: "1px 5px", borderRadius: "4px" }}>{ctwaReferral.source_id || "META_AD"}</code> {ctwaReferral.body && `• ${ctwaReferral.body.slice(0, 50)}...`}
+                    </div>
+                  </div>
+                </div>
+                {ctwaReferral.source_url && (
+                  <a href={ctwaReferral.source_url} target="_blank" rel="noreferrer" style={{ fontSize: "12px", fontWeight: "700", color: "#4338ca", background: "white", padding: "6px 12px", borderRadius: "8px", border: "1px solid #c7d2fe", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                    View Ad on Meta ↗
+                  </a>
+                )}
+              </div>
+            )}
 
             {/* Messages Scroll Area */}
             <div className="chat-messages-container" ref={chatMessagesContainerRef}>

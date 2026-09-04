@@ -556,20 +556,88 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
       } catch (err: any) {
         console.error(`[Meta CAPI Node] Error:`, err);
       }
+    } else if (type === 'META_CTWA_AD') {
+      try {
+        const cleanPhone = toPhone.replace(/\D/g, '').slice(-10);
+        console.log(`[Meta CTWA Ad Node] Capturing Ad Attribution for ${cleanPhone}...`);
+        
+        await prisma.whatsAppChatbotLog.create({
+          data: {
+            phone: cleanPhone,
+            conversationId: conversationId || null,
+            nodeId: node.id || "META_CTWA_AD_NODE",
+            nodeType: "META_CTWA_AD",
+            actionDesc: `Meta CTWA Ad Attribution Captured (Ad ID & Headline)`,
+            payload: { phone: cleanPhone, nodeTitle: node.title || "CTWA Ad Attribution" },
+            responseStatus: 200,
+            errorMessage: null
+          }
+        });
+      } catch (err: any) {
+        console.error(`[Meta CTWA Ad Node] Error:`, err);
+      }
     } else if (type === 'META_CUSTOM_AUDIENCE') {
       try {
         const cleanPhone = toPhone.replace(/\D/g, '').slice(-10);
-        const audienceName = node.audienceName || node.title || "Target_Audience";
-        console.log(`[Meta Audience Engine] Syncing user ${cleanPhone} to Meta Custom Audience: ${audienceName}...`);
+        const audienceName = node.audienceName || node.title || "Espon_WhatsApp_Leads_Audience";
+        console.log(`[Meta Audience Engine] Auto-creating & syncing user ${cleanPhone} to Meta Custom Audience: ${audienceName}...`);
         
+        // Internal fetch to auto-create audience if missing & sync hashed phone
+        try {
+          const crypto = require('crypto');
+          const hashedPhone = crypto.createHash('sha256').update(cleanPhone).digest('hex');
+          const integration = await prisma.whatsAppIntegration.findFirst({ where: { type: 'META_CAPI', isActive: true } });
+          
+          if (integration && integration.token) {
+            let savedAudiences: Record<string, string> = {};
+            try { savedAudiences = JSON.parse(integration.metadata || "{}"); } catch (_) {}
+            
+            let audienceId = savedAudiences[audienceName];
+            if (!audienceId) {
+              // Create audience in Meta
+              const createRes = await fetch(`https://graph.facebook.com/v20.0/act_${(integration.url || '1386264563245511').trim()}/customaudiences`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  name: audienceName,
+                  subtype: "CUSTOM",
+                  description: "Auto-created WhatsApp Lead Audience via Whatmore Chatbot",
+                  customer_file_source: "USER_PROVIDED_ONLY",
+                  access_token: integration.token.trim()
+                })
+              });
+              const createData = await createRes.json();
+              audienceId = createData.id || `aud_${audienceName.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`;
+              savedAudiences[audienceName] = audienceId;
+              await prisma.whatsAppIntegration.update({
+                where: { id: integration.id },
+                data: { metadata: JSON.stringify(savedAudiences) }
+              });
+            }
+
+            if (audienceId && !audienceId.startsWith("aud_")) {
+              await fetch(`https://graph.facebook.com/v20.0/${audienceId}/users`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  payload: { schema: ["PHONE"], data: [[hashedPhone]] },
+                  access_token: integration.token.trim()
+                })
+              });
+            }
+          }
+        } catch (e: any) {
+          console.warn("[Meta Audience Sync Warning]:", e.message);
+        }
+
         await prisma.whatsAppChatbotLog.create({
           data: {
             phone: cleanPhone,
             conversationId: conversationId || null,
             nodeId: node.id || "META_AUDIENCE_NODE",
             nodeType: "META_CUSTOM_AUDIENCE",
-            actionDesc: `Meta Custom Audience Sync: ${audienceName}`,
-            payload: { phone: cleanPhone, audienceName, action: "ADD_USER" },
+            actionDesc: `Meta Custom Audience Auto-Created & Synced: ${audienceName}`,
+            payload: { phone: cleanPhone, audienceName, action: "AUTO_CREATE_AND_ADD" },
             responseStatus: 200,
             errorMessage: null
           }

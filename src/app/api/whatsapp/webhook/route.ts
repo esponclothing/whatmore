@@ -263,6 +263,35 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Feature: Extract CTWA Ad Referral details
+      const referral = msg.referral || (msg.context && msg.context.referral);
+      let ctwaMetadata: any = null;
+      if (referral) {
+        ctwaMetadata = {
+          source_id: referral.source_id || referral.ad_id || "META_AD",
+          source_url: referral.source_url || "",
+          source_type: referral.source_type || "ad",
+          headline: referral.headline || "Click-to-WhatsApp Ad Referral",
+          body: referral.body || "",
+          media_type: referral.media_type || "image",
+          image_url: referral.image_url || "",
+          video_url: referral.video_url || "",
+          ctwa_clid: referral.ctwa_clid || ""
+        };
+        console.log(`[CTWA Ad Attribution Webhook] Received referral from Meta Ad ${ctwaMetadata.source_id}: "${ctwaMetadata.headline}"`);
+        
+        // Update customer leadSource & tag
+        try {
+          await prisma.customer.update({
+            where: { id: customer.id },
+            data: { 
+              leadSource: "Meta Click-to-WhatsApp Ad",
+              tags: Array.from(new Set([...(customer.tags || []), "Meta_CTWA_Ad"]))
+            }
+          });
+        } catch (_) {}
+      }
+
       // Step D: Store Incoming Message
       await prisma.whatsAppMessage.create({
         data: {
@@ -275,9 +304,26 @@ export async function POST(req: NextRequest) {
           mediaType: mediaMimeType,
           status: "RECEIVED",
           metaMessageId: msg.id,
+          metadata: ctwaMetadata ? JSON.stringify(ctwaMetadata) : null,
           sentAt: messageTimestamp
         }
       });
+
+      // If CTWA Ad Referral is present, log a system referral banner message in chat timeline
+      if (ctwaMetadata) {
+        await prisma.whatsAppMessage.create({
+          data: {
+            conversationId: conversation.id,
+            senderType: "SYSTEM",
+            senderName: "META_CTWA_AD",
+            messageType: "TEXT",
+            content: `🎯 Meta CTWA Ad Referral: "${ctwaMetadata.headline}" (Ad ID: ${ctwaMetadata.source_id})`,
+            metadata: JSON.stringify(ctwaMetadata),
+            status: "SENT",
+            sentAt: new Date()
+          }
+        }).catch(() => {});
+      }
 
       console.log(`[WhatsApp Webhook] Incoming message from +91 ${cleanPhone}: "${textContent.slice(0, 50)}"`);
 
