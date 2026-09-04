@@ -2,14 +2,19 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bot, GitBranch, Play, Square, Activity, Search, Trash2, Edit3, Save } from 'lucide-react';
-import { getWhatsAppChatbotFlows, toggleWhatsAppChatbotFlowStatusAction, deleteWhatsAppChatbotFlowAction, getWhatsAppChatbotLogsAction } from '@/app/actions/whatsAppPlatformActions';
+import { Bot, GitBranch, Play, Square, Activity, Search, Trash2, Edit3, Save, Check, X, Pencil } from 'lucide-react';
+import { getWhatsAppChatbotFlows, toggleWhatsAppChatbotFlowStatusAction, deleteWhatsAppChatbotFlowAction, getWhatsAppChatbotLogsAction, renameWhatsAppChatbotFlowAction } from '@/app/actions/whatsAppPlatformActions';
 
 export default function ChatbotHubPage() {
   const router = useRouter();
   const [flows, setFlows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
+  // Inline rename state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState<string>('');
+  const [isSavingName, setIsSavingName] = useState<boolean>(false);
+
   // Logs state
   const [activeTab, setActiveTab] = useState<'bots' | 'logs'>('bots');
   const [searchPhone, setSearchPhone] = useState('');
@@ -29,6 +34,24 @@ export default function ChatbotHubPage() {
       setFlows(res.flows);
     }
     setLoading(false);
+  };
+
+  const handleStartRename = (flow: any) => {
+    setEditingId(flow.id);
+    setEditingName(flow.name);
+  };
+
+  const handleSaveRename = async (id: string) => {
+    if (!editingName.trim()) return;
+    setIsSavingName(true);
+    const res = await renameWhatsAppChatbotFlowAction(id, editingName.trim());
+    if (res.success) {
+      setFlows(prev => prev.map(f => f.id === id ? { ...f, name: editingName.trim() } : f));
+      setEditingId(null);
+    } else {
+      alert(`Failed to rename chatbot: ${res.error}`);
+    }
+    setIsSavingName(false);
   };
 
   const handleToggleStatus = async (id: string, currentStatus: boolean) => {
@@ -127,7 +150,57 @@ export default function ChatbotHubPage() {
               ) : (
                 flows.map(f => (
                   <tr key={f.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '16px', fontWeight: 500, color: '#0f172a' }}>{f.name}</td>
+                    <td style={{ padding: '16px', fontWeight: 500, color: '#0f172a' }}>
+                      {editingId === f.id ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <input
+                            type="text"
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveRename(f.id);
+                              if (e.key === 'Escape') setEditingId(null);
+                            }}
+                            autoFocus
+                            style={{
+                              padding: '6px 10px',
+                              borderRadius: '6px',
+                              border: '1.5px solid #2563eb',
+                              fontSize: '13.5px',
+                              fontWeight: 600,
+                              outline: 'none',
+                              color: '#0f172a'
+                            }}
+                          />
+                          <button
+                            onClick={() => handleSaveRename(f.id)}
+                            disabled={isSavingName}
+                            style={{ background: '#22c55e', color: 'white', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer' }}
+                            title="Save Name"
+                          >
+                            <Check size={15} />
+                          </button>
+                          <button
+                            onClick={() => setEditingId(null)}
+                            style={{ background: '#cbd5e1', color: '#334155', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer' }}
+                            title="Cancel"
+                          >
+                            <X size={15} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>{f.name}</span>
+                          <button
+                            onClick={() => handleStartRename(f)}
+                            style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px', display: 'inline-flex' }}
+                            title="Rename Chatbot"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        </div>
+                      )}
+                    </td>
                     <td style={{ padding: '16px', color: '#475569' }}>
                       <span style={{ background: '#f1f5f9', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace' }}>
                         {f.triggerKeyword || 'None'}
@@ -148,6 +221,7 @@ export default function ChatbotHubPage() {
                     </td>
                     <td style={{ padding: '16px', color: '#64748b', fontSize: '13px' }}>{new Date(f.updatedAt).toLocaleDateString()}</td>
                     <td style={{ padding: '16px', textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                      <button onClick={() => handleStartRename(f)} style={{ background: '#f1f5f9', color: '#475569', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer' }} title="Rename Bot"><Pencil size={15} /></button>
                       <button onClick={() => handleEdit(f.id)} style={{ background: '#eff6ff', color: '#2563eb', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer' }} title="Edit Flow"><Edit3 size={16} /></button>
                       <button onClick={() => handleDelete(f.id)} style={{ background: '#fef2f2', color: '#dc2626', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer' }} title="Delete Flow"><Trash2 size={16} /></button>
                     </td>

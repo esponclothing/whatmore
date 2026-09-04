@@ -5,7 +5,13 @@ import crypto from "crypto";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { phone, conversationId, eventValue = 10000, customEventName = "Lead" } = body;
+    let { phone, conversationId, eventValue, customEventName = "Lead" } = body;
+
+    // Fetch dynamic metaCapiLeadValue if not provided
+    if (!eventValue) {
+      const settings = await prisma.whatsAppSettings.findFirst();
+      eventValue = settings?.metaCapiLeadValue || 10000;
+    }
 
     if (!phone) {
       return NextResponse.json({ error: "Phone number is required" }, { status: 400 });

@@ -65,6 +65,7 @@ import {
   deleteWhatsAppChatbotFlowAction,
   duplicateWhatsAppChatbotFlowAction,
   toggleWhatsAppChatbotFlowStatusAction,
+  renameWhatsAppChatbotFlowAction,
   getAllEmployeesAndTeams,
   getTeamsWithMembersAction,
   getProductsAction,
@@ -425,10 +426,25 @@ export default function WhatsAppChatbotBuilderPage() {
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [showManageModal, setShowManageModal] = useState<boolean>(false);
+  const [editingManageModalId, setEditingManageModalId] = useState<string | null>(null);
+  const [editingManageModalName, setEditingManageModalName] = useState<string>("");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("wati_lead_gen");
   const [drawerTab, setDrawerTab] = useState<"basic" | "advanced">("basic");
   const [newBotNameInput, setNewBotNameInput] = useState<string>("");
   const [newBotKeywordInput, setNewBotKeywordInput] = useState<string>("");
+
+  const handleSaveModalRename = async (id: string) => {
+    if (!editingManageModalName.trim()) return;
+    const res = await renameWhatsAppChatbotFlowAction(id, editingManageModalName.trim());
+    if (res.success) {
+      setSavedFlows((prev) => prev.map((f) => (f.id === id ? { ...f, name: editingManageModalName.trim() } : f)));
+      if (id === currentFlowId) {
+        setFlowName(editingManageModalName.trim());
+        setLastSavedFlowName(editingManageModalName.trim());
+      }
+      setEditingManageModalId(null);
+    }
+  };
 
   // Canvas Node State
   const [nodes, setNodes] = useState<any[]>(BOT_TEMPLATES[0].nodes);
@@ -474,21 +490,19 @@ export default function WhatsAppChatbotBuilderPage() {
 
   const updatePortCoords = () => {
     if (typeof window === "undefined") return;
+    const container = document.querySelector('.canvas-pan-zoom-container');
+    if (!container) return;
+    const containerRect = container.getBoundingClientRect();
+    const currentZoom = zoom || 1;
+
     const coords: {[key: string]: {x: number, y: number}} = {};
     const ports = document.querySelectorAll('.node-input-port, .node-output-port, .choice-option-port');
     ports.forEach(el => {
       if (!el.id) return;
-      let x = el.offsetWidth / 2;
-      let y = el.offsetHeight / 2;
-      let current: HTMLElement | null = el as HTMLElement;
-      while (current && !current.classList.contains("canvas-pan-zoom-container")) {
-        x += current.offsetLeft;
-        y += current.offsetTop;
-        current = current.offsetParent as HTMLElement;
-      }
-      if (current) {
-        coords[el.id] = { x, y };
-      }
+      const rect = el.getBoundingClientRect();
+      const x = (rect.left + rect.width / 2 - containerRect.left) / currentZoom;
+      const y = (rect.top + rect.height / 2 - containerRect.top) / currentZoom;
+      coords[el.id] = { x, y };
     });
     setPortCoords(coords);
   };
@@ -504,7 +518,9 @@ export default function WhatsAppChatbotBuilderPage() {
   useEffect(() => {
     // Recalculate port coordinates after DOM layout updates
     updatePortCoords();
-  }, [nodes, currentFlowId, zoom]);
+    const timer = setTimeout(updatePortCoords, 60);
+    return () => clearTimeout(timer);
+  }, [nodes, currentFlowId, zoom, pan, isDrawerOpen]);
 
   // Discard unsaved changes handler
   const handleDiscardChanges = () => {
@@ -2202,30 +2218,58 @@ export default function WhatsAppChatbotBuilderPage() {
             }}
           >
             {/* SVG CONNECTOR WIRES LAYER */}
-            <svg className="canvas-svg-layer">
-              {nodes.map((node) => {
+            <svg className="canvas-svg-layer" style={{ width: "100%", height: "100%", overflow: "visible" }}>
+              {nodes.flatMap((node) => {
+                const paths: React.ReactNode[] = [];
+
                 if (node.outputPort) {
                   const target = nodes.find((n) => n.id === node.outputPort);
-                  if (target) return <path key={`${node.id}_${target.id}`} d={getBezierPath(node, target)} />;
+                  if (target) {
+                    paths.push(
+                      <path
+                        key={`wire_out_${node.id}_${target.id}`}
+                        d={getBezierPath(node, target)}
+                        stroke="#3b82f6"
+                        strokeWidth="2.5"
+                        fill="none"
+                        strokeLinecap="round"
+                      />
+                    );
+                  }
                 }
+
                 if (node.choices && Array.isArray(node.choices)) {
-                  return node.choices.map((c: any, idx: number) => {
+                  node.choices.forEach((c: any, idx: number) => {
                     if (c.targetNode) {
                       const targetChoiceNode = nodes.find((n) => n.id === c.targetNode);
                       if (targetChoiceNode) {
-                        return <path key={`${node.id}_${c.id}`} d={getBezierPath(node, targetChoiceNode, idx)} className="active-path" />;
+                        paths.push(
+                          <path
+                            key={`wire_choice_${node.id}_${c.id}_${targetChoiceNode.id}`}
+                            d={getBezierPath(node, targetChoiceNode, idx)}
+                            className="active-path"
+                            stroke="#3b82f6"
+                            strokeWidth="2.5"
+                            fill="none"
+                            strokeLinecap="round"
+                          />
+                        );
                       }
                     }
-                    return null;
                   });
                 }
-                return null;
+
+                return paths;
               })}
 
               {connectingFrom && connectingMousePos && (
                 <path
                   d={getBezierFromTo(connectingFrom.startX, connectingFrom.startY, connectingMousePos.x, connectingMousePos.y)}
                   className="connecting-active-wire"
+                  stroke="#3b82f6"
+                  strokeWidth="2.5"
+                  strokeDasharray="4 4"
+                  fill="none"
                 />
               )}
             </svg>
@@ -4071,8 +4115,56 @@ export default function WhatsAppChatbotBuilderPage() {
                   {savedFlows.map((f) => (
                     <tr key={f.id} style={{ background: f.id === currentFlowId ? "#f0fdf4" : "transparent" }}>
                       <td>
-                        <strong style={{ fontSize: "13px", display: "block" }}>{f.name}</strong>
-                        {f.id === currentFlowId && <span style={{ fontSize: "10px", color: "#10b981", fontWeight: 700 }}>Currently Editing</span>}
+                        {editingManageModalId === f.id ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <input
+                              type="text"
+                              value={editingManageModalName}
+                              onChange={(e) => setEditingManageModalName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleSaveModalRename(f.id);
+                                if (e.key === "Escape") setEditingManageModalId(null);
+                              }}
+                              autoFocus
+                              style={{
+                                padding: "4px 8px",
+                                borderRadius: "4px",
+                                border: "1px solid #3b82f6",
+                                fontSize: "12px",
+                                outline: "none"
+                              }}
+                            />
+                            <button
+                              onClick={() => handleSaveModalRename(f.id)}
+                              style={{ background: "#22c55e", color: "white", border: "none", padding: "4px 6px", borderRadius: "4px", cursor: "pointer", fontSize: "11px" }}
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingManageModalId(null)}
+                              style={{ background: "#cbd5e1", color: "#334155", border: "none", padding: "4px 6px", borderRadius: "4px", cursor: "pointer", fontSize: "11px" }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <strong style={{ fontSize: "13px" }}>{f.name}</strong>
+                              <button
+                                onClick={() => {
+                                  setEditingManageModalId(f.id);
+                                  setEditingManageModalName(f.name);
+                                }}
+                                style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", padding: "2px", display: "inline-flex" }}
+                                title="Rename Chatbot"
+                              >
+                                ✎
+                              </button>
+                            </div>
+                            {f.id === currentFlowId && <span style={{ fontSize: "10px", color: "#10b981", fontWeight: 700 }}>Currently Editing</span>}
+                          </div>
+                        )}
                       </td>
                       <td style={{ fontSize: "11.5px", color: "#64748b" }}>{f.triggerKeyword || "HI, HELLO"}</td>
                       <td>
@@ -4098,6 +4190,16 @@ export default function WhatsAppChatbotBuilderPage() {
                       <td>{f.executionCount || 0} runs</td>
                       <td>
                         <div style={{ display: "flex", gap: "6px" }}>
+                          <button
+                            className="studio-btn"
+                            style={{ padding: "3px 8px", fontSize: "11px" }}
+                            onClick={() => {
+                              setEditingManageModalId(f.id);
+                              setEditingManageModalName(f.name);
+                            }}
+                          >
+                            Rename
+                          </button>
                           <button
                             className="studio-btn"
                             style={{ padding: "3px 8px", fontSize: "11px" }}

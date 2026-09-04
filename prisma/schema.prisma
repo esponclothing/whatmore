@@ -1672,6 +1672,9 @@ model WhatsAppSettings {
   merchantUpiId        String?
   merchantUpiName      String?
 
+  // Meta CAPI Lead Value Settings
+  metaCapiLeadValue    Int      @default(10000)
+
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }

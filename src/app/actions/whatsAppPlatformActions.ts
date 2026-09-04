@@ -1253,7 +1253,25 @@ export async function deleteWhatsAppChatbotFlowAction(id: string) {
       where: { id }
     });
     revalidatePath('/whatsapp/chatbot-builder');
+    revalidatePath('/whatsapp/chatbots');
     return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function renameWhatsAppChatbotFlowAction(id: string, name: string) {
+  try {
+    const flow = await prisma.whatsAppChatbotFlow.update({
+      where: { id },
+      data: {
+        name,
+        updatedAt: new Date()
+      }
+    });
+    revalidatePath('/whatsapp/chatbot-builder');
+    revalidatePath('/whatsapp/chatbots');
+    return { success: true, flow };
   } catch (e: any) {
     return { success: false, error: e.message };
   }
@@ -1823,6 +1841,7 @@ export async function saveWhatsAppSettingsAction(data: {
   geminiApiKey?: string;
   aiSystemPrompt?: string;
   welcomeMessage?: string;
+  metaCapiLeadValue?: number;
 }) {
   try {
     let settings = await prisma.whatsAppSettings.findFirst();
@@ -1835,6 +1854,7 @@ export async function saveWhatsAppSettingsAction(data: {
       });
     }
     revalidatePath("/whatsapp/settings");
+    revalidatePath("/whatsapp/integrations");
     return { success: true, settings };
   } catch (error: any) {
     return { success: false, error: error.message };

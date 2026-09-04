@@ -1115,6 +1115,43 @@ const reloadTeams = async () => {
               </div>
             </div>
 
+            {/* Meta CAPI Lead Value Config */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6 mb-8">
+              <h3 className="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2">
+                <Zap className="text-blue-500" size={18} />
+                Meta Conversions API Default Lead Value
+              </h3>
+              <p className="text-xs text-slate-500 mb-4">
+                This is the default monetary value (in INR) that will be passed to Meta Ads Manager when an agent clicks ? Mark Interested in the Inbox.
+              </p>
+              <div className="flex items-center gap-4">
+                <div className="relative w-64">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span className="text-slate-500 sm:text-sm">?</span>
+                  </div>
+                  <input
+                    type="number"
+                    value={metaCapiLeadValue}
+                    onChange={(e) => setMetaCapiLeadValue(Number(e.target.value))}
+                    className="w-full pl-8 py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    placeholder="10000"
+                  />
+                </div>
+                <button
+                  onClick={handleSaveMetaCapi}
+                  disabled={savingCapi}
+                  className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-6 rounded-lg text-sm font-semibold shadow-sm transition-all disabled:opacity-50 flex items-center gap-2">
+                  {savingCapi ? <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> : <Save size={16} />}
+                  Save Lead Value
+                </button>
+              </div>
+              {capiResultMsg && (
+                <div className={"mt-3 p-3 rounded-lg text-xs font-semibold " + (capiResultMsg.success ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200")}>
+                  {capiResultMsg.text}
+                </div>
+              )}
+            </div>
+
             {/* Active Meta Integration Table */}
             <div className="border border-slate-200 rounded-xl overflow-hidden mb-8">
               <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 font-bold text-xs text-slate-700 flex justify-between items-center">

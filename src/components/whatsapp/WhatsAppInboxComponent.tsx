@@ -271,7 +271,7 @@ export default function WhatsAppInboxComponent() {
         body: JSON.stringify({
           phone: activeConvDetail.customer?.whatsappNumber || activeConvDetail.customer?.mobile || activeConvDetail.phone,
           conversationId: activeConvDetail.id,
-          eventValue: 10000,
+          // eventValue is now fetched from DB backend automatically
           customEventName: "Lead"
         })
       });
