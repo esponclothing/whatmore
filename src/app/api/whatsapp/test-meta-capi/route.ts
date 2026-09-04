@@ -35,12 +35,16 @@ export async function POST(req: NextRequest) {
     const cleanPhone = testPhone.replace(/\D/g, "").slice(-10);
     const hashedPhone = crypto.createHash("sha256").update(cleanPhone).digest("hex");
 
-    const capiUrl = `https://graph.facebook.com/v18.0/${pixelId}/events`;
+    const eventId = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const cleanTestCode = testEventCode ? testEventCode.trim() : '';
+    const queryParam = cleanTestCode ? `?test_event_code=${encodeURIComponent(cleanTestCode)}` : '';
+    const capiUrl = `https://graph.facebook.com/v20.0/${pixelId}/events${queryParam}`;
     const payload: any = {
       data: [
         {
           event_name: eventName,
           event_time: Math.floor(Date.now() / 1000),
+          event_id: eventId,
           action_source: "system_generated",
           user_data: {
             ph: [hashedPhone]
@@ -49,6 +53,10 @@ export async function POST(req: NextRequest) {
       ],
       access_token: accessToken
     };
+
+    if (cleanTestCode) {
+      payload.test_event_code = cleanTestCode;
+    }
 
     if (testEventCode && testEventCode.trim()) {
       payload.test_event_code = testEventCode.trim();

@@ -495,27 +495,43 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
           const pixelId = integration.url ? integration.url.trim() : '';
           const accessToken = integration.token ? integration.token.trim() : '';
           const eventName = node.eventName || 'Lead';
+          const testCode = node.testEventCode ? node.testEventCode.trim() : '';
+          const eventId = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
           if (pixelId && accessToken) {
             const crypto = require('crypto');
             const hashedPhone = crypto.createHash('sha256').update(cleanPhone).digest('hex');
 
-            const capiUrl = `https://graph.facebook.com/v18.0/${pixelId}/events`;
-            const payload = {
-              data: [
-                {
-                  event_name: eventName,
-                  event_time: Math.floor(Date.now() / 1000),
-                  action_source: "system_generated",
-                  user_data: {
-                    ph: [hashedPhone]
-                  }
-                }
-              ],
+            const queryParam = testCode ? `?test_event_code=${encodeURIComponent(testCode)}` : '';
+            const capiUrl = `https://graph.facebook.com/v20.0/${pixelId}/events${queryParam}`;
+            
+            const eventObj: any = {
+              event_name: eventName,
+              event_time: Math.floor(Date.now() / 1000),
+              event_id: eventId,
+              action_source: "system_generated",
+              user_data: {
+                ph: [hashedPhone]
+              }
+            };
+
+            if (node.eventValue || node.currency) {
+              eventObj.custom_data = {
+                currency: node.currency || "INR",
+                value: node.eventValue || 0
+              };
+            }
+
+            const payload: any = {
+              data: [eventObj],
               access_token: accessToken
             };
 
-            console.log(`[Meta CAPI] Sending ${eventName} event to Meta Pixel: ${pixelId}`);
+            if (testCode) {
+              payload.test_event_code = testCode;
+            }
+
+            console.log(`[Meta CAPI Engine] Sending ${eventName} event to Meta Pixel ${pixelId} (Test Code: ${testCode || 'None'})...`);
             const capiRes = await fetch(capiUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -523,7 +539,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
             });
 
             const resData = await capiRes.json();
-            console.log(`[Meta CAPI] Response:`, resData);
+            console.log(`[Meta CAPI Engine] Response:`, resData);
 
             await prisma.whatsAppChatbotLog.create({
               data: {
