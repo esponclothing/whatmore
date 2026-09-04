@@ -1013,7 +1013,7 @@ const reloadTeams = async () => {
               </div>
               <button
                 onClick={() => {
-                  const existing = webhooks.find((w: any) => w.type === 'META_CAPI');
+                  const existing = webhookIntegrations.find((w: any) => w.type === 'META_CAPI');
                   if (existing) {
                     handleOpenModal(existing);
                   } else {
@@ -1132,14 +1132,14 @@ const reloadTeams = async () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {webhooks.filter((w: any) => w.type === 'META_CAPI').length === 0 ? (
+                  {webhookIntegrations.filter((w: any) => w.type === 'META_CAPI').length === 0 ? (
                     <tr>
                       <td colSpan={5} className="text-center py-8 text-slate-400 text-sm">
                         No Meta CAPI credentials configured. Click <strong>Configure Meta Credentials</strong> above to connect.
                       </td>
                     </tr>
                   ) : (
-                    webhooks.filter((w: any) => w.type === 'META_CAPI').map((wh: any) => (
+                    webhookIntegrations.filter((w: any) => w.type === 'META_CAPI').map((wh: any) => (
                       <tr key={wh.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                         <td className="px-4 py-3 font-bold text-slate-800 flex items-center gap-2">
                           <Target size={15} className="text-indigo-600" /> {wh.name}
