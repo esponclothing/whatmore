@@ -2439,7 +2439,7 @@ export default function WhatsAppChatbotBuilderPage() {
                         style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", resize: "none" }}
                       />
                     </div>
-                  ) : (selectedNode.type !== "CRM_LEAD" && selectedNode.type !== "meta_capi" && (selectedNode.type || "").toUpperCase() !== "META_CAPI") ? (
+                  ) : (selectedNode.type !== "CRM_LEAD" && selectedNode.type !== "meta_capi" && (selectedNode.type || "").toUpperCase() !== "META_CAPI" && !(selectedNode.title || "").toLowerCase().includes("meta capi")) ? (
                     <div>
                       <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Message / Description</label>
                       <textarea
@@ -2946,7 +2946,7 @@ export default function WhatsAppChatbotBuilderPage() {
                       </>
                     )}
 
-                    {(selectedNode.type || "").toUpperCase() === "META_CAPI" && (
+                    {((selectedNode.type || "").toUpperCase() === "META_CAPI" || (selectedNode.type || "").toLowerCase() === "meta_capi" || (selectedNode.title || "").toLowerCase().includes("meta capi")) && (
                       <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "12px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                           <Target size={16} style={{ color: "#2563eb" }} />
