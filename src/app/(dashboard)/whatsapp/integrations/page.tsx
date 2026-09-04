@@ -929,16 +929,16 @@ const reloadTeams = async () => {
                             Open <a href="https://business.facebook.com/events_manager2" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Meta Events Manager <ExternalLink size={11} /></a>, select your dataset/pixel and copy the 15-digit ID.
                           </div>
                           <div className="bg-white/80 p-2 rounded-lg border border-blue-100">
-                            <strong className="text-blue-950 block mb-0.5">2. Generate Permanent System User Access Token:</strong>
+                            <strong className="text-blue-950 block mb-0.5">2. Create System User & Connect Meta App:</strong>
                             Go to <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Meta Business Settings → System Users <ExternalLink size={11} /></a>
                             <ul className="list-disc list-inside text-slate-600 mt-1 space-y-0.5 text-[11px]">
                               <li>Click <strong>Add</strong> → Name: <em>WhatsApp Bot Admin</em> (Role: Admin).</li>
-                              <li>Go to <strong>Assigned Assets</strong> → Add your Pixel with <em>Full Control</em>.</li>
+                              <li>If asked for a Meta App, go to <a href="https://business.facebook.com/settings/apps" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Business Settings → Apps <ExternalLink size={11} /></a> and click <strong>Add App</strong>.</li>
+                              <li>Under System User, click <strong>Assign Assets</strong> → Assign both your <strong>Meta App</strong> and <strong>Pixel/Dataset</strong> with <em>Full Control</em>.</li>
                               <li>Click <strong>Generate New Token</strong> → Select your Meta App.</li>
                               <li>Select permissions: <code>ads_management</code> & <code>event_management</code>.</li>
                               <li>Copy the permanent token (starts with <code>EAAI...</code>).</li>
-                            </ul>
-                          </div>
+                            </ul></div>
                         </div>
                       </div>
                     )}
