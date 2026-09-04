@@ -28,7 +28,7 @@ import {
   ShoppingBag,
   ShoppingCart,
   Globe,
-  UserPlus, Target,
+  UserPlus, Target, Users,
   UserCheck,
   Bot,
   Sparkles,
