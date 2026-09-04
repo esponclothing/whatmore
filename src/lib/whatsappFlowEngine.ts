@@ -509,18 +509,18 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
               event_name: eventName,
               event_time: Math.floor(Date.now() / 1000),
               event_id: eventId,
-              action_source: "system_generated",
+              event_source_url: "https://esponsports.com",
+              action_source: "website",
               user_data: {
-                ph: [hashedPhone]
+                ph: [hashedPhone],
+                client_user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                client_ip_address: "127.0.0.1"
+              },
+              custom_data: {
+                currency: node.currency || "INR",
+                value: node.eventValue || 1000
               }
             };
-
-            if (node.eventValue || node.currency) {
-              eventObj.custom_data = {
-                currency: node.currency || "INR",
-                value: node.eventValue || 0
-              };
-            }
 
             const payload: any = {
               data: [eventObj],
