@@ -2967,6 +2967,16 @@ export default function WhatsAppChatbotBuilderPage() {
                               <option key={int.id} value={int.id}>{int.name}</option>
                             ))}
                           </select>
+                          <div style={{ marginTop: "8px" }}>
+                            <a
+                              href="/whatsapp/integrations"
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ fontSize: "11px", color: "#2563eb", fontWeight: 600, textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                            >
+                              + Add or Manage Meta Pixel Credentials in Integrations ↗
+                            </a>
+                          </div>
                         </div>
                       </>
                     )}

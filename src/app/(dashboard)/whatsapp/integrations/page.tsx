@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store, MessageSquare, Users, Bot, Layers, BookOpen, Edit3, X, Plus, Trash2, UserCheck, UserX, Shield } from "lucide-react";
+import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store, MessageSquare, Users, Bot, Layers, BookOpen, Edit3, X, Plus, Trash2, UserCheck, UserX, Shield, ExternalLink, Sparkles, HelpCircle } from "lucide-react";
 import { 
   getWhatsAppApiCredentialsAction, 
   saveWhatsAppApiCredentialsAction, 
@@ -917,6 +917,31 @@ const reloadTeams = async () => {
                     <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
                   </div>
                   <form onSubmit={handleSubmitIntegration} className="p-4 flex flex-col gap-4">
+                    {formData.type === 'META_CAPI' && (
+                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-3.5 text-xs text-slate-700 flex flex-col gap-2.5 shadow-sm">
+                        <div className="flex items-center gap-1.5 font-bold text-blue-900 text-sm">
+                          <Sparkles size={16} className="text-blue-600" />
+                          <span>Meta CAPI Permanent Token & Pixel Guide</span>
+                        </div>
+                        <div className="space-y-2 text-[11.5px] leading-relaxed">
+                          <div className="bg-white/80 p-2 rounded-lg border border-blue-100">
+                            <strong className="text-blue-950 block mb-0.5">1. Get Meta Pixel / Dataset ID:</strong>
+                            Open <a href="https://business.facebook.com/events_manager2" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Meta Events Manager <ExternalLink size={11} /></a>, select your dataset/pixel and copy the 15-digit ID.
+                          </div>
+                          <div className="bg-white/80 p-2 rounded-lg border border-blue-100">
+                            <strong className="text-blue-950 block mb-0.5">2. Generate Permanent System User Access Token:</strong>
+                            Go to <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Meta Business Settings → System Users <ExternalLink size={11} /></a>
+                            <ul className="list-disc list-inside text-slate-600 mt-1 space-y-0.5 text-[11px]">
+                              <li>Click <strong>Add</strong> → Name: <em>WhatsApp Bot Admin</em> (Role: Admin).</li>
+                              <li>Go to <strong>Assigned Assets</strong> → Add your Pixel with <em>Full Control</em>.</li>
+                              <li>Click <strong>Generate New Token</strong> → Select your Meta App.</li>
+                              <li>Select permissions: <code>ads_management</code> & <code>event_management</code>.</li>
+                              <li>Copy the permanent token (starts with <code>EAAI...</code>).</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <label className="block text-xs font-bold text-slate-600 mb-1">Category</label>
                       <select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500">
