@@ -918,32 +918,51 @@ const reloadTeams = async () => {
                   </div>
                   <form onSubmit={handleSubmitIntegration} className="p-4 flex flex-col gap-4">
                     {formData.type === 'META_CAPI' && (
-                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-3.5 text-xs text-slate-700 flex flex-col gap-2.5 shadow-sm">
+                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-3.5 text-xs text-slate-700 flex flex-col gap-2.5 shadow-sm max-h-[300px] overflow-y-auto">
                         <div className="flex items-center gap-1.5 font-bold text-blue-900 text-sm">
                           <Sparkles size={16} className="text-blue-600" />
-                          <span>Meta CAPI Permanent Token & Pixel Guide</span>
+                          <span>Meta CAPI Step-by-Step Setup Guide</span>
                         </div>
                         <div className="space-y-2 text-[11.5px] leading-relaxed">
-                          <div className="bg-white/80 p-2 rounded-lg border border-blue-100">
-                            <strong className="text-blue-950 block mb-0.5">1. Get Meta Pixel / Dataset ID:</strong>
-                            Open <a href="https://business.facebook.com/events_manager2" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Meta Events Manager <ExternalLink size={11} /></a>, select your dataset/pixel and copy the 15-digit ID.
+                          <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 shadow-2xs">
+                            <strong className="text-blue-950 block mb-1">Step 1: Create a Meta App for CAPI:</strong>
+                            Go to <a href="https://developers.facebook.com/apps/creation/" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Meta App Creation ↗ <ExternalLink size={11} /></a>
+                            <ol className="list-decimal list-inside text-slate-600 mt-1 space-y-0.5 text-[11px]">
+                              <li>Enter <strong>App Name</strong> & <strong>Contact Email</strong> → Click Next.</li>
+                              <li>Filter by <strong>Ads and monetization</strong>.</li>
+                              <li>Check <strong>Measure ad performance data with Marketing API</strong>.</li>
+                              <li>Select your Business Portfolio & Create App.</li>
+                            </ol>
                           </div>
-                          <div className="bg-white/80 p-2 rounded-lg border border-blue-100">
-                            <strong className="text-blue-950 block mb-0.5">2. Create System User & Connect Meta App:</strong>
-                            Go to <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Meta Business Settings → System Users <ExternalLink size={11} /></a>
-                            <ul className="list-disc list-inside text-slate-600 mt-1 space-y-0.5 text-[11px]">
-                              <li>Click <strong>Add</strong> → Name: <em>WhatsApp Bot Admin</em> (Role: Admin).</li>
-                              <li>If asked for a Meta App, go to <a href="https://business.facebook.com/settings/apps" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Business Settings → Apps <ExternalLink size={11} /></a> and click <strong>Add App</strong>.</li>
-                              <li>Under System User, click <strong>Assign Assets</strong> → Assign both your <strong>Meta App</strong> and <strong>Pixel/Dataset</strong> with <em>Full Control</em>.</li>
-                              <li>Click <strong>Generate New Token</strong> → Select your Meta App.</li>
-                              <li>Select permissions: <code>ads_management</code> & <code>event_management</code>.</li>
-                              <li>Copy the permanent token (starts with <code>EAAI...</code>).</li>
-                            </ul></div>
+
+                          <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 shadow-2xs">
+                            <strong className="text-blue-950 block mb-1">Step 2: Get Meta Pixel / Dataset ID:</strong>
+                            Open <a href="https://business.facebook.com/events_manager2" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Meta Events Manager ↗ <ExternalLink size={11} /></a>, select your Pixel/Dataset and copy the 15-digit ID.
+                          </div>
+
+                          <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 shadow-2xs">
+                            <strong className="text-blue-950 block mb-1">Step 3: Create System User & Assign Assets:</strong>
+                            Go to <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Business Settings → System Users ↗ <ExternalLink size={11} /></a>
+                            <ol className="list-decimal list-inside text-slate-600 mt-1 space-y-0.5 text-[11px]">
+                              <li>Click <strong>Add</strong> → Name: <em>CAPI Bot Admin</em> (Role: Admin).</li>
+                              <li>Click <strong>Assign Assets</strong> → Assign your <strong>Meta App</strong> (Full Control) and <strong>Pixel</strong> (Full Control).</li>
+                            </ol>
+                          </div>
+
+                          <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 shadow-2xs">
+                            <strong className="text-blue-950 block mb-1">Step 4: Generate Permanent Access Token:</strong>
+                            <ol className="list-decimal list-inside text-slate-600 space-y-0.5 text-[11px]">
+                              <li>Under System User, click <strong>Generate New Token</strong>.</li>
+                              <li>Select your <strong>Meta App</strong> from Step 1.</li>
+                              <li>Check <code>ads_management</code> & <code>event_management</code>.</li>
+                              <li>Copy the permanent token starting with <code>EAAI...</code>.</li>
+                            </ol>
+                          </div>
                         </div>
                       </div>
                     )}
                     <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">Category</label>
+<label className="block text-xs font-bold text-slate-600 mb-1">Category</label>
                       <select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500">
                         <option value="CRM_LEAD">CRM (Lead Webhook)</option>
                         <option value="ERP">ERP</option>
