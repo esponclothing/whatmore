@@ -595,10 +595,6 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
               const createData = await createRes.json();
               audienceId = createData.id || `aud_${audienceName.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`;
               savedAudiences[audienceName] = audienceId;
-              await prisma.whatsAppIntegration.update({
-                where: { id: integration.id },
-                data: { metadata: JSON.stringify(savedAudiences) }
-              });
             }
 
             if (audienceId && !audienceId.startsWith("aud_")) {

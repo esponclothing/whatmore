@@ -21,53 +21,50 @@ export async function POST(req: NextRequest) {
     const accessToken = integration.token.trim();
     const targetAdAccount = adAccountId || process.env.META_AD_ACCOUNT_ID || (integration.url || "").trim();
 
+    // In-memory audience cache for runtime
+    const audienceCache: Record<string, string> = {};
+
     // Helper: Auto-Create Audience in Meta Ads Manager
     const ensureMetaAudience = async (name: string) => {
       if (!name || !name.trim()) return null;
       const cleanName = name.trim();
 
-      // Check if audience ID is already saved in integration metadata
-      let savedAudiences: Record<string, string> = {};
-      try {
-        savedAudiences = JSON.parse(integration.metadata || "{}");
-      } catch (_) {}
-
-      if (savedAudiences[cleanName]) {
-        return savedAudiences[cleanName];
+      if (audienceCache[cleanName]) {
+        return audienceCache[cleanName];
       }
 
       console.log(`[Meta Audience API] Auto-creating Custom Audience "${cleanName}" in Meta Ads Manager...`);
 
-      // Call Meta Graph API to create Custom Audience dynamically
-      const createRes = await fetch(`https://graph.facebook.com/v20.0/act_${targetAdAccount.replace(/^act_/, '')}/customaudiences`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: cleanName,
-          subtype: "CUSTOM",
-          description: "Dynamic WhatsApp Lead Audience created via Whatmore",
-          customer_file_source: "USER_PROVIDED_ONLY",
-          access_token: accessToken
-        })
-      });
+      let audienceId: string | null = null;
+      try {
+        // Call Meta Graph API to create Custom Audience dynamically
+        const createRes = await fetch(`https://graph.facebook.com/v20.0/act_${targetAdAccount.replace(/^act_/, '')}/customaudiences`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: cleanName,
+            subtype: "CUSTOM",
+            description: "Dynamic WhatsApp Lead Audience created via Whatmore",
+            customer_file_source: "USER_PROVIDED_ONLY",
+            access_token: accessToken
+          })
+        });
 
-      const createData = await createRes.json();
-      console.log(`[Meta Audience API] Response for "${cleanName}":`, createData);
-
-      let audienceId = createData.id;
+        const createData = await createRes.json();
+        console.log(`[Meta Audience API] Response for "${cleanName}":`, createData);
+        if (createData.id) {
+          audienceId = createData.id;
+        }
+      } catch (graphErr) {
+        console.warn(`[Meta Audience API] Graph API call error:`, graphErr);
+      }
 
       // If creation returns existing ID or fallback, assign cleanly
       if (!audienceId) {
         audienceId = `aud_${cleanName.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`;
       }
 
-      // Save audience ID in integration metadata
-      savedAudiences[cleanName] = audienceId;
-      await prisma.whatsAppIntegration.update({
-        where: { id: integration.id },
-        data: { metadata: JSON.stringify(savedAudiences) }
-      });
-
+      audienceCache[cleanName] = audienceId;
       return audienceId;
     };
 
