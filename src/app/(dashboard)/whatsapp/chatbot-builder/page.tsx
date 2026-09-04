@@ -423,6 +423,7 @@ export default function WhatsAppChatbotBuilderPage() {
 
   // Modals state
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [showManageModal, setShowManageModal] = useState<boolean>(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("wati_lead_gen");
   const [drawerTab, setDrawerTab] = useState<"basic" | "advanced">("basic");
@@ -432,7 +433,6 @@ export default function WhatsAppChatbotBuilderPage() {
   // Canvas Node State
   const [nodes, setNodes] = useState<any[]>(BOT_TEMPLATES[0].nodes);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [openCategories, setOpenCategories] = useState<{ [key: string]: boolean }>({ Messages: true, Choices: true });
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
@@ -517,7 +517,6 @@ export default function WhatsAppChatbotBuilderPage() {
           setHistoryStack([parsed]);
           setHistoryIndex(0);
           setSelectedNodeId(null);
-          setSelectedNodeIds(new Set());
           setIsDrawerOpen(false);
           setToastMsg("✓ Discarded unsaved changes");
           setTimeout(() => setToastMsg(null), 3000);
@@ -680,7 +679,6 @@ export default function WhatsAppChatbotBuilderPage() {
         setHistoryStack([importedNodes]);
         setHistoryIndex(0);
         setSelectedNodeId(null);
-        setSelectedNodeIds(new Set());
         setIsDrawerOpen(false);
 
         if (importedName) setFlowName(importedName);
@@ -849,7 +847,6 @@ export default function WhatsAppChatbotBuilderPage() {
         setHistoryStack([parsedNodes]);
         setHistoryIndex(0);
         setSelectedNodeId(null);
-        setSelectedNodeIds(new Set());
         setIsDrawerOpen(false);
         setLastSavedNodesJson(JSON.stringify(parsedNodes));
       }
@@ -922,7 +919,6 @@ export default function WhatsAppChatbotBuilderPage() {
           setIsBotActive(false);
           setNodes([]);
           setSelectedNodeId(null);
-          setSelectedNodeIds(new Set());
           setIsDrawerOpen(false);
         }
       }
@@ -1063,10 +1059,1350 @@ export default function WhatsAppChatbotBuilderPage() {
           errors.push(`Meta CAPI node "${node.title || 'Meta CAPI Event'}" requires an active Meta integration. Save Meta credentials in Integrations first.`);
         }
       }
+      if (type === "CRM_ROUNDROBIN") {
+        if (node.assignmentMode === "DIRECT") {
+          if (!node.agentId) {
+            errors.push(`Agent Routing block "${node.title}" has no specific agent selected.`);
+          }
+        } else {
+          if (!node.distributionMethod) {
+            errors.push(`Agent Routing block "${node.title}" has no distribution method selected.`);
+          }
+          if (node.roundRobinTarget === "AGENTS") {
+            if (!node.agentIds || node.agentIds.length === 0) {
+              errors.push(`Agent Routing block "${node.title}" has no agents selected.`);
+            }
+          } else {
+            // Default to TEAM
+            if (!node.teamId) {
+              errors.push(`Agent Routing block "${node.title}" has no team selected.`);
+            }
+          }
+        }
+      }
     });
 
-    return errors;
+    return { isValid: errors.length === 0, errors };
   };
+
+  const handleRunValidation = () => {
+    const validation = validateWorkflow();
+    if (validation.isValid) {
+      alert("✅ Your Flow looks great! No errors found.");
+    } else {
+      alert(`⚠️ Flow Validation Failed:\n\n- ${validation.errors.join("\\n- ")}\n\nPlease fix these errors before publishing.`);
+    }
+  };
+
+  const handleSaveFlowWithStatus = async (wantsPublish: boolean) => {
+    setIsSaving(true);
+    let targetActive = wantsPublish;
+
+    // Validate if the user is trying to publish
+    if (wantsPublish) {
+      const validation = validateWorkflow();
+      if (!validation.isValid) {
+        targetActive = false;
+        alert(`Cannot Publish Live due to the following errors:\n\n- ${validation.errors.join("\\n- ")}\n\nSaving your chatbot as a DRAFT instead.`);
+      }
+    }
+
+    const res = await saveWhatsAppChatbotFlowAction({
+      id: currentFlowId || undefined,
+      name: flowName,
+      triggerKeyword: triggerKeyword,
+      nodesJson: JSON.stringify(nodes),
+      isActive: targetActive
+    });
+
+    if (res.success && res.flow) {
+      setCurrentFlowId(res.flow.id);
+      setIsBotActive(targetActive);
+      if (targetActive) {
+        setToastMsg("✓ Chatbot Flow successfully saved & Published live!");
+      } else {
+        setToastMsg("✓ Chatbot Flow saved successfully as a DRAFT.");
+      }
+      setLastSavedFlowName(flowName);
+      setLastSavedTriggerKeyword(triggerKeyword);
+      setLastSavedIsBotActive(targetActive);
+      setLastSavedNodesJson(JSON.stringify(nodes));
+      await fetchFlows();
+    } else {
+      setToastMsg(`Error saving flow: ${res.error}`);
+    }
+    setIsSaving(false);
+    setTimeout(() => setToastMsg(null), 4000);
+  };
+
+  // Choice Option handlers
+  const handleAddOptionToNode = (nodeId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setNodes((prev) =>
+      prev.map((n) => {
+        if (n.id !== nodeId) return n;
+        const currentChoices = n.choices || [];
+        const newChoiceNum = currentChoices.length + 1;
+        const newChoice = {
+          id: `c_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+          text: `Option ${newChoiceNum}`,
+          targetNode: null
+        };
+        return { ...n, choices: [...currentChoices, newChoice] };
+      })
+    );
+  };
+
+  const handleDeleteOptionFromNode = (nodeId: string, choiceId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setNodes((prev) =>
+      prev.map((n) => {
+        if (n.id !== nodeId) return n;
+        return { ...n, choices: (n.choices || []).filter((c: any) => c.id !== choiceId) };
+      })
+    );
+  };
+
+  const handleUpdateOptionText = (nodeId: string, choiceId: string, newText: string) => {
+    setNodes((prev) =>
+      prev.map((n) => {
+        if (n.id !== nodeId) return n;
+        const updated = (n.choices || []).map((c: any) => (c.id === choiceId ? { ...c, text: newText } : c));
+        return { ...n, choices: updated };
+      })
+    );
+  };
+
+  const toggleCategory = (catName: string) => {
+    setOpenCategories((prev) => ({
+      ...prev,
+      [catName]: !prev[catName]
+    }));
+  };
+
+  const pushHistory = (newNodes: any[]) => {
+    const updated = historyStack.slice(0, historyIndex + 1);
+    setHistoryStack([...updated, newNodes]);
+    setHistoryIndex(updated.length);
+  };
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      setHistoryIndex(historyIndex - 1);
+      setNodes(historyStack[historyIndex - 1]);
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndex < historyStack.length - 1) {
+      setHistoryIndex(historyIndex + 1);
+      setNodes(historyStack[historyIndex + 1]);
+    }
+  };
+
+  // ---------------------------------------------------------
+  // RICH BLOCK INITIALIZATION FOR ALL 25+ BLOCK TYPES
+  // ---------------------------------------------------------
+  const handleAddBlockToCanvas = (block: any, x?: number, y?: number) => {
+    if (block.id === "meta_capi") {
+      const hasMeta = integrations.some(i => i.type === "META_CAPI" && i.isActive);
+      if (!hasMeta) {
+        setToastMsg("Error: Please save your Meta CAPI credentials in Integrations first!");
+        setTimeout(() => setToastMsg(null), 3000);
+        return;
+      }
+    }
+    const selected = nodes.find((n) => n.id === selectedNodeId) || nodes[nodes.length - 1];
+    const newNodeId = `node_${Date.now()}`;
+    const basePos = {
+      x: typeof x === "number" ? x : (selected ? selected.x + 290 : 400),
+      y: typeof y === "number" ? y : (selected ? selected.y + 40 : 200)
+    };
+
+    let newNode: any = {
+      id: newNodeId,
+      type: block.id.toUpperCase(),
+      title: block.name,
+      x: basePos.x,
+      y: basePos.y
+    };
+
+    switch (block.id) {
+      case "text":
+        newNode = { ...newNode, category: "choice", text: "Hi {{customer_name}}, thank you for reaching out to Espon Apparel!" };
+        break;
+      case "image":
+        newNode = { ...newNode, category: "choice", imageUrl: "https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=500", caption: "Check out our latest 2026 Wholesale Activewear Collection!" };
+        break;
+      case "video":
+        newNode = { ...newNode, category: "choice", videoUrl: "https://www.w3schools.com/html/mov_bbb.mp4", caption: "Watch our apparel production demo video." };
+        break;
+      case "youtube":
+        newNode = { ...newNode, category: "choice", youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", caption: "Espon Factory Tour & Manufacturing Demo" };
+        break;
+      case "file":
+        newNode = { ...newNode, category: "choice", fileUrl: "https://espon.in/catalog.pdf", filename: "Espon_Apparel_Catalog_2026.pdf" };
+        break;
+      case "audio":
+        newNode = { ...newNode, category: "choice", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", isVoiceNote: true, text: "Audio Note: Welcome message from Ikra Sales Manager" };
+        break;
+      case "location":
+        newNode = { ...newNode, category: "choice", locationName: "Espon Apparel HQ Factory", address: "SCO 71A, Ashoka Plaza, Rohtak, Haryana 124001", lat: 28.8955, lng: 76.6066 };
+        break;
+      case "contact":
+        newNode = { ...newNode, category: "choice", contactName: "Ikra Sales Manager", contactPhone: "+91 7206066678", contactOrg: "Espon Apparel Direct" };
+        break;
+      case "link":
+        newNode = { ...newNode, category: "choice", text: "Click below to visit our B2B wholesale store:", buttonText: "Visit Portal 🌐", url: "https://espon.in" };
+        break;
+      case "carousel":
+        newNode = {
+          ...newNode,
+          category: "choice",
+          text: "Featured Categories Carousel:",
+          items: [
+            { id: "item_1", title: "Polo T-Shirts", subtitle: "₹290/pc · Min 100 pcs", imageUrl: "https://images.unsplash.com/photo-1581655353564-df123a1eb820?w=400", buttonText: "Inquire Now" },
+            { id: "item_2", title: "Track Pants", subtitle: "₹340/pc · Min 50 pcs", imageUrl: "https://images.unsplash.com/photo-1552902865-b72c031ac5ea?w=400", buttonText: "Inquire Now" }
+          ]
+        };
+        break;
+      case "request":
+        newNode = { ...newNode, category: "input", text: "Please enter your requirement quantity (pcs):", variableName: "req_qty" };
+        break;
+      case "buttons":
+        newNode = {
+          ...newNode,
+          category: "choice",
+          text: "Select your inquiry topic below:",
+          choices: [
+            { id: `c_${Date.now()}_1`, text: "1. Wholesale Catalog", targetNode: null },
+            { id: `c_${Date.now()}_2`, text: "2. Custom Manufacturing", targetNode: null }
+          ]
+        };
+        break;
+      case "list_menu":
+        newNode = {
+          ...newNode,
+          category: "choice",
+          text: "Select from our service options menu:",
+          menuTitle: "Main Menu Options",
+          choices: [
+            { id: `c_${Date.now()}_1`, text: "1. View Bulk Pricing", description: "Tiered wholesale slabs", targetNode: null },
+            { id: `c_${Date.now()}_2`, text: "2. Track Order Status", description: "Live AWB status", targetNode: null }
+          ]
+        };
+        break;
+      case "input_name":
+        newNode = { ...newNode, category: "input", text: "What is your full name?", variableName: "customer_name", retryMessage: "Please enter a valid name." };
+        break;
+      case "input_email":
+        newNode = { ...newNode, category: "input", text: "Please enter your business email address:", variableName: "customer_email", retryMessage: "Invalid email format. Try again." };
+        break;
+      case "input_phone":
+        newNode = { ...newNode, category: "input", text: "Please enter your 10-digit mobile number:", variableName: "customer_mobile", retryMessage: "Invalid mobile number. Enter 10 digits." };
+        break;
+      case "input_date":
+        newNode = { ...newNode, category: "input", text: "Select your preferred delivery date (YYYY-MM-DD):", variableName: "delivery_date" };
+        break;
+      case "input_rating":
+        newNode = { ...newNode, category: "input", text: "Rate your experience from 1 to 5 Stars ⭐:", variableName: "rating_score" };
+        break;
+      case "set_var":
+        newNode = { ...newNode, category: "logic", title: "Set Variable", variableName: "lead_status", variableValue: "Qualified" };
+        break;
+      case "condition":
+        newNode = { ...newNode, category: "logic", title: "Condition (If / Else)", variableName: "customer_type", operator: "EQUALS", compareValue: "Wholesaler", truePort: null, falsePort: null };
+        break;
+      case "delay":
+        newNode = { ...newNode, category: "logic", title: "Wait / Delay", delayValue: 5, delayUnit: "MINUTES", text: "Wait 5 minutes before continuing..." };
+        break;
+      case "split_test":
+        newNode = { ...newNode, category: "logic", title: "Split Test (A/B)", splitRatio: "50/50", branchAPort: null, branchBPort: null };
+        break;
+      case "jump":
+        newNode = { ...newNode, category: "logic", title: "Jump to Block", targetNodeId: null };
+        break;
+      case "pay_link":
+        newNode = { ...newNode, category: "payment", title: "Send Payment Link", amount: 1500, currency: "INR", paymentDescription: "Order Deposit Payment", paymentUrl: "https://pay.espon.in/dep1092" };
+        break;
+      case "pay_qr":
+        newNode = { ...newNode, category: "payment", title: "UPI QR Code", amount: 2500, upiId: "7206066678@OKBIZAXIS", payeeName: "Espon Clothing Pvt Ltd", text: "Scan QR via GPay / PhonePe / Paytm:" };
+        break;
+      case "pay_collect":
+        newNode = { ...newNode, category: "payment", title: "Collect Payment", amount: 5000, paymentModes: ["UPI", "Cards", "NetBanking"] };
+        break;
+      case "catalog":
+        newNode = { ...newNode, category: "choice", title: "Product Catalog Carousel", categoryName: "Wholesale Activewear", text: "Browse ready stock catalog below:" };
+        break;
+      case "order":
+        newNode = { ...newNode, category: "choice", title: "Multi-Item Order", text: "Order Summary: 100 pcs Polo T-Shirts (₹29,000)" };
+        break;
+      case "webhook":
+        newNode = { ...newNode, category: "api", title: "Webhook Fetch (API)", webhookUrl: "https://api.espon.in/v1/inventory", method: "POST", headers: "Content-Type: application/json", requestBody: '{"sku": "ESP-902"}' };
+        break;
+      case "crm_contact":
+        newNode = { ...newNode, category: "crm", title: "Update CRM Contact", leadStage: "Qualified Lead", temperature: "HOT", tags: "Hot Lead, Wholesale" };
+        break;
+      case "crm_lead":
+        newNode = { ...newNode, category: "crm", title: "Create Lead", leadSource: "WhatsApp Bot", customerType: "Wholesaler" };
+        break;
+      case "meta_capi":
+        newNode = { ...newNode, category: "crm", title: "Meta CAPI Event", eventName: "Lead", integrationId: integrations.find(i => i.type === "META_CAPI" && i.isActive)?.id };
+        break;
+      case "crm_roundrobin":
+        newNode = { ...newNode, category: "crm", title: "Assign Sales Rep", assignmentMode: "ROUND_ROBIN", department: "Wholesale Sales" };
+        break;
+      case "ai_bot":
+        newNode = { ...newNode, category: "ai", title: "AI GPT Intent Auto-Answer", systemPrompt: "You are Espon AI Assistant. Answer product catalog and pricing inquiries politely.", confidenceThreshold: 85 };
+        break;
+      case "meta_template":
+        newNode = { ...newNode, category: "ai", title: "Send Meta Template", templateName: "order_confirmation_v2", language: "en_US" };
+        break;
+      default:
+        newNode = { ...newNode, category: "choice", text: `Configure ${block.name}...` };
+    }
+
+    const updated = [...nodes, newNode];
+    setNodes(updated);
+    pushHistory(updated);
+    setSelectedNodeId(newNodeId);
+    setIsDrawerOpen(true);
+  };
+
+  const handleMouseDownCanvas = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (
+      target.closest('.canvas-node-card') ||
+      target.closest('.node-card-header') ||
+      target.closest('.block-tile') ||
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('textarea') ||
+      target.closest('select') ||
+      target.closest('.node-input-port') ||
+      target.closest('.node-output-port') ||
+      target.closest('.choice-option-port')
+    ) {
+      return;
+    }
+
+    setIsPanning(true);
+    setPanStart({
+      x: e.clientX - pan.x,
+      y: e.clientY - pan.y
+    });
+  };
+
+  const handleMouseDownNode = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setDragStartPos({ x: e.clientX, y: e.clientY });
+    setDraggingNodeId(id);
+    const targetNode = nodes.find((n) => n.id === id);
+    if (targetNode) {
+      setDragOffset({
+        x: e.clientX - (targetNode.x * zoom + pan.x),
+        y: e.clientY - (targetNode.y * zoom + pan.y)
+      });
+    }
+  };
+
+  const handleOpenNodeSettings = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedNodeId(id);
+    setIsDrawerOpen(true);
+  };
+
+  const handleStartConnectWire = (
+    e: React.MouseEvent,
+    sourceNodeId: string,
+    choiceId?: string,
+    choiceIndex?: number
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const sourceNode = nodes.find((n) => n.id === sourceNodeId);
+    if (!sourceNode) return;
+
+    let startFallback = { x: sourceNode.x + 260, y: sourceNode.y + 40 };
+    let portId = `port-out-${sourceNode.id}`;
+    if (choiceId) {
+      startFallback = { x: sourceNode.x + 255, y: sourceNode.y + 140 + (choiceIndex || 0) * 30 };
+      portId = `port-out-${sourceNode.id}-${choiceId}`;
+    }
+
+    const start = getPortCoords(portId, startFallback);
+
+    const canvas = (e.currentTarget as HTMLElement).closest(".infinite-canvas-wrapper");
+    let currentCanvasMouseX = start.x;
+    let currentCanvasMouseY = start.y;
+
+    if (canvas) {
+      const rectCanvas = canvas.getBoundingClientRect();
+      currentCanvasMouseX = (e.clientX - rectCanvas.left - pan.x) / zoom;
+      currentCanvasMouseY = (e.clientY - rectCanvas.top - pan.y) / zoom;
+    }
+
+    setConnectingFrom({
+      sourceNodeId,
+      choiceId,
+      choiceIndex,
+      startX: start.x,
+      startY: start.y
+    });
+    setConnectingMousePos({ x: currentCanvasMouseX, y: currentCanvasMouseY });
+  };
+
+  const handleDropConnection = (targetNodeId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!connectingFrom) return;
+
+    const sourceNode = nodes.find((n) => n.id === connectingFrom.sourceNodeId);
+    const targetNode = nodes.find((n) => n.id === targetNodeId);
+
+    if (!sourceNode || !targetNode || sourceNode.id === targetNode.id) {
+      setConnectingFrom(null);
+      setConnectingMousePos(null);
+      setHoveredTargetNodeId(null);
+      return;
+    }
+
+    setNodes((prev) =>
+      prev.map((n) => {
+        if (n.id !== connectingFrom.sourceNodeId) return n;
+        if (connectingFrom.choiceId) {
+          const updatedChoices = (n.choices || []).map((c: any) =>
+            c.id === connectingFrom.choiceId ? { ...c, targetNode: targetNodeId } : c
+          );
+          return { ...n, choices: updatedChoices };
+        } else {
+          return { ...n, outputPort: targetNodeId };
+        }
+      })
+    );
+
+    pushHistory(nodes);
+    setToastMsg(`✓ Flow Connected: "${sourceNode.title}" ➔ "${targetNode.title}"`);
+    setTimeout(() => setToastMsg(null), 3000);
+
+    setConnectingFrom(null);
+    setConnectingMousePos(null);
+    setHoveredTargetNodeId(null);
+  };
+
+  const handleMouseMoveCanvas = (e: React.MouseEvent) => {
+    if (isPanning) {
+      setPan({
+        x: e.clientX - panStart.x,
+        y: e.clientY - panStart.y
+      });
+      return;
+    }
+
+    if (connectingFrom) {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const mx = (e.clientX - rect.left - pan.x) / zoom;
+      const my = (e.clientY - rect.top - pan.y) / zoom;
+      setConnectingMousePos({ x: mx, y: my });
+      return;
+    }
+
+    if (!draggingNodeId) return;
+    const newX = (e.clientX - dragOffset.x - pan.x) / zoom;
+    const newY = (e.clientY - dragOffset.y - pan.y) / zoom;
+
+    setNodes((prev) =>
+      prev.map((n) => (n.id === draggingNodeId ? { ...n, x: Math.max(10, newX), y: Math.max(10, newY) } : n))
+    );
+  };
+
+  const handleMouseUpCanvas = (e: React.MouseEvent) => {
+    setIsPanning(false);
+
+    if (connectingFrom) {
+      setConnectingFrom(null);
+      setConnectingMousePos(null);
+      setHoveredTargetNodeId(null);
+    }
+
+    if (draggingNodeId) {
+      const dist = Math.hypot(e.clientX - dragStartPos.x, e.clientY - dragStartPos.y);
+      if (dist < 4) {
+        setSelectedNodeId(draggingNodeId);
+      }
+      pushHistory(nodes);
+    }
+    setDraggingNodeId(null);
+  };
+
+  const handleWheelCanvas = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      const zoomDelta = e.deltaY < 0 ? 0.05 : -0.05;
+      setZoom((prev) => Math.min(1.5, Math.max(0.3, prev + zoomDelta)));
+    } else {
+      setPan((prev) => ({
+        x: prev.x - e.deltaX * 0.8,
+        y: prev.y - e.deltaY * 0.8
+      }));
+    }
+  };
+
+  const handleDeleteNode = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = nodes.filter((n) => n.id !== id);
+    setNodes(updated);
+    pushHistory(updated);
+    if (selectedNodeId === id) {
+      setSelectedNodeId(null);
+      setIsDrawerOpen(false);
+    }
+  };
+
+  const handleDuplicateNode = (node: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newNodeId = `node_${Date.now()}`;
+    const newNode = {
+      ...node,
+      id: newNodeId,
+      title: `${node.title} (Copy)`,
+      x: node.x + 40,
+      y: node.y + 40
+    };
+    const updated = [...nodes, newNode];
+    setNodes(updated);
+    pushHistory(updated);
+    setSelectedNodeId(newNodeId);
+  };
+
+  const handleFitAllNodesToScreen = () => {
+    setZoom(0.65);
+    setPan({ x: 0, y: 0 });
+  };
+
+  const getBezierPath = (sourceNode: any, targetNode: any, optionIndex?: number) => {
+    if (!sourceNode || !targetNode) return "";
+    
+    let startFallback = { x: sourceNode.x + 260, y: sourceNode.y + 40 };
+    let portId = `port-out-${sourceNode.id}`;
+    if (typeof optionIndex === "number" && sourceNode.choices && sourceNode.choices[optionIndex]) {
+      const choice = sourceNode.choices[optionIndex];
+      startFallback = { x: sourceNode.x + 255, y: sourceNode.y + 140 + optionIndex * 30 };
+      portId = `port-out-${sourceNode.id}-${choice.id}`;
+    }
+
+    const start = getPortCoords(portId, startFallback);
+
+    const endFallback = { x: targetNode.x, y: targetNode.y + 40 };
+    const endPortId = `port-in-${targetNode.id}`;
+    const end = getPortCoords(endPortId, endFallback);
+
+    const controlDist = Math.max(60, Math.abs(end.x - start.x) * 0.5);
+    const cx1 = start.x + controlDist;
+    const cx2 = end.x - controlDist;
+
+    return `M ${start.x} ${start.y} C ${cx1} ${start.y}, ${cx2} ${end.y}, ${end.x} ${end.y}`;
+  };
+
+  const getBezierFromTo = (startX: number, startY: number, endX: number, endY: number) => {
+    const controlDist = Math.max(60, Math.abs(endX - startX) * 0.5);
+    const cx1 = startX + controlDist;
+    const cx2 = endX - controlDist;
+    return `M ${startX} ${startY} C ${cx1} ${startY}, ${cx2} ${endY}, ${endX} ${endY}`;
+  };
+
+  const handleStartSimTest = () => {
+    const startNode = nodes.find((n) => n.type === "CHOICE" || n.type === "START") || nodes[0];
+    setSimMessages([
+      {
+        sender: "bot",
+        text: startNode?.text || "Welcome to WhatsApp Assistant!",
+        imageUrl: startNode?.imageUrl,
+        choices: startNode?.choices || []
+      }
+    ]);
+    setShowSimModal(true);
+  };
+
+  const handleSimChoiceSelect = (choice: any) => {
+    const userMsg = { sender: "user", text: choice.text };
+    const targetNode = nodes.find((n) => n.id === choice.targetNode);
+
+    let botReplyMsg = null;
+    if (targetNode) {
+      if (targetNode.type.startsWith("CRM") && targetNode.outputPort) {
+        const nextEndNode = nodes.find((n) => n.id === targetNode.outputPort);
+        botReplyMsg = {
+          sender: "bot",
+          text: (targetNode.text ? `[CRM Log]: ${targetNode.text}\n\n` : "") + (nextEndNode?.text || "Thank you for reaching out!"),
+          buttonText: nextEndNode?.buttonText
+        };
+      } else {
+        botReplyMsg = {
+          sender: "bot",
+          text: targetNode.text || targetNode.title,
+          buttonText: targetNode.buttonText
+        };
+      }
+    } else {
+      botReplyMsg = {
+        sender: "bot",
+        text: "Thank you! Our executive will contact you shortly regarding your request."
+      };
+    }
+
+    setSimMessages((prev) => [...prev, userMsg, botReplyMsg]);
+  };
+
+  const selectedNode = nodes.find((n) => n.id === selectedNodeId);
+
+  const hasUnsavedChanges = 
+    currentFlowId !== null && 
+    (lastSavedNodesJson !== JSON.stringify(nodes) ||
+     lastSavedFlowName !== flowName ||
+     lastSavedTriggerKeyword !== triggerKeyword ||
+     lastSavedIsBotActive !== isBotActive);
+
+  return (
+    <div className={`studio-container ${isFullScreenStudio ? "fullscreen-studio" : ""}`}>
+      {/* SILENT LOADING PROGRESS BAR */}
+      {isLoadingFlows && (
+        <div className="shopify-progress-bar" style={{ position: "absolute", top: 0, left: 0, right: 0, height: "3.5px", background: "linear-gradient(90deg, #6d28d9, #a78bfa, #6d28d9)", backgroundSize: "200% 100%", animation: "shopify-progress-loading 1.2s infinite linear", zIndex: 9999 }} />
+      )}
+
+      {/* SHOPIFY-STYLE FLOATING SAVE BANNER */}
+      {hasUnsavedChanges && (
+        <div className="shopify-save-banner" style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "14px 28px",
+          background: "#1e1b4b",
+          color: "#ffffff",
+          borderRadius: "12px",
+          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.15)",
+          position: "fixed",
+          top: "84px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "92%",
+          maxWidth: "680px",
+          zIndex: 1000,
+          border: "1px solid #312e81"
+        }}>
+          <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#e0e7ff" }}>
+            ⚠️ Unsaved changes in "${flowName}"
+          </span>
+          <div style={{ display: "flex", gap: "12px" }}>
+            <button 
+              className="studio-btn" 
+              onClick={handleDiscardChanges} 
+              style={{ background: "rgba(255, 255, 255, 0.1)", color: "#ffffff", border: "1px solid rgba(255, 255, 255, 0.15)", padding: "7px 16px", cursor: "pointer", borderRadius: "8px", fontSize: "12.5px" }}
+            >
+              Discard
+            </button>
+            <button 
+              className="studio-btn primary" 
+              onClick={() => handleSaveFlowWithStatus(isBotActive)} 
+              disabled={isSaving}
+              style={{ padding: "7px 20px", cursor: "pointer", borderRadius: "8px", fontSize: "12.5px" }}
+            >
+              {isSaving ? "Saving..." : "Save Flow"}
+            </button>
+          </div>
+        </div>
+      )}
+
+
+      {/* TOP CONTROL BAR */}
+      <div className="studio-top-bar">
+        <div className="studio-title-block">
+          <Bot size={22} color="#10b981" />
+          <select
+            className="bot-selector-dropdown"
+            value={currentFlowId || ""}
+            onChange={(e) => handleSelectFlow(e.target.value)}
+            disabled={savedFlows.length === 0}
+          >
+            {savedFlows.length > 0 ? (
+              savedFlows.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name} {f.isActive ? "🟢 (Live)" : "⚪ (Draft)"}
+                </option>
+              ))
+            ) : (
+              <option value="">No Active Chatbot</option>
+            )}
+          </select>
+
+          <span className={`flow-status-pill ${isBotActive ? "" : "draft"}`} style={{ background: isBotActive ? "#dcfce7" : "#f1f5f9", color: isBotActive ? "#15803d" : "#64748b" }}>
+            {isBotActive ? "ACTIVE LIVE" : "DRAFT"}
+          </span>
+
+          <span className="flow-meta-sub">
+            {nodes.length} steps · DB Synced
+          </span>
+        </div>
+
+        <div className="studio-actions-group">
+          <button className="studio-btn primary" onClick={() => setShowCreateModal(true)} title="Create New Chatbot">
+            <Plus size={15} /> ＋ New Chatbot
+          </button>
+
+          <button className="studio-btn" onClick={handleDuplicateCurrentBot} disabled={!currentFlowId} title="Duplicate Current Chatbot">
+            <Copy size={14} /> Duplicate
+          </button>
+
+          <button className="studio-btn" onClick={() => jsonFileInputRef.current?.click()} title="Import Chatbot Flow from JSON file">
+            <Layers size={14} /> Import JSON
+          </button>
+
+          <button className="studio-btn" onClick={handleExportJsonFlow} disabled={nodes.length === 0} title="Export Current Chatbot Flow as JSON file">
+            <Layers size={14} style={{ transform: "rotate(180deg)" }} /> Export JSON
+          </button>
+
+          <button className="studio-btn" onClick={handleCopyJsonFlow} disabled={nodes.length === 0} title="Copy Current Chatbot Flow as JSON">
+            <Copy size={14} /> Copy JSON
+          </button>
+
+          <input
+            type="file"
+            ref={jsonFileInputRef}
+            style={{ display: "none" }}
+            accept=".json"
+            onChange={handleImportJsonFlow}
+          />
+
+          <button className="studio-btn" onClick={() => setShowManageModal(true)} title="Manage All Chatbots">
+            <FolderOpen size={14} /> All Bots ({savedFlows.length})
+          </button>
+
+          <button className="studio-btn danger" onClick={() => setShowDeleteModal(true)} disabled={!currentFlowId} title="Delete Current Chatbot">
+            <Trash2 size={14} /> Delete Bot
+          </button>
+
+          <div style={{ width: "1px", height: "24px", background: "#e2e8f0", margin: "0 4px" }} />
+
+          <button className="circular-history-btn" onClick={handleUndo} title="Undo"><RotateCcw size={15} /></button>
+          <button className="circular-history-btn" onClick={handleRedo} title="Redo"><RotateCw size={15} /></button>
+
+          <button
+            className="studio-btn fullscreen-btn"
+            onClick={() => setIsFullScreenStudio(!isFullScreenStudio)}
+            title="Toggle Full Screen Studio Mode"
+          >
+            {isFullScreenStudio ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          </button>
+
+          <button className="studio-btn test-btn" onClick={handleStartSimTest} disabled={nodes.length === 0}>
+            <Play size={14} /> Preview & Test
+          </button>
+
+          <button className="studio-btn" onClick={handleRunValidation} disabled={nodes.length === 0} style={{ background: "#475569", color: "white" }}>
+            <ShieldCheck size={14} /> Validate Flow
+          </button>
+
+          <button 
+            className="studio-btn" 
+            style={{ background: "#64748b", color: "#fff", display: "flex", alignItems: "center", gap: "6px" }} 
+            onClick={() => handleSaveFlowWithStatus(false)} 
+            disabled={isSaving || nodes.length === 0}
+          >
+            <FileText size={14} /> Save as Draft
+          </button>
+
+          <button 
+            className="studio-btn primary" 
+            onClick={() => handleSaveFlowWithStatus(true)} 
+            disabled={isSaving || nodes.length === 0}
+          >
+            <CheckCircle2 size={14} /> Publish Flow
+          </button>
+        </div>
+      </div>
+
+      {toastMsg && (
+        <div style={{ background: "#dcfce7", borderBottom: "1px solid #86efac", color: "#166534", padding: "8px 16px", fontSize: "12.5px", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>{toastMsg}</span>
+          <button onClick={() => setToastMsg(null)} style={{ background: "none", border: "none", color: "#166534", cursor: "pointer", fontSize: "16px" }}>×</button>
+        </div>
+      )}
+
+      {/* STUDIO MAIN BODY */}
+      <div className="studio-body">
+        {/* LEFT SIDEBAR: BLOCK LIBRARY */}
+        <div className={`block-library-sidebar ${isSidebarCollapsed ? "collapsed" : ""}`}>
+          <div className="library-header">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span className="library-title">Block Library</span>
+              <button className="panel-toggle-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
+                {isSidebarCollapsed ? <ChevronRight size={16} /> : <X size={16} />}
+              </button>
+            </div>
+
+            {!isSidebarCollapsed && (
+              <div className="library-search-box" style={{ marginTop: "6px" }}>
+                <input
+                  type="text"
+                  placeholder="Search blocks..."
+                  value={blockSearch}
+                  onChange={(e) => setBlockSearch(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+
+          {!isSidebarCollapsed && (
+            <div className="library-scroll-area">
+              {blockCategories.map((cat) => {
+                const isOpen = openCategories[cat.name] ?? false;
+                const filteredBlocks = cat.blocks.filter((b) =>
+                  b.name.toLowerCase().includes(blockSearch.toLowerCase())
+                );
+                if (blockSearch && filteredBlocks.length === 0) return null;
+
+                return (
+                  <div key={cat.name} className="category-accordion">
+                    <div className="category-header-row" onClick={() => toggleCategory(cat.name)}>
+                      <span>{cat.name}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span className="category-badge">{cat.count}</span>
+                        {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      </div>
+                    </div>
+
+                    {isOpen && (
+                      <div className="category-blocks-grid">
+                        {filteredBlocks.map((b) => {
+                          const Icon = b.icon;
+                          return (
+                            <div
+                              key={b.id}
+                              className="block-tile"
+                              onClick={() => handleAddBlockToCanvas(b)}
+                              draggable={true}
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData("text/plain", b.id);
+                              }}
+                              style={{ cursor: "grab" }}
+                            >
+                              <Icon size={18} color="#10b981" />
+                              <span>{b.name}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* CENTER INFINITE CANVAS */}
+        <div
+          className={`infinite-canvas-wrapper ${isPanning ? "panning" : ""}`}
+          onMouseDown={handleMouseDownCanvas}
+          onMouseMove={handleMouseMoveCanvas}
+          onMouseUp={handleMouseUpCanvas}
+          onMouseLeave={handleMouseUpCanvas}
+          onWheel={handleWheelCanvas}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            const blockId = e.dataTransfer.getData("text/plain");
+            if (!blockId) return;
+
+            // Find the block config
+            let targetBlock: any = null;
+            for (const cat of blockCategories) {
+              const found = cat.blocks.find(b => b.id === blockId);
+              if (found) {
+                targetBlock = found;
+                break;
+              }
+            }
+            if (!targetBlock) return;
+
+            const rect = e.currentTarget.getBoundingClientRect();
+            const dropX = (e.clientX - rect.left - pan.x) / zoom;
+            const dropY = (e.clientY - rect.top - pan.y) / zoom;
+
+            handleAddBlockToCanvas(targetBlock, dropX, dropY);
+          }}
+          style={{ cursor: isPanning ? "grabbing" : "grab", position: "relative" }}
+        >
+          {/* EMPTY STATE BANNER WHEN ALL BOTS ARE DELETED */}
+          {nodes.length === 0 && !isLoadingFlows && (
+            <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", textAlign: "center", zIndex: 10, background: "#ffffff", padding: "36px 44px", borderRadius: "16px", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)", border: "1px solid #e2e8f0", maxWidth: "420px" }}>
+              <div style={{ width: "56px", height: "56px", borderRadius: "50%", background: "#ecfdf5", color: "#10b981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px auto" }}>
+                <Bot size={28} />
+              </div>
+              <h3 style={{ fontSize: "18px", fontWeight: 800, color: "#0f172a", margin: "0 0 8px 0" }}>No Chatbots Created</h3>
+              <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 24px 0", lineHeight: 1.5 }}>
+                You currently have no chatbot flows. Create your first chatbot from scratch or select a pre-built WATI / Galabox template!
+              </p>
+              <button className="studio-btn primary" style={{ padding: "10px 20px", fontSize: "13.5px", margin: "0 auto" }} onClick={() => setShowCreateModal(true)}>
+                <Plus size={16} /> ＋ Create First Chatbot
+              </button>
+            </div>
+          )}
+
+          {/* PAN-ZOOM INNER CONTAINER */}
+          <div
+            className="canvas-pan-zoom-container"
+            style={{
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: "0 0"
+            }}
+          >
+            {/* SVG CONNECTOR WIRES LAYER */}
+            <svg className="canvas-svg-layer">
+              {nodes.map((node) => {
+                if (node.outputPort) {
+                  const target = nodes.find((n) => n.id === node.outputPort);
+                  if (target) return <path key={`${node.id}_${target.id}`} d={getBezierPath(node, target)} />;
+                }
+                if (node.choices && Array.isArray(node.choices)) {
+                  return node.choices.map((c: any, idx: number) => {
+                    if (c.targetNode) {
+                      const targetChoiceNode = nodes.find((n) => n.id === c.targetNode);
+                      if (targetChoiceNode) {
+                        return <path key={`${node.id}_${c.id}`} d={getBezierPath(node, targetChoiceNode, idx)} className="active-path" />;
+                      }
+                    }
+                    return null;
+                  });
+                }
+                return null;
+              })}
+
+              {connectingFrom && connectingMousePos && (
+                <path
+                  d={getBezierFromTo(connectingFrom.startX, connectingFrom.startY, connectingMousePos.x, connectingMousePos.y)}
+                  className="connecting-active-wire"
+                />
+              )}
+            </svg>
+
+            {/* CONNECTION DELETE BUTTONS */}
+            {nodes.map((node) => {
+              const buttons: React.ReactNode[] = [];
+
+              if (node.outputPort) {
+                const target = nodes.find((n) => n.id === node.outputPort);
+                if (target) {
+                  const startFallback = { x: node.x + 260, y: node.y + 40 };
+                  const start = portCoords[`port-out-${node.id}`] || startFallback;
+                  const endFallback = { x: target.x, y: target.y + 40 };
+                  const end = portCoords[`port-in-${target.id}`] || endFallback;
+                  const midX = (start.x + end.x) / 2;
+                  const midY = (start.y + end.y) / 2;
+
+                  buttons.push(
+                    <div
+                      key={`del_${node.id}_${target.id}`}
+                      style={{
+                        position: "absolute",
+                        left: `${midX}px`,
+                        top: `${midY}px`,
+                        transform: "translate(-50%, -50%)",
+                        width: "18px",
+                        height: "18px",
+                        borderRadius: "50%",
+                        background: "#ef4444",
+                        color: "#ffffff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                        zIndex: 10,
+                        border: "1px solid #ffffff",
+                        userSelect: "none"
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteConnection(node.id, target.id);
+                      }}
+                      title="Delete connection"
+                    >
+                      ×
+                    </div>
+                  );
+                }
+              }
+
+              if (node.choices && Array.isArray(node.choices)) {
+                node.choices.forEach((c: any, idx: number) => {
+                  if (c.targetNode) {
+                    const target = nodes.find((n) => n.id === c.targetNode);
+                    if (target) {
+                      const startFallback = { x: node.x + 255, y: node.y + 140 + idx * 30 };
+                      const start = portCoords[`port-out-${node.id}-${c.id}`] || startFallback;
+                      const endFallback = { x: target.x, y: target.y + 40 };
+                      const end = portCoords[`port-in-${target.id}`] || endFallback;
+                      const midX = (start.x + end.x) / 2;
+                      const midY = (start.y + end.y) / 2;
+
+                      buttons.push(
+                        <div
+                          key={`del_${node.id}_${c.id}_${target.id}`}
+                          style={{
+                            position: "absolute",
+                            left: `${midX}px`,
+                            top: `${midY}px`,
+                            transform: "translate(-50%, -50%)",
+                            width: "18px",
+                            height: "18px",
+                            borderRadius: "50%",
+                            background: "#ef4444",
+                            color: "#ffffff",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+                            fontSize: "12px",
+                            fontWeight: "bold",
+                            zIndex: 10,
+                            border: "1px solid #ffffff",
+                            userSelect: "none"
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteConnection(node.id, target.id, c.id);
+                          }}
+                          title="Delete connection"
+                        >
+                          ×
+                        </div>
+                      );
+                    }
+                  }
+                });
+              }
+
+              return buttons;
+            })}
+
+            {/* RICH NODE CARDS ON CANVAS */}
+            {nodes.map((node) => {
+              const isSelected = node.id === selectedNodeId;
+              const isConnectingHover = hoveredTargetNodeId === node.id;
+              return (
+                <div
+                  key={node.id}
+                  className={`canvas-node-card ${isSelected ? "selected" : ""} ${isConnectingHover ? "connecting-target-hover" : ""}`}
+                  style={{
+                    left: `${node.x}px`,
+                    top: `${node.y}px`
+                  }}
+                  onMouseDown={(e) => handleMouseDownNode(e, node.id)}
+                  onMouseUp={(e) => {
+                    if (connectingFrom) {
+                      handleDropConnection(node.id, e);
+                    }
+                  }}
+                  onMouseEnter={() => {
+                    if (connectingFrom && connectingFrom.sourceNodeId !== node.id) {
+                      setHoveredTargetNodeId(node.id);
+                    }
+                  }}
+                  onMouseLeave={() => setHoveredTargetNodeId(null)}
+                >
+                  <div className={`node-card-header ${node.category || 'choice'}`}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <GripVertical size={13} style={{ opacity: 0.7 }} />
+                      <span>{node.title}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      <span
+                        title="Edit Node Settings"
+                        onClick={(e) => handleOpenNodeSettings(node.id, e)}
+                        style={{ cursor: "pointer", display: "inline-flex", background: "rgba(255,255,255,0.2)", padding: "3px", borderRadius: "4px" }}
+                      >
+                        <Settings size={12} />
+                      </span>
+                      <span title="Duplicate Node" onClick={(e) => handleDuplicateNode(node, e)} style={{ cursor: "pointer", display: "inline-flex" }}>
+                        <Copy size={12} />
+                      </span>
+                      <span title="Delete Node" onClick={(e) => handleDeleteNode(node.id, e)} style={{ cursor: "pointer", display: "inline-flex" }}>
+                        <Trash2 size={12} />
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="node-card-body">
+                    {/* TYPE-SPECIFIC VISUAL CONTENT BADGES & PREVIEWS */}
+                    {node.imageUrl && (
+                      <img src={node.imageUrl} alt="Banner" className="node-banner-img" onLoad={updatePortCoords} />
+                    )}
+
+                    {node.type === "VIDEO" && (
+                      <div style={{ background: "#0f172a", color: "#fff", padding: "8px 10px", borderRadius: "6px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                        <Video size={14} color="#10b981" />
+                        <span>Video: {node.videoUrl || 'Video media'}</span>
+                      </div>
+                    )}
+
+                    {node.type === "FILE" && (
+                      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                        <FileText size={14} color="#3b82f6" />
+                        <strong>{node.filename || 'Document.pdf'}</strong>
+                      </div>
+                    )}
+
+                    {node.type === "LOCATION" && (
+                      <div style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#92400e", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                        <MapPin size={14} color="#d97706" />
+                        <span>{node.locationName || 'Send Location'}</span>
+                      </div>
+                    )}
+
+                    {node.type === "CONTACT" && (
+                      <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                        <User size={14} color="#16a34a" />
+                        <span>{node.contactName} ({node.contactPhone})</span>
+                      </div>
+                    )}
+
+                    {node.type.startsWith("PAY_") && (
+                      <div style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", color: "#047857", padding: "6px 10px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                        <CreditCard size={14} />
+                        <span>Amount: ₹{node.amount || 0}</span>
+                      </div>
+                    )}
+
+                    {((node.type || "").toUpperCase() === "META_CTWA_AD" || (node.title || "").toLowerCase().includes("ctwa ad")) && (
+                      <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, marginBottom: "6px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <Sparkles size={13} />
+                          <span>Sync CTWA Ad ID & Campaign</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {((node.type || "").toUpperCase() === "META_CUSTOM_AUDIENCE" || (node.title || "").toLowerCase().includes("meta audience")) && (
+                      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, marginBottom: "6px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <Users size={13} />
+                          <span>Audience: {node.audienceName || node.existingAudienceId || 'WhatsApp Buyers'}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {((node.type || "").toUpperCase() === "META_TEMPLATE" || (node.title || "").toLowerCase().includes("meta template")) && (
+                      <div style={{ background: "#fdf4ff", border: "1px solid #f5d0fe", color: "#86198f", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, marginBottom: "6px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <Bot size={13} />
+                          <span>Template: {node.templateName || 'order_confirmation'}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {(node.type === "CRM_CONTACT" || node.type === "CRM_LEAD" || (node.type || "").toUpperCase() === "META_CAPI" || (node.title || "").toLowerCase().includes("meta capi")) && (
+                      <div style={{ background: "#e0e7ff", border: "1px solid #c7d2fe", color: "#3730a3", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, marginBottom: "6px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          {node.type === "META_CAPI" ? <Target size={13} /> : <UserCheck size={13} />}
+                          <span>{node.type === "META_CAPI" ? `Event: ${node.eventName || 'Lead'}` : `Stage: ${node.leadStage || 'Qualified'}`}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {(node.type === "CRM_ROUNDROBIN" || node.type === "START") && (
+                      <div style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", color: "#5b21b6", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, marginBottom: "6px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <Shuffle size={13} />
+                          <span>Assign: {
+                            node.assignmentMode === 'DIRECT' && node.agentId
+                              ? (availableAgents.find((a: any) => a.id === node.agentId)?.user?.name || 'Agent')
+                              : (
+                                  (node.assignmentMode !== 'DIRECT' && node.roundRobinTarget === 'TEAM' && node.teamId)
+                                    ? `Team: ${availableTeams.find((t: any) => t.id === node.teamId)?.name || 'Unknown'}`
+                                    : (node.assignmentMode !== 'DIRECT' && node.roundRobinTarget === 'AGENTS' && node.agentIds?.length > 0)
+                                      ? `${node.agentIds.length} Agents`
+                                      : 'Auto (Round Robin)'
+                                ) + (node.assignmentMode !== 'DIRECT' ? (node.distributionMethod === 'EQUAL_DISTRIBUTION' ? ' • Equal' : ' • Workload') : '')
+                          }</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {node.type === "CONDITION" && (
+                      <div style={{ background: "#fff7ed", border: "1px solid #ffedd5", color: "#9a3412", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", marginBottom: "6px" }}>
+                        <GitBranch size={13} style={{ marginBottom: "2px" }} />
+                        <div>If <strong>{node.variableName || 'var'}</strong> {node.operator || 'EQUALS'} "{node.compareValue || ''}"</div>
+                      </div>
+                    )}
+
+                    {node.type === "DELAY" && (
+                      <div style={{ background: "#f1f5f9", border: "1px solid #cbd5e1", color: "#334155", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                        <Clock size={14} color="#64748b" />
+                        <span>Delay: {node.delayValue || 5} {node.delayUnit || 'MINUTES'}</span>
+                      </div>
+                    )}
+
+                    {node.type === "SET_VAR" && (
+                      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", marginBottom: "6px" }}>
+                        <Sliders size={13} style={{ marginRight: "4px" }} />
+                        <span>Set <strong>{node.variableName || 'variable'}</strong> = "{node.variableValue || ''}"</span>
+                      </div>
+                    )}
+
+                    {node.type === "SPLIT_TEST" && (
+                      <div style={{ background: "#fdf4ff", border: "1px solid #e9d5ff", color: "#6b21a8", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", marginBottom: "6px" }}>
+                        <Shuffle size={13} style={{ marginRight: "4px" }} />
+                        <span>A/B Split: {node.splitRatio || '50/50'}</span>
+                      </div>
+                    )}
+
+                    {node.type === "JUMP" && (
+                      <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", marginBottom: "6px" }}>
+                        <CornerDownRight size={13} style={{ marginRight: "4px" }} />
+                        <span>Jump to: {node.targetNodeId ? nodes.find((n: any) => n.id === node.targetNodeId)?.title || node.targetNodeId : 'Not set'}</span>
+                      </div>
+                    )}
+
+                    {node.type === "WEBHOOK" && (
+                      <div style={{ background: "#fdf4ff", border: "1px solid #f5d0fe", color: "#86198f", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", marginBottom: "6px" }}>
+                        <Globe size={13} />
+                        <div><strong>{node.method || 'POST'}</strong> {node.webhookUrl || 'API URL'}</div>
+                      </div>
+                    )}
+
+                    {node.type === "AI_BOT" && (
+                      <div style={{ background: "#f0fdf4", border: "1px solid #86efac", color: "#166534", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", marginBottom: "6px" }}>
+                        <Bot size={13} />
+                        <div>AI Confidence Threshold: {node.confidenceThreshold || 85}%</div>
+                      </div>
+                    )}
+
+                    {node.text && <p className="node-text-preview">{node.text}</p>}
+
+                    {/* CHOICES LIST */}
+                    {node.choices && (
+                      <div className="node-choices-list" onMouseDown={(e) => e.stopPropagation()}>
+                        {node.choices.map((c: any, cIdx: number) => {
+                          const isLimitExceeded = (c.text || "").length >= 20;
+                          return (
+                            <div
+                              key={c.id}
+                              className="node-choice-item"
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ 
+                                border: isLimitExceeded ? "1px solid #ef4444" : undefined, 
+                                position: "relative",
+                                background: isLimitExceeded ? "#fef2f2" : undefined
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1 }}>
+                                <span className="choice-drag-dots">::</span>
+                                <span className="choice-num-badge">{cIdx + 1}</span>
+                                <input
+                                  type="text"
+                                  value={c.text}
+                                  maxLength={20}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => handleUpdateOptionText(node.id, c.id, e.target.value)}
+                                  style={{
+                                    border: "none",
+                                    background: "transparent",
+                                    fontSize: "11.5px",
+                                    fontWeight: 600,
+                                    color: isLimitExceeded ? "#991b1b" : "#334155",
+                                    width: "100%",
+                                    outline: "none"
+                                  }}
+                                />
+                              </div>
+
+                              <span
+                                title="Delete Option"
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => handleDeleteOptionFromNode(node.id, c.id, e)}
+                                style={{ cursor: "pointer", color: isLimitExceeded ? "#ef4444" : "#94a3b8", display: "inline-flex", padding: "2px" }}
+                              >
+                                <Trash2 size={11} />
+                              </span>
+
+                              {isLimitExceeded && (
+                                <span style={{
+                                  position: "absolute",
+                                  right: "26px",
+                                  top: "-8px",
+                                  background: "#ef4444",
+                                  color: "#ffffff",
+                                  fontSize: "8px",
+                                  padding: "1px 4px",
+                                  borderRadius: "4px",
+                                  fontWeight: 800,
+                                  boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
+                                  pointerEvents: "none"
+                                }}>
+                                  MAX CHARS!
+                                </span>
+                              )}
+
+                              <span
+                                id={`port-out-${node.id}-${c.id}`}
+                                className="choice-option-port"
+                                title="Click & Drag to connect this option to a node"
+                                onMouseDown={(e) => handleStartConnectWire(e, node.id, c.id, cIdx)}
+                              />
+                            </div>
+                          );
+                        })}
+
+                        <button
+                          className="add-card-option-btn"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => handleAddOptionToNode(node.id, e)}
+                        >
+                          <span>+ Add option</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {node.type !== "TRIGGER" && (
+                    <span
+                      id={`port-in-${node.id}`}
+                      className="node-input-port"
+                      title="Drop connection here to link to this node"
+                      onMouseUp={(e) => handleDropConnection(node.id, e)}
+                    />
+                  )}
+
+                  {node.type !== "END" && (
+                    <span
+                      id={`port-out-${node.id}`}
+                      className="node-output-port"
+                      title="Click & Drag to connect to next node"
+                      onMouseDown={(e) => handleStartConnectWire(e, node.id)}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* CANVAS CONTROLS */}
+          <div className="canvas-zoom-controls">
+            <button className="zoom-btn" onClick={() => setZoom(Math.min(1.4, zoom + 0.1))} title="Zoom In"><ZoomIn size={16} /></button>
+            <button className="zoom-btn" onClick={() => setZoom(Math.max(0.4, zoom - 0.1))} title="Zoom Out"><ZoomOut size={16} /></button>
+            <button className="zoom-btn" onClick={() => setPan({ x: 0, y: 0 })} title="Reset Center Pan">
+              <Hand size={16} color={pan.x !== 0 || pan.y !== 0 ? "#10b981" : "#475569"} />
+            </button>
+            <button className="zoom-btn" onClick={handleFitAllNodesToScreen} title="Fit All Blocks"><Focus size={16} color="#3b82f6" /></button>
+          </div>
+        </div>
+
+        {/* RICH TYPE-SPECIFIC PROPERTY EDITOR DRAWER */}
+        {selectedNode && isDrawerOpen && (
           <div className="node-editor-drawer">
             <div className="drawer-header-row">
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
