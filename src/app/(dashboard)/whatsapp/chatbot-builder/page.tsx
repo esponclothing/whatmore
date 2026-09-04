@@ -152,16 +152,24 @@ const blockCategories = [
     blocks: [
       { id: "crm_contact", name: "Update CRM Contact", icon: UserCheck },
       { id: "crm_lead", name: "Create Lead", icon: UserPlus },
-      { id: "meta_capi", name: "Meta CAPI Event", icon: Target },
       { id: "crm_roundrobin", name: "Assign Sales Rep", icon: Shuffle }
     ]
   },
   {
-    name: "AI & Meta",
-    count: 2,
+    name: "Meta Suite & Ads",
+    count: 4,
     blocks: [
-      { id: "ai_bot", name: "AI GPT Intent", icon: Bot },
-      { id: "meta_template", name: "Send Meta Template", icon: Sparkles }
+      { id: "meta_capi", name: "Meta CAPI Event", icon: Target },
+      { id: "meta_ctwa_ad", name: "CTWA Ad Attribution", icon: Sparkles },
+      { id: "meta_custom_audience", name: "Meta Audience Sync", icon: Users },
+      { id: "meta_template", name: "Send Meta Template", icon: Bot }
+    ]
+  },
+  {
+    name: "AI Automation",
+    count: 1,
+    blocks: [
+      { id: "ai_bot", name: "AI GPT Intent", icon: Bot }
     ]
   }
 ];
@@ -2431,7 +2439,7 @@ export default function WhatsAppChatbotBuilderPage() {
                         style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", resize: "none" }}
                       />
                     </div>
-                  ) : selectedNode.type !== "CRM_LEAD" ? (
+                  ) : (selectedNode.type !== "CRM_LEAD" && selectedNode.type !== "meta_capi" && (selectedNode.type || "").toUpperCase() !== "META_CAPI") ? (
                     <div>
                       <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Message / Description</label>
                       <textarea
@@ -2939,35 +2947,43 @@ export default function WhatsAppChatbotBuilderPage() {
                     )}
 
                     {(selectedNode.type || "").toUpperCase() === "META_CAPI" && (
-                      <>
-                        <div style={{ marginTop: "12px" }}>
-                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Meta CAPI Event</label>
+                      <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "12px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <Target size={16} style={{ color: "#2563eb" }} />
+                          <span style={{ fontSize: "13px", fontWeight: 700, color: "#1e293b" }}>Meta CAPI Event Setup</span>
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Meta CAPI Event Type</label>
                           <select
                             value={selectedNode.eventName || "Lead"}
                             onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, eventName: e.target.value } : n)))}
-                            style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                            style={{ width: "100%", padding: "7px 10px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff", fontWeight: 600 }}
                           >
-                            <option value="Lead">Lead</option>
-                            <option value="Contact">Contact</option>
-                            <option value="Purchase">Purchase</option>
-                            <option value="SubmitApplication">Submit Application</option>
-                            <option value="Schedule">Schedule</option>
-                            <option value="CompleteRegistration">Complete Registration</option>
+                            <option value="Lead">🎯 Lead (CTWA Conversion)</option>
+                            <option value="Purchase">💰 Purchase (Order Placed)</option>
+                            <option value="Contact">💬 Contact (New Inquiry)</option>
+                            <option value="SubmitApplication">📝 Submit Application</option>
+                            <option value="Schedule">📅 Schedule Appointment</option>
+                            <option value="CompleteRegistration">✅ Complete Registration</option>
+                            <option value="AddToCart">🛒 Add To Cart</option>
+                            <option value="ViewContent">👁️ View Content / Catalog</option>
                           </select>
                         </div>
-                        <div style={{ marginTop: "12px" }}>
-                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Meta Integration (Pixel & Token)</label>
+
+                        <div>
+                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Meta Integration (Pixel ID & Access Token)</label>
                           <select
                             value={selectedNode.integrationId || ""}
                             onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, integrationId: e.target.value } : n)))}
-                            style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                            style={{ width: "100%", padding: "7px 10px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
                           >
                             <option value="">-- Select Meta Integration --</option>
                             {integrations.filter(i => i.type === "META_CAPI").map(int => (
-                              <option key={int.id} value={int.id}>{int.name}</option>
+                              <option key={int.id} value={int.id}>{int.name} (Pixel: {int.url})</option>
                             ))}
                           </select>
-                          <div style={{ marginTop: "8px" }}>
+                          <div style={{ marginTop: "6px" }}>
                             <a
                               href="/whatsapp/integrations"
                               target="_blank"
@@ -2978,7 +2994,69 @@ export default function WhatsAppChatbotBuilderPage() {
                             </a>
                           </div>
                         </div>
-                      </>
+
+                        <div>
+                          <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Meta Test Event Code (Optional)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. TEST12345"
+                            value={selectedNode.testEventCode || ""}
+                            onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, testEventCode: e.target.value } : n)))}
+                            style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", fontFamily: "monospace" }}
+                          />
+                          <p style={{ fontSize: "10.5px", color: "#64748b", marginTop: "4px" }}>
+                            Found in <strong>Meta Events Manager → Test Events tab</strong> for real-time live testing.
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setToastMsg("⚡ Sending Test Event to Meta Pixel...");
+                            try {
+                              const res = await fetch("/api/whatsapp/test-meta-capi", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  integrationId: selectedNode.integrationId,
+                                  eventName: selectedNode.eventName || "Lead",
+                                  testEventCode: selectedNode.testEventCode
+                                })
+                              });
+                              const data = await res.json();
+                              if (data.success) {
+                                alert(`✅ VERIFIED WITH META!\n\n${data.message}\nPixel ID: ${data.pixelId}\nEvent: ${data.eventName}\nTrace ID: ${data.fbtraceId || 'N/A'}`);
+                                setToastMsg("✓ Meta Event verified successfully!");
+                              } else {
+                                alert(`❌ META TEST ERROR:\n\n${data.error}`);
+                                setToastMsg(`Error: ${data.error}`);
+                              }
+                            } catch (e: any) {
+                              alert(`❌ Network Error: ${e.message}`);
+                            }
+                            setTimeout(() => setToastMsg(null), 4000);
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "9px 12px",
+                            background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
+                            color: "#fff",
+                            fontWeight: 700,
+                            fontSize: "12px",
+                            border: "none",
+                            borderRadius: "7px",
+                            cursor: "pointer",
+                            boxShadow: "0 2px 4px rgba(37,99,235,0.2)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px",
+                            marginTop: "4px"
+                          }}
+                        >
+                          ⚡ Test & Verify Event Fire to Meta Now
+                        </button>
+                      </div>
                     )}
 
                     {((selectedNode.type || "").toUpperCase() === "CRM_ROUNDROBIN" || (selectedNode.type || "").toUpperCase() === "START") && (
