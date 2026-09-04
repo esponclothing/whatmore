@@ -433,6 +433,8 @@ export default function WhatsAppChatbotBuilderPage() {
   // Canvas Node State
   const [nodes, setNodes] = useState<any[]>(BOT_TEMPLATES[0].nodes);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
+  const [copiedNodesBuffer, setCopiedNodesBuffer] = useState<any[]>([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [openCategories, setOpenCategories] = useState<{ [key: string]: boolean }>({ Messages: true, Choices: true });
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
@@ -714,14 +716,19 @@ export default function WhatsAppChatbotBuilderPage() {
 
   const handleCopyJsonFlow = async () => {
     if (nodes.length === 0) return;
-    const exportData = {
+    let nodesToCopy = nodes.filter((n) => selectedNodeIds.has(n.id) || selectedNodeId === n.id);
+    if (nodesToCopy.length === 0) {
+      nodesToCopy = nodes;
+    }
+    const exportData = nodesToCopy.length === nodes.length ? {
       name: flowName,
       triggerKeyword: triggerKeyword,
       nodes: nodes
-    };
+    } : nodesToCopy;
+
     try {
       await navigator.clipboard.writeText(JSON.stringify(exportData, null, 2));
-      setToastMsg("📋 JSON copied to clipboard!");
+      setToastMsg(`📋 ${nodesToCopy.length === nodes.length ? "Full workflow" : nodesToCopy.length + " selected block(s)"} copied to clipboard!`);
       setTimeout(() => setToastMsg(null), 3000);
     } catch (err) {
       console.error("Failed to copy JSON:", err);
@@ -873,8 +880,29 @@ export default function WhatsAppChatbotBuilderPage() {
       setShowCreateModal(false);
       setNewBotNameInput("");
       setNewBotKeywordInput("");
+
+      // Immediately mount the newly created bot on the canvas
+      const newNodes = template.nodes;
+      setCurrentFlowId(res.flow.id);
+      setFlowName(res.flow.name);
+      setTriggerKeyword(res.flow.triggerKeyword || botKeyword);
+      setIsBotActive(true);
+      setLastSavedFlowName(res.flow.name);
+      setLastSavedTriggerKeyword(res.flow.triggerKeyword || botKeyword);
+      setLastSavedIsBotActive(true);
+      setNodes(newNodes);
+      setHistoryStack([newNodes]);
+      setHistoryIndex(0);
+      setSelectedNodeId(null);
+      setSelectedNodeIds(new Set());
+      setIsDrawerOpen(false);
+      setLastSavedNodesJson(JSON.stringify(newNodes));
+
+      if (typeof window !== "undefined") {
+        window.history.pushState(null, "", `/whatsapp/chatbot-builder?flowId=${res.flow.id}`);
+      }
+
       await fetchFlows();
-      handleSelectFlow(res.flow.id);
     } else {
       setToastMsg(`Error creating chatbot: ${res.error}`);
     }
@@ -1386,6 +1414,10 @@ export default function WhatsAppChatbotBuilderPage() {
       return;
     }
 
+    setSelectedNodeId(null);
+    setSelectedNodeIds(new Set());
+    setIsDrawerOpen(false);
+
     setIsPanning(true);
     setPanStart({
       x: e.clientX - pan.x,
@@ -1397,6 +1429,19 @@ export default function WhatsAppChatbotBuilderPage() {
     e.stopPropagation();
     setDragStartPos({ x: e.clientX, y: e.clientY });
     setDraggingNodeId(id);
+
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      setSelectedNodeIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    } else {
+      setSelectedNodeIds(new Set([id]));
+      setSelectedNodeId(id);
+    }
+
     const targetNode = nodes.find((n) => n.id === id);
     if (targetNode) {
       setDragOffset({
@@ -1546,16 +1591,217 @@ export default function WhatsAppChatbotBuilderPage() {
     }
   };
 
-  const handleDeleteNode = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const updated = nodes.filter((n) => n.id !== id);
+  const handleDeleteSelectedNodes = () => {
+    const idsToDelete = new Set<string>();
+    if (selectedNodeId) idsToDelete.add(selectedNodeId);
+    selectedNodeIds.forEach((id) => idsToDelete.add(id));
+
+    if (idsToDelete.size === 0) return;
+
+    const count = idsToDelete.size;
+    const updated = nodes
+      .filter((n) => !idsToDelete.has(n.id))
+      .map((n) => {
+        let outputPort = n.outputPort;
+        if (outputPort && idsToDelete.has(outputPort)) {
+          outputPort = null;
+        }
+        let choices = n.choices;
+        if (Array.isArray(choices)) {
+          choices = choices.map((c: any) =>
+            c.targetNode && idsToDelete.has(c.targetNode) ? { ...c, targetNode: null } : c
+          );
+        }
+        return { ...n, outputPort, choices };
+      });
+
+    setNodes(updated);
+    pushHistory(updated);
+    setSelectedNodeId(null);
+    setSelectedNodeIds(new Set());
+    setIsDrawerOpen(false);
+    setToastMsg(`✓ Deleted ${count} block(s) / workflow!`);
+    setTimeout(() => setToastMsg(null), 2500);
+  };
+
+  const handleDeleteNode = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const updated = nodes
+      .filter((n) => n.id !== id)
+      .map((n) => {
+        let outputPort = n.outputPort === id ? null : n.outputPort;
+        let choices = n.choices;
+        if (Array.isArray(choices)) {
+          choices = choices.map((c: any) => (c.targetNode === id ? { ...c, targetNode: null } : c));
+        }
+        return { ...n, outputPort, choices };
+      });
+
     setNodes(updated);
     pushHistory(updated);
     if (selectedNodeId === id) {
       setSelectedNodeId(null);
       setIsDrawerOpen(false);
     }
+    setSelectedNodeIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setToastMsg("✓ Block deleted successfully!");
+    setTimeout(() => setToastMsg(null), 2000);
   };
+
+  const handlePasteWorkflow = async () => {
+    try {
+      let sourceData: any[] = [];
+      try {
+        const clipText = await navigator.clipboard.readText();
+        if (clipText && clipText.trim().startsWith("[")) {
+          const parsed = JSON.parse(clipText);
+          if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].id) {
+            sourceData = parsed;
+          }
+        } else if (clipText && clipText.trim().startsWith("{")) {
+          const parsed = JSON.parse(clipText);
+          if (Array.isArray(parsed.nodes)) {
+            sourceData = parsed.nodes;
+          }
+        }
+      } catch (_) {}
+
+      if (sourceData.length === 0 && copiedNodesBuffer.length > 0) {
+        sourceData = copiedNodesBuffer;
+      }
+
+      if (sourceData.length === 0) {
+        setToastMsg("⚠️ Clipboard is empty or contains invalid node JSON.");
+        setTimeout(() => setToastMsg(null), 3000);
+        return;
+      }
+
+      const idMap: { [key: string]: string } = {};
+      const now = Date.now();
+      sourceData.forEach((node, idx) => {
+        idMap[node.id] = `node_${now}_${idx}_${Math.floor(Math.random() * 1000)}`;
+      });
+
+      const pastedNodes = sourceData.map((node) => {
+        const newId = idMap[node.id];
+        let newOutputPort = node.outputPort;
+        if (newOutputPort && idMap[newOutputPort]) {
+          newOutputPort = idMap[newOutputPort];
+        } else if (newOutputPort && !nodes.some((existing) => existing.id === newOutputPort)) {
+          newOutputPort = null;
+        }
+
+        let newChoices = node.choices;
+        if (Array.isArray(newChoices)) {
+          newChoices = newChoices.map((choice: any) => {
+            let newTarget = choice.targetNode;
+            if (newTarget && idMap[newTarget]) {
+              newTarget = idMap[newTarget];
+            } else if (newTarget && !nodes.some((existing) => existing.id === newTarget)) {
+              newTarget = null;
+            }
+            return { ...choice, targetNode: newTarget };
+          });
+        }
+
+        return {
+          ...node,
+          id: newId,
+          x: (node.x || 100) + 40,
+          y: (node.y || 100) + 40,
+          outputPort: newOutputPort,
+          choices: newChoices
+        };
+      });
+
+      const updated = [...nodes, ...pastedNodes];
+      setNodes(updated);
+      pushHistory(updated);
+
+      const newSelectedIds = new Set(pastedNodes.map((n) => n.id));
+      setSelectedNodeIds(newSelectedIds);
+      if (pastedNodes.length > 0) {
+        setSelectedNodeId(pastedNodes[0].id);
+      }
+
+      setToastMsg(`✓ Pasted ${pastedNodes.length} block(s) into workflow!`);
+      setTimeout(() => setToastMsg(null), 3000);
+    } catch (e) {
+      console.error("Paste error:", e);
+      setToastMsg("❌ Failed to paste workflow JSON.");
+      setTimeout(() => setToastMsg(null), 3000);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable ||
+          target.closest("input") ||
+          target.closest("textarea"));
+
+      const isCtrl = e.ctrlKey || e.metaKey;
+
+      // Ctrl + A -> Select All Nodes on Canvas
+      if (isCtrl && (e.key === "a" || e.key === "A")) {
+        if (!isInput) {
+          e.preventDefault();
+          const allIds = new Set(nodes.map((n) => n.id));
+          setSelectedNodeIds(allIds);
+          if (nodes.length > 0) {
+            setSelectedNodeId(nodes[0].id);
+          }
+          setToastMsg(`✓ Selected all ${nodes.length} nodes!`);
+          setTimeout(() => setToastMsg(null), 2000);
+        }
+        return;
+      }
+
+      // Ctrl + C -> Copy Selected Nodes
+      if (isCtrl && (e.key === "c" || e.key === "C")) {
+        if (!isInput) {
+          e.preventDefault();
+          let nodesToCopy = nodes.filter((n) => selectedNodeIds.has(n.id) || selectedNodeId === n.id);
+          if (nodesToCopy.length === 0) {
+            nodesToCopy = nodes;
+          }
+          const jsonStr = JSON.stringify(nodesToCopy, null, 2);
+          setCopiedNodesBuffer(nodesToCopy);
+          navigator.clipboard.writeText(jsonStr).catch(() => {});
+          setToastMsg(`✓ Copied ${nodesToCopy.length} node(s) to clipboard!`);
+          setTimeout(() => setToastMsg(null), 2500);
+        }
+        return;
+      }
+
+      // Ctrl + V -> Paste Nodes
+      if (isCtrl && (e.key === "v" || e.key === "V")) {
+        if (!isInput) {
+          e.preventDefault();
+          handlePasteWorkflow();
+        }
+        return;
+      }
+
+      // Delete / Backspace -> Delete Selected Nodes
+      if ((e.key === "Delete" || e.key === "Backspace") && !isInput) {
+        e.preventDefault();
+        handleDeleteSelectedNodes();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [nodes, selectedNodeId, selectedNodeIds, copiedNodesBuffer]);
 
   const handleDuplicateNode = (node: any, e: React.MouseEvent) => {
     e.stopPropagation();
