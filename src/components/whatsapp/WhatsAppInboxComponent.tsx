@@ -299,16 +299,31 @@ export default function WhatsAppInboxComponent() {
     return Array.from(new Set([...t1, ...t2])).filter(t => !isAuto(t));
   }, [activeConvDetail?.tags, activeConvDetail?.customer?.tags]);
 
-  // Extract Meta Click-to-WhatsApp (CTWA) Ad Referral details
-  const ctwaReferral = useMemo(() => {
-    if (!activeConvDetail?.messages) return null;
-    const sysRefMsg = activeConvDetail.messages.find((m: any) => m.senderName === "META_CTWA_AD" || (m.metadata && (m.metadata.includes("headline") || m.metadata.includes("source_id"))));
-    if (!sysRefMsg) return null;
-    try {
-      return typeof sysRefMsg.metadata === "string" ? JSON.parse(sysRefMsg.metadata) : sysRefMsg.metadata;
-    } catch (_) {
-      return null;
-    }
+  // Sort messages so that META_CTWA_AD messages are placed immediately before the customer message that triggered them
+  const sortedMessages = useMemo(() => {
+    if (!activeConvDetail?.messages) return [];
+    const msgs = [...activeConvDetail.messages];
+
+    msgs.sort((a: any, b: any) => {
+      const isAAd = a.senderName === "META_CTWA_AD" || a.messageType === "META_CTWA_AD";
+      const isBAd = b.senderName === "META_CTWA_AD" || b.messageType === "META_CTWA_AD";
+      let timeA = new Date(a.sentAt).getTime();
+      let timeB = new Date(b.sentAt).getTime();
+
+      // If one is Ad referral and the other is Customer incoming message within 30s, force Ad referral before customer message
+      if (isAAd && b.senderType === "CUSTOMER" && Math.abs(timeA - timeB) <= 30000) {
+        return -1;
+      }
+      if (isBAd && a.senderType === "CUSTOMER" && Math.abs(timeA - timeB) <= 30000) {
+        return 1;
+      }
+      if (timeA !== timeB) return timeA - timeB;
+      if (isAAd) return -1;
+      if (isBAd) return 1;
+      return 0;
+    });
+
+    return msgs;
   }, [activeConvDetail?.messages]);
 
   // Quote Form State
@@ -1769,38 +1784,122 @@ export default function WhatsAppInboxComponent() {
               </div>
             </div>
 
-            {/* Meta CTWA Ad Attribution Banner */}
-            {ctwaReferral && (
-              <div style={{ margin: "10px 16px 2px 16px", padding: "12px 16px", background: "linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%)", borderRadius: "12px", border: "1px solid #c7d2fe", display: "flex", alignItems: "center", justifyContent: "space-between", boxShadow: "0 2px 4px rgba(0,0,0,0.02)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#4f46e5", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "12px" }}>
-                    🎯 AD
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "11px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.5px", color: "#4338ca" }}>
-                      Meta Click-to-WhatsApp Ad Referral
-                    </div>
-                    <div style={{ fontSize: "13px", fontWeight: "700", color: "#1e1b4b" }}>
-                      "{ctwaReferral.headline || "Click-to-WhatsApp Ad"}"
-                    </div>
-                    <div style={{ fontSize: "11px", color: "#4338ca", marginTop: "2px" }}>
-                      Ad ID: <code style={{ fontWeight: "700", background: "#e0e7ff", padding: "1px 5px", borderRadius: "4px" }}>{ctwaReferral.source_id || "META_AD"}</code> {ctwaReferral.body && `• ${ctwaReferral.body.slice(0, 50)}...`}
-                    </div>
-                  </div>
-                </div>
-                {ctwaReferral.source_url && (
-                  <a href={ctwaReferral.source_url} target="_blank" rel="noreferrer" style={{ fontSize: "12px", fontWeight: "700", color: "#4338ca", background: "white", padding: "6px 12px", borderRadius: "8px", border: "1px solid #c7d2fe", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                    View Ad on Meta ↗
-                  </a>
-                )}
-              </div>
-            )}
-
             {/* Messages Scroll Area */}
             <div className="chat-messages-container" ref={chatMessagesContainerRef}>
-              {activeConvDetail.messages?.map((msg: any) => {
+              {sortedMessages?.map((msg: any) => {
                 const isAgent = msg.senderType === "AGENT" || msg.senderType === "BOT" || msg.senderType === "AI";
                 const isInternal = msg.isInternalNote;
+
+                // Render Meta CTWA Ad Referral Card inside the chat stream
+                if (msg.senderName === "META_CTWA_AD" || msg.messageType === "META_CTWA_AD") {
+                  let metaDataObj: any = {};
+                  try {
+                    metaDataObj = typeof msg.metadata === "string" ? JSON.parse(msg.metadata) : (msg.metadata || {});
+                  } catch (_) {}
+
+                  const headline = metaDataObj.headline || "Click-to-WhatsApp Ad";
+                  const body = metaDataObj.body || "";
+                  const sourceId = metaDataObj.source_id || "META_AD";
+                  const sourceUrl = metaDataObj.source_url || "";
+                  const mediaUrl = metaDataObj.image_url || metaDataObj.video_url || "";
+
+                  return (
+                    <div key={msg.id} style={{ display: "flex", justifyContent: "center", margin: "14px 0" }}>
+                      <div style={{
+                        maxWidth: "92%",
+                        width: "440px",
+                        background: "linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%)",
+                        border: "1px solid #c7d2fe",
+                        borderRadius: "16px",
+                        padding: "14px 16px",
+                        boxShadow: "0 4px 12px rgba(79, 70, 229, 0.08)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "10px"
+                      }}>
+                        {/* Header Badge */}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <div style={{
+                              width: "28px",
+                              height: "28px",
+                              borderRadius: "8px",
+                              background: "#2563eb",
+                              color: "white",
+                              display: "flex",
+                              alignItems: "center",
+                              justify: "center",
+                              fontSize: "12px",
+                              fontWeight: "bold"
+                            }}>
+                              🎯
+                            </div>
+                            <div>
+                              <span style={{ fontSize: "11px", fontWeight: 800, color: "#1d4ed8", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                META AD REFERRAL
+                              </span>
+                              <div style={{ fontSize: "10px", color: "#475569" }}>
+                                Customer clicked this ad on Meta
+                              </div>
+                            </div>
+                          </div>
+                          <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 500 }}>
+                            {new Date(msg.sentAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+
+                        {/* Optional Ad Image / Media Thumbnail */}
+                        {mediaUrl && (
+                          <img
+                            src={mediaUrl}
+                            alt="Meta Ad Media"
+                            style={{ width: "100%", maxHeight: "160px", objectFit: "cover", borderRadius: "10px", border: "1px solid #dbeafe" }}
+                          />
+                        )}
+
+                        {/* Ad Body Content */}
+                        <div style={{ background: "white", padding: "10px 12px", borderRadius: "10px", border: "1px solid #e0e7ff" }}>
+                          <div style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a", marginBottom: "4px" }}>
+                            "{headline}"
+                          </div>
+                          {body && (
+                            <div style={{ fontSize: "12px", color: "#475569", lineHeight: "1.4" }}>
+                              {body}
+                            </div>
+                          )}
+                          <div style={{ fontSize: "10.5px", color: "#64748b", marginTop: "6px" }}>
+                            Ad ID: <code style={{ background: "#f1f5f9", padding: "1px 5px", borderRadius: "4px", fontWeight: 600 }}>{sourceId}</code>
+                          </div>
+                        </div>
+
+                        {/* Action Button */}
+                        {sourceUrl && (
+                          <a
+                            href={sourceUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              textAlign: "center",
+                              background: "#2563eb",
+                              color: "white",
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              padding: "8px 12px",
+                              borderRadius: "8px",
+                              textDecoration: "none",
+                              display: "flex",
+                              alignItems: "center",
+                              justify: "center",
+                              gap: "4px"
+                            }}
+                          >
+                            View Ad on Meta ↗
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
 
                 if (isInternal) {
                   return (

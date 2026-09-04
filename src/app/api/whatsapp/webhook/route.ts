@@ -316,11 +316,11 @@ export async function POST(req: NextRequest) {
             conversationId: conversation.id,
             senderType: "SYSTEM",
             senderName: "META_CTWA_AD",
-            messageType: "TEXT",
+            messageType: "META_CTWA_AD",
             content: `🎯 Meta CTWA Ad Referral: "${ctwaMetadata.headline}" (Ad ID: ${ctwaMetadata.source_id})`,
             metadata: JSON.stringify(ctwaMetadata),
             status: "SENT",
-            sentAt: new Date()
+            sentAt: new Date(messageTimestamp.getTime() - 1000)
           }
         }).catch(() => {});
       }
