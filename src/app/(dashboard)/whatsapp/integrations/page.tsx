@@ -954,7 +954,7 @@ const reloadTeams = async () => {
                             <ol className="list-decimal list-inside text-slate-600 space-y-0.5 text-[11px]">
                               <li>Under System User, click <strong>Generate New Token</strong>.</li>
                               <li>Select your <strong>Meta App</strong> from Step 1.</li>
-                              <li>Check <code>ads_management</code> & <code>event_management</code>.</li>
+                              <li>Select permissions: <code>ads_management</code>, <code>ads_read</code>, <code>business_management</code>.</li>
                               <li>Copy the permanent token starting with <code>EAAI...</code>.</li>
                             </ol>
                           </div>
