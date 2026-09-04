@@ -2175,7 +2175,34 @@ export default function WhatsAppChatbotBuilderPage() {
                       </div>
                     )}
 
-                    {(node.type === "CRM_CONTACT" || node.type === "CRM_LEAD" || node.type === "META_CAPI") && (
+                    {((node.type || "").toUpperCase() === "META_CTWA_AD" || (node.title || "").toLowerCase().includes("ctwa ad")) && (
+                      <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, marginBottom: "6px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <Sparkles size={13} />
+                          <span>Sync CTWA Ad ID & Campaign</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {((node.type || "").toUpperCase() === "META_CUSTOM_AUDIENCE" || (node.title || "").toLowerCase().includes("meta audience")) && (
+                      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, marginBottom: "6px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <Users size={13} />
+                          <span>Audience: {node.audienceName || node.existingAudienceId || 'WhatsApp Buyers'}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {((node.type || "").toUpperCase() === "META_TEMPLATE" || (node.title || "").toLowerCase().includes("meta template")) && (
+                      <div style={{ background: "#fdf4ff", border: "1px solid #f5d0fe", color: "#86198f", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, marginBottom: "6px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <Bot size={13} />
+                          <span>Template: {node.templateName || 'order_confirmation'}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {(node.type === "CRM_CONTACT" || node.type === "CRM_LEAD" || (node.type || "").toUpperCase() === "META_CAPI" || (node.title || "").toLowerCase().includes("meta capi")) && (
                       <div style={{ background: "#e0e7ff", border: "1px solid #c7d2fe", color: "#3730a3", padding: "6px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, marginBottom: "6px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                           {node.type === "META_CAPI" ? <Target size={13} /> : <UserCheck size={13} />}
@@ -2426,6 +2453,252 @@ export default function WhatsAppChatbotBuilderPage() {
                   />
                 </div>
 
+                {/* --- META CAPI EVENT PANEL (TOP OF DRAWER) --- */}
+                {((selectedNode.type || "").toUpperCase() === "META_CAPI" || (selectedNode.type || "").toLowerCase() === "meta_capi" || (selectedNode.title || "").toLowerCase().includes("meta capi")) && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px", background: "#f8fafc", border: "1.5px solid #cbd5e1", borderRadius: "10px", padding: "14px", marginTop: "4px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Target size={16} style={{ color: "#2563eb" }} />
+                      <span style={{ fontSize: "13px", fontWeight: 800, color: "#0f172a" }}>Meta CAPI Event Configuration</span>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Select Meta CAPI Event to Fire</label>
+                      <select
+                        value={selectedNode.eventName || "Lead"}
+                        onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, eventName: e.target.value } : n)))}
+                        style={{ width: "100%", padding: "8px 10px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff", fontWeight: 700 }}
+                      >
+                        <option value="Lead">🎯 Lead (CTWA Lead Conversion)</option>
+                        <option value="Purchase">💰 Purchase (Order Placed)</option>
+                        <option value="Contact">💬 Contact (New Inquiry)</option>
+                        <option value="SubmitApplication">📝 Submit Application</option>
+                        <option value="Schedule">📅 Schedule Appointment</option>
+                        <option value="CompleteRegistration">✅ Complete Registration</option>
+                        <option value="AddToCart">🛒 Add To Cart</option>
+                        <option value="ViewContent">👁️ View Content / Catalog</option>
+                      </select>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                      <div>
+                        <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>Event Currency</label>
+                        <select
+                          value={selectedNode.currency || "INR"}
+                          onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, currency: e.target.value } : n)))}
+                          style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                        >
+                          <option value="INR">INR (₹)</option>
+                          <option value="USD">USD ($)</option>
+                          <option value="EUR">EUR (€)</option>
+                          <option value="GBP">GBP (£)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>Event Value (Optional)</label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 5000"
+                          value={selectedNode.eventValue || ""}
+                          onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, eventValue: parseFloat(e.target.value) || 0 } : n)))}
+                          style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px" }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Meta Integration (Pixel & Token)</label>
+                      <select
+                        value={selectedNode.integrationId || ""}
+                        onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, integrationId: e.target.value } : n)))}
+                        style={{ width: "100%", padding: "8px 10px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", background: "#fff" }}
+                      >
+                        <option value="">-- Select Meta Integration --</option>
+                        {integrations.filter(i => i.type === "META_CAPI").map(int => (
+                          <option key={int.id} value={int.id}>{int.name} (Pixel: {int.url})</option>
+                        ))}
+                      </select>
+                      <div style={{ marginTop: "6px" }}>
+                        <a
+                          href="/whatsapp/integrations"
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ fontSize: "11px", color: "#2563eb", fontWeight: 600, textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                        >
+                          + Add or Manage Meta Pixel Credentials in Integrations ↗
+                        </a>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Meta Test Event Code (For Real-Time Testing)</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. TEST12345"
+                        value={selectedNode.testEventCode || ""}
+                        onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, testEventCode: e.target.value } : n)))}
+                        style={{ width: "100%", padding: "7px 10px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", fontFamily: "monospace" }}
+                      />
+                      <p style={{ fontSize: "10.5px", color: "#64748b", marginTop: "4px" }}>
+                        Copy from <strong>Meta Events Manager → Test Events tab</strong> to see instant live hits.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setToastMsg("⚡ Sending Test Event to Meta Pixel...");
+                        try {
+                          const res = await fetch("/api/whatsapp/test-meta-capi", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              integrationId: selectedNode.integrationId,
+                              eventName: selectedNode.eventName || "Lead",
+                              testEventCode: selectedNode.testEventCode
+                            })
+                          });
+                          const data = await res.json();
+                          if (data.success) {
+                            alert(`✅ VERIFIED WITH META!\n\n${data.message}\nPixel ID: ${data.pixelId}\nEvent: ${data.eventName}\nTrace ID: ${data.fbtraceId || 'N/A'}`);
+                            setToastMsg("✓ Meta Event verified successfully!");
+                          } else {
+                            alert(`❌ META TEST ERROR:\n\n${data.error}`);
+                            setToastMsg(`Error: ${data.error}`);
+                          }
+                        } catch (e: any) {
+                          alert(`❌ Network Error: ${e.message}`);
+                        }
+                        setTimeout(() => setToastMsg(null), 4000);
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
+                        color: "#fff",
+                        fontWeight: 800,
+                        fontSize: "12.5px",
+                        border: "none",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        boxShadow: "0 2px 6px rgba(37,99,235,0.25)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                        marginTop: "4px"
+                      }}
+                    >
+                      ⚡ Test & Verify Event Fire to Meta Now
+                    </button>
+                  </div>
+                )}
+
+                {/* --- META CTWA AD ATTRIBUTION PANEL (TOP OF DRAWER) --- */}
+                {((selectedNode.type || "").toUpperCase() === "META_CTWA_AD" || (selectedNode.title || "").toLowerCase().includes("ctwa ad")) && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px", background: "#f0fdf4", border: "1.5px solid #bbf7d0", borderRadius: "10px", padding: "14px", marginTop: "4px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Sparkles size={16} style={{ color: "#166534" }} />
+                      <span style={{ fontSize: "13px", fontWeight: 800, color: "#14532d" }}>CTWA Ad Attribution Settings</span>
+                    </div>
+                    <p style={{ fontSize: "11px", color: "#166534" }}>
+                      Reads incoming referral data from Meta Click-to-WhatsApp Ads (Ad ID, Campaign Name, Headline) and binds it to conversation.
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <label style={{ fontSize: "11.5px", display: "flex", alignItems: "center", gap: "6px", color: "#14532d", fontWeight: 600 }}>
+                        <input type="checkbox" checked={selectedNode.captureAdId !== false} onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, captureAdId: e.target.checked } : n)))} />
+                        Capture Meta Ad ID & Adset ID
+                      </label>
+                      <label style={{ fontSize: "11.5px", display: "flex", alignItems: "center", gap: "6px", color: "#14532d", fontWeight: 600 }}>
+                        <input type="checkbox" checked={selectedNode.captureCampaignName !== false} onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, captureCampaignName: e.target.checked } : n)))} />
+                        Capture Campaign Name & Source
+                      </label>
+                      <label style={{ fontSize: "11.5px", display: "flex", alignItems: "center", gap: "6px", color: "#14532d", fontWeight: 600 }}>
+                        <input type="checkbox" checked={selectedNode.captureHeadline !== false} onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, captureHeadline: e.target.checked } : n)))} />
+                        Capture Ad Headline & Image Thumbnail
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {/* --- META AUDIENCE SYNC PANEL (TOP OF DRAWER) --- */}
+                {((selectedNode.type || "").toUpperCase() === "META_CUSTOM_AUDIENCE" || (selectedNode.title || "").toLowerCase().includes("meta audience")) && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px", background: "#eff6ff", border: "1.5px solid #bfdbfe", borderRadius: "10px", padding: "14px", marginTop: "4px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Users size={16} style={{ color: "#1d4ed8" }} />
+                      <span style={{ fontSize: "13px", fontWeight: 800, color: "#1e3a8a" }}>Meta Custom Audience Retargeting Sync</span>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#1e3a8a" }}>Audience Action</label>
+                      <select
+                        value={selectedNode.audienceMode || "EXISTING"}
+                        onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, audienceMode: e.target.value } : n)))}
+                        style={{ width: "100%", padding: "7px 10px", fontSize: "12px", border: "1px solid #93c5fd", borderRadius: "6px", marginTop: "4px", background: "#fff", fontWeight: 700 }}
+                      >
+                        <option value="EXISTING">🔗 Add to Existing Meta Custom Audience</option>
+                        <option value="NEW">➕ Create New Meta Custom Audience</option>
+                      </select>
+                    </div>
+
+                    {selectedNode.audienceMode === "NEW" ? (
+                      <div>
+                        <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#1e3a8a" }}>New Custom Audience Name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. WhatsApp Wholesale Buyers 2026"
+                          value={selectedNode.audienceName || ""}
+                          onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, audienceName: e.target.value } : n)))}
+                          style={{ width: "100%", padding: "7px 10px", fontSize: "12px", border: "1px solid #93c5fd", borderRadius: "6px", marginTop: "4px" }}
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#1e3a8a" }}>Existing Meta Custom Audience ID</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 23859201938"
+                          value={selectedNode.existingAudienceId || ""}
+                          onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, existingAudienceId: e.target.value } : n)))}
+                          style={{ width: "100%", padding: "7px 10px", fontSize: "12px", border: "1px solid #93c5fd", borderRadius: "6px", marginTop: "4px", fontFamily: "monospace" }}
+                        />
+                        <p style={{ fontSize: "10.5px", color: "#3b82f6", marginTop: "4px" }}>
+                          Found in <strong>Meta Ads Manager → Audiences tab</strong>.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* --- META TEMPLATE PANEL (TOP OF DRAWER) --- */}
+                {((selectedNode.type || "").toUpperCase() === "META_TEMPLATE" || (selectedNode.title || "").toLowerCase().includes("meta template")) && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px", background: "#fdf4ff", border: "1.5px solid #f5d0fe", borderRadius: "10px", padding: "14px", marginTop: "4px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Bot size={16} style={{ color: "#a21caf" }} />
+                      <span style={{ fontSize: "13px", fontWeight: 800, color: "#701a75" }}>Send Approved Meta WhatsApp Template</span>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#701a75" }}>Template Name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. order_confirmation_v2"
+                        value={selectedNode.templateName || ""}
+                        onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, templateName: e.target.value } : n)))}
+                        style={{ width: "100%", padding: "7px 10px", fontSize: "12px", border: "1px solid #f0abfc", borderRadius: "6px", marginTop: "4px", fontFamily: "monospace" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#701a75" }}>Language Code</label>
+                      <input
+                        type="text"
+                        placeholder="en_US or hi_IN"
+                        value={selectedNode.language || "en_US"}
+                        onChange={(e) => setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, language: e.target.value } : n)))}
+                        style={{ width: "100%", padding: "7px 10px", fontSize: "12px", border: "1px solid #f0abfc", borderRadius: "6px", marginTop: "4px" }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {selectedNode.type === "TRIGGER" ? (
                     <div>
                       <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Trigger Keywords (Comma Separated)</label>
@@ -2439,7 +2712,7 @@ export default function WhatsAppChatbotBuilderPage() {
                         style={{ width: "100%", padding: "6px 8px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", marginTop: "4px", resize: "none" }}
                       />
                     </div>
-                  ) : (selectedNode.type !== "CRM_LEAD" && selectedNode.type !== "meta_capi" && (selectedNode.type || "").toUpperCase() !== "META_CAPI" && !(selectedNode.title || "").toLowerCase().includes("meta capi")) ? (
+                  ) : (selectedNode.type !== "CRM_LEAD" && !["META_CAPI", "META_CTWA_AD", "META_CUSTOM_AUDIENCE", "META_TEMPLATE"].includes((selectedNode.type || "").toUpperCase()) && !(selectedNode.title || "").toLowerCase().includes("meta")) ? (
                     <div>
                       <label style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569" }}>Message / Description</label>
                       <textarea
