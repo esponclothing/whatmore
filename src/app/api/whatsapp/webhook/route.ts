@@ -282,11 +282,16 @@ export async function POST(req: NextRequest) {
         
         // Update customer leadSource & tag
         try {
+          const existingTags = (customer.tags || '')
+            .split(',')
+            .map((t: string) => t.trim())
+            .filter(Boolean);
+          const newTags = Array.from(new Set([...existingTags, "Meta_CTWA_Ad"]));
           await prisma.customer.update({
             where: { id: customer.id },
             data: { 
               leadSource: "Meta Click-to-WhatsApp Ad",
-              tags: Array.from(new Set([...(customer.tags || []), "Meta_CTWA_Ad"]))
+              tags: newTags.join(', ')
             }
           });
         } catch (_) {}

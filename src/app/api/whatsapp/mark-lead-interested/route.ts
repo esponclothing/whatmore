@@ -77,18 +77,28 @@ export async function POST(req: NextRequest) {
 
     // Update Customer / Conversation CRM Stage to Interested
     let updatedCustomer = null;
-    const customer = await prisma.customer.findFirst({
-      where: { OR: [{ mobile: { contains: cleanPhone } }, { whatsappNumber: { contains: cleanPhone } }] }
-    });
-
-    if (customer) {
-      updatedCustomer = await prisma.customer.update({
-        where: { id: customer.id },
-        data: {
-          leadStage: "Lead Interested",
-          tags: Array.from(new Set([...(customer.tags || []), "Interested_Lead", "Meta_Conversion_₹10k"]))
-        }
+    try {
+      const customer = await prisma.customer.findFirst({
+        where: { OR: [{ mobile: { contains: cleanPhone } }, { whatsappNumber: { contains: cleanPhone } }] }
       });
+
+      if (customer) {
+        const existingTags = (customer.tags || '')
+          .split(',')
+          .map((t: string) => t.trim())
+          .filter(Boolean);
+        const newTags = Array.from(new Set([...existingTags, "Interested_Lead", `Meta_Conversion_₹${eventValue}`]));
+
+        updatedCustomer = await prisma.customer.update({
+          where: { id: customer.id },
+          data: {
+            leadStage: "Lead Interested",
+            tags: newTags.join(', ')
+          }
+        });
+      }
+    } catch (tagErr) {
+      console.warn("[Mark Lead Interested] Could not update customer tags/stage:", tagErr);
     }
 
     // Log in Chatbot Logs table for auditing
