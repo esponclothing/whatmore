@@ -517,6 +517,9 @@ const reloadTeams = async () => {
         <button onClick={() => setActiveTab("webhooks")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "webhooks" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
           Webhooks
         </button>
+        <button onClick={() => setActiveTab("facebook")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "facebook" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
+          <Target size={16} /> Facebook & Meta Ads
+        </button>
       </nav>
 
       {/* 1. Integrations tab */}
@@ -991,6 +994,166 @@ const reloadTeams = async () => {
                 </div>
               </div>
             )}
+
+          </div>
+        </div>
+      )}
+
+      {activeTab === "facebook" && (
+        <div className="flex flex-col gap-8 w-full max-w-7xl">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                  <Target className="text-indigo-600" size={22} /> Facebook & Meta Ads Automation Suite
+                </h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  Connect Meta Conversions API (CAPI), sync WhatsApp leads directly to Meta Pixel & Custom Audiences for Click-to-WhatsApp (CTWA) Ad optimization.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  const existing = webhooks.find((w: any) => w.type === 'META_CAPI');
+                  if (existing) {
+                    handleOpenModal(existing);
+                  } else {
+                    handleOpenModal(null);
+                    setFormData({ name: 'Meta Pixel Espon', type: 'META_CAPI', url: '1386264563245511', token: '' });
+                  }
+                }}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 text-sm shadow-sm transition-all"
+              >
+                <Plus size={16} /> Configure Meta Credentials
+              </button>
+            </div>
+
+            {/* Quick Live Test & Status Banner */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs">CAPI</div>
+                  <h4 className="font-bold text-emerald-950 text-sm">Conversions API Engine</h4>
+                </div>
+                <p className="text-xs text-emerald-800 leading-relaxed mb-3">
+                  Click-to-WhatsApp (CTWA) campaigns fire conversions via <code className="bg-emerald-100 px-1 rounded text-emerald-950 font-bold">business_messaging</code> action source.
+                </p>
+                <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-emerald-700 bg-emerald-100/80 px-2.5 py-1 rounded-full border border-emerald-200">
+                  <CheckCircle2 size={13} /> Active & Syncing
+                </span>
+              </div>
+
+              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-5">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">INBOX</div>
+                  <h4 className="font-bold text-indigo-950 text-sm">Inbox Instant Conversion</h4>
+                </div>
+                <p className="text-xs text-indigo-800 leading-relaxed mb-3">
+                  Agents can click <strong>⚡ Mark Interested (₹10k Lead)</strong> in WhatsApp Agent Inbox to trigger high-value conversion to Meta.
+                </p>
+                <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-indigo-700 bg-indigo-100/80 px-2.5 py-1 rounded-full border border-indigo-200">
+                  <Zap size={13} /> Ready (Default ₹10,000 INR)
+                </span>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center font-bold text-xs">AUD</div>
+                  <h4 className="font-bold text-amber-950 text-sm">Meta Custom Audiences</h4>
+                </div>
+                <p className="text-xs text-amber-800 leading-relaxed mb-3">
+                  Auto-build retargeting audiences of B2B Retailers (₹500 value) & Wholesalers (₹1,000 value) from chatbot choices.
+                </p>
+                <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-amber-700 bg-amber-100/80 px-2.5 py-1 rounded-full border border-amber-200">
+                  <Users size={13} /> Active in Chatbot Builder
+                </span>
+              </div>
+            </div>
+
+            {/* Active Meta Integration Table */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden mb-8">
+              <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 font-bold text-xs text-slate-700 flex justify-between items-center">
+                <span>Active Meta Integrations</span>
+                <span className="text-[11px] text-slate-500 font-normal">Pixel ID & System User Token</span>
+              </div>
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-100/60 text-slate-500 border-b border-slate-200 text-xs">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Name</th>
+                    <th className="px-4 py-3 font-semibold">Pixel / Dataset ID</th>
+                    <th className="px-4 py-3 font-semibold">Access Token</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {webhooks.filter((w: any) => w.type === 'META_CAPI').length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="text-center py-8 text-slate-400 text-sm">
+                        No Meta CAPI credentials configured. Click <strong>Configure Meta Credentials</strong> above to connect.
+                      </td>
+                    </tr>
+                  ) : (
+                    webhooks.filter((w: any) => w.type === 'META_CAPI').map((wh: any) => (
+                      <tr key={wh.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                        <td className="px-4 py-3 font-bold text-slate-800 flex items-center gap-2">
+                          <Target size={15} className="text-indigo-600" /> {wh.name}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-700">{wh.url}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                          {wh.token ? `${wh.token.substring(0, 12)}...${wh.token.slice(-6)}` : 'No token'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-extrabold ${wh.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                            {wh.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => handleOpenModal(wh)} className="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-100">
+                              <Edit size={16} />
+                            </button>
+                            <button onClick={() => handleDelete(wh.id)} className="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Step-by-Step Meta Setup Guide */}
+            <div className="bg-blue-50/60 border border-blue-200 rounded-2xl p-6 text-sm text-blue-900">
+              <h4 className="font-bold text-base text-blue-950 mb-3 flex items-center gap-2">
+                <HelpCircle size={18} className="text-blue-600" /> 4-Step Meta Conversions API & Custom Audience Setup Guide
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white/90 p-3.5 rounded-xl border border-blue-100 shadow-2xs">
+                  <strong className="text-blue-950 block mb-1 text-xs">Step 1: Create Meta App (Business):</strong>
+                  Go to <a href="https://developers.facebook.com/apps/creation/" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">developers.facebook.com ↗ <ExternalLink size={11} /></a>
+                  <p className="text-xs text-slate-600 mt-1">Select App Type: <strong>Business</strong> → Enter App Name (e.g. <em>Whatmore Integration</em>).</p>
+                </div>
+
+                <div className="bg-white/90 p-3.5 rounded-xl border border-blue-100 shadow-2xs">
+                  <strong className="text-blue-950 block mb-1 text-xs">Step 2: Get Meta Pixel / Dataset ID:</strong>
+                  Go to <a href="https://business.facebook.com/events_manager2" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Meta Events Manager ↗ <ExternalLink size={11} /></a>
+                  <p className="text-xs text-slate-600 mt-1">Select your Pixel/Dataset and copy the 15-digit ID (e.g. <code>1386264563245511</code>).</p>
+                </div>
+
+                <div className="bg-white/90 p-3.5 rounded-xl border border-blue-100 shadow-2xs">
+                  <strong className="text-blue-950 block mb-1 text-xs">Step 3: Create System User & Assign Assets:</strong>
+                  Go to <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Business Settings → System Users ↗ <ExternalLink size={11} /></a>
+                  <p className="text-xs text-slate-600 mt-1">Add System User (Admin role) → Click <strong>Assign Assets</strong> → Select App & Pixel (Full Control).</p>
+                </div>
+
+                <div className="bg-white/90 p-3.5 rounded-xl border border-blue-100 shadow-2xs">
+                  <strong className="text-blue-950 block mb-1 text-xs">Step 4: Generate Permanent System User Access Token:</strong>
+                  <p className="text-xs text-slate-600 mt-1">Click <strong>Generate New Token</strong> → Select App → Check <code>ads_management</code>, <code>ads_read</code>, <code>business_management</code> → Copy <code>EAA...</code> Token.</p>
+                </div>
+              </div>
+            </div>
 
           </div>
         </div>

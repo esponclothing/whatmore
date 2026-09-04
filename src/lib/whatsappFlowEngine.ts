@@ -516,7 +516,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
               },
               custom_data: {
                 currency: node.currency || "INR",
-                value: node.eventValue || 1000
+                value: node.eventValue !== undefined && node.eventValue !== null ? Number(node.eventValue) : 1000
               }
             };
 
@@ -529,7 +529,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
               payload.test_event_code = testCode;
             }
 
-            console.log(`[Meta CAPI Engine] Sending ${eventName} event to Meta Pixel ${pixelId} (Business Messaging)...`);
+            console.log(`[Meta CAPI Engine] Sending ${eventName} event (₹${eventObj.custom_data.value}) to Meta Pixel ${pixelId} (Business Messaging)...`);
             const capiRes = await fetch(capiUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -545,7 +545,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
                 conversationId: conversationId || null,
                 nodeId: node.id || "META_CAPI_NODE",
                 nodeType: "META_CAPI",
-                actionDesc: `Meta CAPI ${eventName} event sent (Business Messaging)`,
+                actionDesc: `Meta CAPI ${eventName} event sent (₹${eventObj.custom_data.value} INR)`,
                 payload: payload,
                 responseStatus: capiRes.status,
                 errorMessage: capiRes.ok ? null : JSON.stringify(resData)
@@ -555,6 +555,27 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
         }
       } catch (err: any) {
         console.error(`[Meta CAPI Node] Error:`, err);
+      }
+    } else if (type === 'META_CUSTOM_AUDIENCE') {
+      try {
+        const cleanPhone = toPhone.replace(/\D/g, '').slice(-10);
+        const audienceName = node.audienceName || node.title || "Target_Audience";
+        console.log(`[Meta Audience Engine] Syncing user ${cleanPhone} to Meta Custom Audience: ${audienceName}...`);
+        
+        await prisma.whatsAppChatbotLog.create({
+          data: {
+            phone: cleanPhone,
+            conversationId: conversationId || null,
+            nodeId: node.id || "META_AUDIENCE_NODE",
+            nodeType: "META_CUSTOM_AUDIENCE",
+            actionDesc: `Meta Custom Audience Sync: ${audienceName}`,
+            payload: { phone: cleanPhone, audienceName, action: "ADD_USER" },
+            responseStatus: 200,
+            errorMessage: null
+          }
+        });
+      } catch (err: any) {
+        console.error(`[Meta Custom Audience Node] Error:`, err);
       }
     } else if (type === 'CRM_ROUNDROBIN' || type === 'START') {
         try {

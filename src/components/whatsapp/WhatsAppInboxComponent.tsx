@@ -259,6 +259,36 @@ export default function WhatsAppInboxComponent() {
     setTimeout(() => setToastMsg(null), 3000);
   };
 
+  const [firingMetaLead, setFiringMetaLead] = useState(false);
+
+  const handleMarkLeadInterested = async () => {
+    if (!activeConvDetail) return;
+    setFiringMetaLead(true);
+    try {
+      const res = await fetch("/api/whatsapp/mark-lead-interested", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: activeConvDetail.customer?.whatsappNumber || activeConvDetail.customer?.mobile || activeConvDetail.phone,
+          conversationId: activeConvDetail.id,
+          eventValue: 10000,
+          customEventName: "Lead"
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setToastMsg(`⚡ Fired Meta Lead Conversion (₹10,000)! Trace ID: ${data.fbtrace_id}`);
+      } else {
+        setToastMsg(`⚠️ Meta CAPI: ${data.error || "Failed to send conversion"}`);
+      }
+    } catch (err: any) {
+      setToastMsg("⚠️ Error firing Meta Lead conversion: " + err.message);
+    } finally {
+      setFiringMetaLead(false);
+      setTimeout(() => setToastMsg(null), 4000);
+    }
+  };
+
   const activeTagsList = useMemo(() => {
     const isAuto = (t: string) => {
       const l = t.toLowerCase().trim();
@@ -1687,6 +1717,17 @@ export default function WhatsAppInboxComponent() {
                     </div>
                   )}
                 </div>
+
+                <button
+                  className="chat-action-btn"
+                  onClick={handleMarkLeadInterested}
+                  disabled={firingMetaLead}
+                  style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#b45309", fontWeight: 700 }}
+                  title="Mark Interested & Fire ₹10,000 Meta Conversion Event"
+                >
+                  <Zap size={14} className={firingMetaLead ? "animate-spin text-amber-600" : "text-amber-600"} />
+                  <span>{firingMetaLead ? "Firing..." : "Mark Interested (₹10k Lead)"}</span>
+                </button>
 
                 <button
                   className={`chat-action-btn ${isFullScreen ? "active-fullscreen" : ""}`}
