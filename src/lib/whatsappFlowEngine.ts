@@ -509,12 +509,10 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
               event_name: eventName,
               event_time: Math.floor(Date.now() / 1000),
               event_id: eventId,
-              event_source_url: "https://esponsports.com",
-              action_source: "website",
+              action_source: "business_messaging",
+              messaging_channel: "whatsapp",
               user_data: {
-                ph: [hashedPhone],
-                client_user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                client_ip_address: "127.0.0.1"
+                ph: [hashedPhone]
               },
               custom_data: {
                 currency: node.currency || "INR",
@@ -531,7 +529,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
               payload.test_event_code = testCode;
             }
 
-            console.log(`[Meta CAPI Engine] Sending ${eventName} event to Meta Pixel ${pixelId} (Test Code: ${testCode || 'None'})...`);
+            console.log(`[Meta CAPI Engine] Sending ${eventName} event to Meta Pixel ${pixelId} (Business Messaging)...`);
             const capiRes = await fetch(capiUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -547,7 +545,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
                 conversationId: conversationId || null,
                 nodeId: node.id || "META_CAPI_NODE",
                 nodeType: "META_CAPI",
-                actionDesc: `Meta CAPI ${eventName} event sent`,
+                actionDesc: `Meta CAPI ${eventName} event sent (Business Messaging)`,
                 payload: payload,
                 responseStatus: capiRes.status,
                 errorMessage: capiRes.ok ? null : JSON.stringify(resData)

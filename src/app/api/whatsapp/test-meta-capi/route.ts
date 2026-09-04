@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     const cleanPhone = testPhone.replace(/\D/g, "").slice(-10);
     const hashedPhone = crypto.createHash("sha256").update(cleanPhone).digest("hex");
 
-        const eventId = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+            const eventId = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const cleanTestCode = testEventCode ? testEventCode.trim() : '';
     const queryParam = cleanTestCode ? `?test_event_code=${encodeURIComponent(cleanTestCode)}` : '';
     const capiUrl = `https://graph.facebook.com/v20.0/${pixelId}/events${queryParam}`;
@@ -46,12 +46,10 @@ export async function POST(req: NextRequest) {
           event_name: eventName,
           event_time: Math.floor(Date.now() / 1000),
           event_id: eventId,
-          event_source_url: "https://esponsports.com",
-          action_source: "website",
+          action_source: "business_messaging",
+          messaging_channel: "whatsapp",
           user_data: {
-            ph: [hashedPhone],
-            client_user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            client_ip_address: "127.0.0.1"
+            ph: [hashedPhone]
           },
           custom_data: {
             currency: "INR",
