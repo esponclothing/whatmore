@@ -579,10 +579,9 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
     } else if (type === 'META_CUSTOM_AUDIENCE') {
       try {
         const cleanPhone = toPhone.replace(/\D/g, '').slice(-10);
-        const audienceName = node.audienceName || node.title || "Espon_WhatsApp_Leads_Audience";
-        console.log(`[Meta Audience Engine] Auto-creating & syncing user ${cleanPhone} to Meta Custom Audience: ${audienceName}...`);
+        const audienceName = (node.audienceName || node.title || "WhatsApp_Custom_Audience").trim();
+        console.log(`[Meta Audience Engine] Auto-creating & syncing user ${cleanPhone} to Meta Custom Audience "${audienceName}"...`);
         
-        // Internal fetch to auto-create audience if missing & sync hashed phone
         try {
           const crypto = require('crypto');
           const hashedPhone = crypto.createHash('sha256').update(cleanPhone).digest('hex');
@@ -592,16 +591,16 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
             let savedAudiences: Record<string, string> = {};
             try { savedAudiences = JSON.parse(integration.metadata || "{}"); } catch (_) {}
             
-            let audienceId = savedAudiences[audienceName];
+            let audienceId = node.existingAudienceId || savedAudiences[audienceName];
             if (!audienceId) {
-              // Create audience in Meta
-              const createRes = await fetch(`https://graph.facebook.com/v20.0/act_${(integration.url || '1386264563245511').trim()}/customaudiences`, {
+              const targetAct = (integration.url || "").trim().replace(/^act_/, '');
+              const createRes = await fetch(`https://graph.facebook.com/v20.0/act_${targetAct}/customaudiences`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   name: audienceName,
                   subtype: "CUSTOM",
-                  description: "Auto-created WhatsApp Lead Audience via Whatmore Chatbot",
+                  description: `Dynamic WhatsApp Lead Audience created via Whatmore Chatbot`,
                   customer_file_source: "USER_PROVIDED_ONLY",
                   access_token: integration.token.trim()
                 })

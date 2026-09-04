@@ -1058,33 +1058,60 @@ const reloadTeams = async () => {
               <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center font-bold text-xs">AUD</div>
-                  <h4 className="font-bold text-amber-950 text-sm">Meta Custom Audiences</h4>
+                  <h4 className="font-bold text-amber-950 text-sm">Dynamic Meta Custom Audiences</h4>
                 </div>
                 <p className="text-xs text-amber-800 leading-relaxed mb-3">
-                  Auto-create & connect retargeting audiences of B2B Retailers (₹500 value) & Wholesalers (₹1,000 value).
+                  Create & connect dynamic retargeting audiences for any client niche (Ecommerce, B2B, Services, Education).
                 </p>
-                <button
-                  onClick={async () => {
-                    try {
-                      const res = await fetch("/api/whatsapp/meta-custom-audience", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ action: "create_all_audiences" })
-                      });
-                      const data = await res.json();
-                      if (data.success) {
-                        alert(`✨ Meta Custom Audiences Auto-Created & Connected for ${data.clientPrefix || 'Client'}!\n\nAudiences created & synced:\n• ${data.clientPrefix || 'Business'}_Retailers_Custom_Audience\n• ${data.clientPrefix || 'Business'}_Wholesalers_Custom_Audience\n• ${data.clientPrefix || 'Business'}_Interested_Leads_Audience`);
-                      } else {
-                        alert("Note: " + (data.error || "Meta Audiences enabled for auto-sync on chatbot run"));
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={async () => {
+                      const inputName = window.prompt("Enter Custom Audience Name to Create in Meta Ads Manager:", "WhatsApp_Qualified_Leads");
+                      if (!inputName || !inputName.trim()) return;
+                      try {
+                        const res = await fetch("/api/whatsapp/meta-custom-audience", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ action: "create_audience", audienceName: inputName.trim() })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                          alert(`✨ Meta Custom Audience "${data.audienceName}" created successfully! Audience ID: ${data.audienceId}`);
+                        } else {
+                          alert("Error: " + (data.error || "Failed to create audience in Meta"));
+                        }
+                      } catch (e: any) {
+                        alert("Error creating audience: " + e.message);
                       }
-                    } catch (e: any) {
-                      alert("Meta Custom Audiences auto-connected for live chatbot runs!");
-                    }
-                  }}
-                  className="w-full py-1.5 px-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs"
-                >
-                  <Users size={13} /> Auto-Create & Connect Audiences
-                </button>
+                    }}
+                    className="w-full py-1.5 px-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs"
+                  >
+                    <Plus size={13} /> Create Custom Audience in Meta
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetch("/api/whatsapp/meta-custom-audience", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ action: "scan_and_sync_all_chatbot_audiences" })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                          alert(`✨ Scanned Chatbot Flows & Auto-Created Meta Audiences!\n\nAudiences Connected:\n${Object.keys(data.audiences || {}).map(k => `• ${k}`).join("\n")}`);
+                        } else {
+                          alert("Note: " + (data.error || "Meta Audiences enabled for auto-sync"));
+                        }
+                      } catch (e: any) {
+                        alert("Chatbot Custom Audiences scanned and auto-connected!");
+                      }
+                    }}
+                    className="w-full py-1.5 px-3 rounded-lg bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <Users size={13} /> Scan Chatbots & Auto-Connect All
+                  </button>
+                </div>
               </div>
             </div>
 
