@@ -433,31 +433,41 @@ export default function WhatsAppInboxComponent() {
 
         setConversations(filtered);
         
-        if (filtered.length > 0) {
-          const isCurrentInList = filtered.some((c) => c.id === selectedConvId);
-          if (!selectedConvId || !isCurrentInList) {
-            setSelectedConvId(filtered[0].id);
+        if (!silent) {
+          if (filtered.length > 0) {
+            const isCurrentInList = filtered.some((c) => c.id === selectedConvId);
+            if (!selectedConvId || !isCurrentInList) {
+              setSelectedConvId(filtered[0].id);
+            }
+          } else {
+            setSelectedConvId(null);
+            setActiveConvDetail(null);
           }
-        } else {
+        }
+      } else {
+        if (!silent) {
+          setConversations([]);
           setSelectedConvId(null);
           setActiveConvDetail(null);
         }
-      } else {
-        setConversations([]);
-        setSelectedConvId(null);
-        setActiveConvDetail(null);
       }
     } catch (err) {
       console.error("Failed to fetch conversations", err);
-      setConversations([]);
+      if (!silent) setConversations([]);
     } finally {
-      setLoadingConvs(false);
+      if (!silent) setLoadingConvs(false);
     }
   };
 
   useEffect(() => {
     fetchConversationsList(conversations.length > 0);
   }, [searchQuery, activeNavTab, unreadOnly, leadStatusFilter, filterEmployeeId]);
+
+  // Ref to hold current selected conversation ID for silent background polling
+  const selectedConvIdRef = useRef(selectedConvId);
+  useEffect(() => {
+    selectedConvIdRef.current = selectedConvId;
+  }, [selectedConvId]);
 
   // Fetch Selected Conversation Detail
   const fetchConversationDetail = async (id: string, silent = false) => {
@@ -468,29 +478,65 @@ export default function WhatsAppInboxComponent() {
       if (!apiRes.ok) throw new Error('API error ' + apiRes.status);
       const res = await apiRes.json();
       if (res.success && res.conversation) {
-        setActiveConvDetail(res.conversation);
-        setCrmEditData({
-          businessName: res.conversation.customer?.businessName || "",
-          contactPerson: res.conversation.customer?.contactPerson || "",
-          mobile: res.conversation.customer?.mobile || "",
-          email: res.conversation.customer?.email || "",
-          city: res.conversation.customer?.city || "",
-          state: res.conversation.customer?.state || "",
-          customerType: res.conversation.customer?.customerType || "Wholesaler",
-          leadStage: res.conversation.leadStatus || "New Lead",
-          tags: res.conversation.tags || ""
-        });
+        if (!silent) {
+          setActiveConvDetail(res.conversation);
+          setCrmEditData({
+            businessName: res.conversation.customer?.businessName || "",
+            contactPerson: res.conversation.customer?.contactPerson || "",
+            mobile: res.conversation.customer?.mobile || "",
+            email: res.conversation.customer?.email || "",
+            city: res.conversation.customer?.city || "",
+            state: res.conversation.customer?.state || "",
+            customerType: res.conversation.customer?.customerType || "Wholesaler",
+            leadStage: res.conversation.leadStatus || "New Lead",
+            tags: res.conversation.tags || ""
+          });
+        } else {
+          // Silent Background Merge — only update state if content or status actually changed
+          setActiveConvDetail((prev: any) => {
+            if (!prev) return res.conversation;
+            if (prev.id !== res.conversation.id) return res.conversation;
+
+            const prevMsgs = prev.messages || [];
+            const newMsgs = res.conversation.messages || [];
+
+            const isSame = 
+              prevMsgs.length === newMsgs.length &&
+              prevMsgs.every((m: any, i: number) => m.id === newMsgs[i]?.id && m.status === newMsgs[i]?.status);
+
+            if (isSame && prev.leadStatus === res.conversation.leadStatus && prev.tags === res.conversation.tags) {
+              return prev; // Retain exact reference -> ZERO UI re-render/flicker!
+            }
+
+            const sendingMsgs = prevMsgs.filter((m: any) => m.status === 'SENDING');
+            const combined = [...newMsgs];
+            sendingMsgs.forEach((sm: any) => {
+              if (!combined.some((m: any) => m.id === sm.id || (m.content === sm.content && m.senderType === 'AGENT'))) {
+                combined.push(sm);
+              }
+            });
+
+            return {
+              ...res.conversation,
+              messages: combined
+            };
+          });
+        }
       } else {
-        console.error("Failed to fetch conversation details", res.error);
-        setToastMsg(`Error opening chat: ${res.error || "Unknown Error"}`);
+        if (!silent) {
+          console.error("Failed to fetch conversation details", res.error);
+          setToastMsg(`Error opening chat: ${res.error || "Unknown Error"}`);
+          setTimeout(() => setToastMsg(null), 5000);
+          setActiveConvDetail(null);
+        }
+      }
+    } catch (err: any) {
+      if (!silent) {
+        console.error("Failed to fetch conversation details", err);
+        setToastMsg(`Error: ${err?.message || "Failed to load chat"}`);
         setTimeout(() => setToastMsg(null), 5000);
         setActiveConvDetail(null);
       }
-    } catch (err: any) {
-      console.error("Failed to fetch conversation details", err);
-      setToastMsg(`Error: ${err?.message || "Failed to load chat"}`);
-      setTimeout(() => setToastMsg(null), 5000);
-      setActiveConvDetail(null);
     } finally {
       if (!silent) setLoadingDetail(false);
     }
@@ -498,16 +544,16 @@ export default function WhatsAppInboxComponent() {
 
   useEffect(() => {
     if (selectedConvId) {
-      fetchConversationDetail(selectedConvId, activeConvDetail !== null);
+      fetchConversationDetail(selectedConvId, false);
     }
   }, [selectedConvId]);
 
-  // Real-time Auto Polling (Every 3 seconds)
+  // Real-time Auto Polling (Every 3 seconds) — Silent & Smooth Background Sync
   useEffect(() => {
     const intervalId = setInterval(() => {
       fetchConversationsList(true);
-      if (selectedConvId) {
-        fetchConversationDetail(selectedConvId, true);
+      if (selectedConvIdRef.current) {
+        fetchConversationDetail(selectedConvIdRef.current, true);
       }
     }, 3000);
     return () => clearInterval(intervalId);
