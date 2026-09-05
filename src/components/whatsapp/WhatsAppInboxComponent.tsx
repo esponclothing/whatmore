@@ -84,7 +84,8 @@ import {
   sendWhatsAppTemplateAction,
   sendProductCardAction,
   sendWhatsAppFlowMessageAction,
-  getWhatsAppSettingsAction
+  getWhatsAppSettingsAction,
+  retryFailedWhatsAppMessageAction
 } from "@/app/actions/whatsAppPlatformActions";
 import { getWhatsAppIntegrationsAction, pushLeadToIntegrationAction } from "@/app/actions/whatsAppIntegrationActions";
 import { useWhatsAppStore } from "@/store/whatsappStore";
@@ -148,17 +149,49 @@ export default function WhatsAppInboxComponent() {
   const [showTemplatePicker, setShowTemplatePicker] = useState<boolean>(false);
   const [showProductPanel, setShowProductPanel] = useState<boolean>(false);
   const [showFlowPicker, setShowFlowPicker] = useState<boolean>(false);
+  const [retryingMsgId, setRetryingMsgId] = useState<string | null>(null);
   
   // Check 24-hour window status
   const checkSessionExpired = () => {
-    if (!activeConvDetail || !activeConvDetail.messages) return { expired: false, reason: "" };
-    const customerMsgs = activeConvDetail.messages.filter((m) => m.senderType === "CUSTOMER" && !m.isInternalNote);
-    if (customerMsgs.length === 0) return { expired: true, reason: "No messages received from customer yet." };
-    const lastCustomerMsg = customerMsgs[customerMsgs.length - 1];
-    const diffMs = Date.now() - new Date(lastCustomerMsg.sentAt).getTime();
+    if (!activeConvDetail) return { expired: false, hoursLeft: 24, neverMessaged: false, reason: "" };
+    
+    const msgs = activeConvDetail.messages || [];
+    const customerMsgs = msgs.filter((m: any) => 
+      (m.senderType === "CUSTOMER" || m.senderType === "USER" || m.role === "user") && !m.isInternalNote
+    );
+
+    let latestTimestamp = 0;
+    if (customerMsgs.length > 0) {
+      customerMsgs.forEach((m: any) => {
+        const time = new Date(m.sentAt || m.created_at).getTime();
+        if (!isNaN(time) && time > latestTimestamp) {
+          latestTimestamp = time;
+        }
+      });
+    } else if (activeConvDetail.lastMessageAt) {
+      const time = new Date(activeConvDetail.lastMessageAt).getTime();
+      if (!isNaN(time)) latestTimestamp = time;
+    }
+
+    if (!latestTimestamp) {
+      return { 
+        expired: true, 
+        hoursLeft: 0, 
+        neverMessaged: true, 
+        reason: "Customer has not initiated a conversation yet. Start with a pre-approved template." 
+      };
+    }
+
+    const diffMs = Date.now() - latestTimestamp;
     const isExpired = diffMs > 24 * 60 * 60 * 1000;
     const hoursLeft = Math.max(0, 24 - (diffMs / (3600 * 1000)));
-    return { expired: isExpired, hoursLeft, reason: isExpired ? "24-Hour Session Window Expired" : `${hoursLeft.toFixed(1)} hours remaining` };
+
+    return { 
+      expired: isExpired, 
+      hoursLeft, 
+      neverMessaged: false,
+      reason: isExpired ? "24-Hour Session Window Expired" : `${hoursLeft.toFixed(1)} hours remaining in 24h window` 
+    };
   };
   const sessionStatus = checkSessionExpired();
 
@@ -696,6 +729,28 @@ export default function WhatsAppInboxComponent() {
       await fetchConversationDetail(selectedConvId, true);
     }
     setSendingMsg(false);
+  };
+
+  // Retry Failed WhatsApp Message Handler
+  const handleRetryMessage = async (msg: any) => {
+    if (!selectedConvId) return;
+    setRetryingMsgId(msg.id);
+    try {
+      const res = await retryFailedWhatsAppMessageAction(msg.id);
+      if (res.success) {
+        setToastMsg("✓ Message delivered successfully via WhatsApp!");
+        await fetchConversationDetail(selectedConvId, true);
+        await fetchConversationsList(true);
+      } else {
+        setToastMsg(`❌ Retry failed: ${res.error || "Delivery failed"}`);
+        await fetchConversationDetail(selectedConvId, true);
+      }
+    } catch (err: any) {
+      setToastMsg(`❌ Error retrying message: ${err.message}`);
+    } finally {
+      setRetryingMsgId(null);
+      setTimeout(() => setToastMsg(null), 4000);
+    }
   };
 
   // Start voice recording
@@ -1633,6 +1688,25 @@ export default function WhatsAppInboxComponent() {
                       </>
                     )}
                     <span className="chat-wa-connected-badge">Connected</span>
+                    {!sessionStatus.neverMessaged && (
+                      <span 
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          background: sessionStatus.expired ? '#fff1f2' : '#f0fdf4',
+                          color: sessionStatus.expired ? '#e11d48' : '#15803d',
+                          border: `1px solid ${sessionStatus.expired ? '#fecdd3' : '#bbf7d0'}`
+                        }}
+                        title={sessionStatus.reason}
+                      >
+                        ⏱️ {sessionStatus.expired ? "24h Window: Expired" : `24h Window: ${sessionStatus.hoursLeft?.toFixed(1)}h left`}
+                      </span>
+                    )}
                   </div>
                   <div className="chat-sub-line">
                     <span>{formatWhatsAppPhone(activeConvDetail.customer?.whatsappNumber || activeConvDetail.customer?.mobile)}</span>
@@ -2084,14 +2158,92 @@ export default function WhatsAppInboxComponent() {
                         </p>
                       )}
 
-                      {msg.status === "FAILED" && (
-                        <div 
-                          style={{ color: "#ef4444", fontSize: "11px", display: "flex", alignItems: "center", gap: "5px", marginTop: "6px", background: "#fef2f2", padding: "6px 10px", borderRadius: "6px", border: "1px solid #fecaca", width: "fit-content" }}
-                          title="Delivery failed. Possible reasons: 24-hour service session expired, user number not registered on WhatsApp, or temporary Meta API credentials error."
-                        >
-                          <span>⚠️ Delivery Failed (24h window closed or invalid configuration)</span>
-                        </div>
-                      )}
+                      {msg.status === "FAILED" && (() => {
+                        let errorObj: any = null;
+                        try {
+                          if (msg.metadata) {
+                            const parsed = typeof msg.metadata === "string" ? JSON.parse(msg.metadata) : msg.metadata;
+                            errorObj = parsed.error || null;
+                          }
+                        } catch {}
+
+                        // A message is ONLY considered 24h expired if Meta explicitly returned error 131047 / is24hExpired,
+                        // OR if sessionStatus.expired is truly true and not neverMessaged
+                        const isReal24hExpired = errorObj?.is24hExpired === true || 
+                          (sessionStatus.expired && !sessionStatus.neverMessaged);
+
+                        const displayReason = isReal24hExpired
+                          ? "24-Hour WhatsApp Session Window has expired"
+                          : errorObj?.details || errorObj?.message || "Delivery Failed (Check recipient number or Meta API)";
+
+                        const isRetrying = retryingMsgId === msg.id;
+
+                        return (
+                          <div 
+                            style={{ 
+                              color: isReal24hExpired ? "#b45309" : "#dc2626", 
+                              fontSize: "11.5px", 
+                              display: "flex", 
+                              alignItems: "center", 
+                              flexWrap: "wrap",
+                              gap: "6px", 
+                              marginTop: "6px", 
+                              background: isReal24hExpired ? "#fffbeb" : "#fef2f2", 
+                              padding: "6px 10px", 
+                              borderRadius: "6px", 
+                              border: `1px solid ${isReal24hExpired ? "#fde68a" : "#fecaca"}`, 
+                              width: "fit-content" 
+                            }}
+                            title={errorObj?.details || errorObj?.message || displayReason}
+                          >
+                            <span style={{ fontWeight: 600 }}>⚠️ {displayReason}</span>
+                            
+                            {isReal24hExpired ? (
+                              <button
+                                type="button"
+                                onClick={() => setShowTemplatePicker(true)}
+                                style={{
+                                  background: "#d97706",
+                                  color: "#ffffff",
+                                  border: "none",
+                                  borderRadius: "4px",
+                                  padding: "2px 8px",
+                                  fontSize: "10.5px",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px"
+                                }}
+                              >
+                                Send Template
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={isRetrying}
+                                onClick={() => handleRetryMessage(msg)}
+                                style={{
+                                  background: "#dc2626",
+                                  color: "#ffffff",
+                                  border: "none",
+                                  borderRadius: "4px",
+                                  padding: "2px 8px",
+                                  fontSize: "10.5px",
+                                  fontWeight: 700,
+                                  cursor: isRetrying ? "wait" : "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px"
+                                }}
+                              >
+                                <RefreshCw size={11} className={isRetrying ? "animate-spin" : ""} />
+                                {isRetrying ? "Retrying..." : "Retry Send"}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
                       <div className="message-meta-line">
                         <span className="message-timestamp" style={msg.isInternalNote ? { color: '#a16207' } : {}}>
                           {new Date(msg.sentAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}

@@ -459,6 +459,7 @@ export async function sendWhatsAppMessageAction(data: {
         }
 
 
+        let metaErrorDetails: any = null;
         try {
            const response = await fetch(url, {
              method: 'POST',
@@ -469,14 +470,45 @@ export async function sendWhatsAppMessageAction(data: {
            
            if (resData.messages?.[0]?.id) {
              metaMessageId = resData.messages[0].id;
+             messageStatus = 'SENT';
            } else if (resData.error) {
              console.error("Meta API Error:", resData.error);
              messageStatus = 'FAILED';
+
+             const is24h = resData.error.code === 131047 || 
+                           resData.error.error_subcode === 2494010 ||
+                           /24\s*hours|re-engagement/i.test(resData.error.message || '') ||
+                           /24\s*hours|re-engagement/i.test(resData.error.error_data?.details || '');
+
+             metaErrorDetails = {
+               code: resData.error.code,
+               subcode: resData.error.error_subcode,
+               message: resData.error.message,
+               details: resData.error.error_data?.details || resData.error.message,
+               is24hExpired: is24h,
+               failedAt: new Date().toISOString()
+             };
            }
-        } catch (e) {
+        } catch (e: any) {
            console.error("Failed to send Meta API message:", e);
            messageStatus = 'FAILED';
+           metaErrorDetails = {
+             message: e.message || "Network error calling Meta API",
+             is24hExpired: false,
+             failedAt: new Date().toISOString()
+           };
         }
+      }
+    }
+
+    let storedMetadata = data.metadata || null;
+    if (metaErrorDetails) {
+      try {
+        const parsed = storedMetadata ? JSON.parse(storedMetadata) : {};
+        parsed.error = metaErrorDetails;
+        storedMetadata = JSON.stringify(parsed);
+      } catch {
+        storedMetadata = JSON.stringify({ error: metaErrorDetails });
       }
     }
 
@@ -491,7 +523,7 @@ export async function sendWhatsAppMessageAction(data: {
         mediaUrl: (data.mediaUrl && !data.mediaUrl.includes('://') && !data.mediaUrl.startsWith('/')) ? `/api/whatsapp/media/${data.mediaUrl}` : data.mediaUrl,
         mediaType: data.mediaType,
         mediaFilename: data.mediaFilename,
-        metadata: data.metadata,
+        metadata: storedMetadata,
         isInternalNote: data.isInternalNote || false,
         status: data.isInternalNote ? 'SENT' : messageStatus,
         metaMessageId: metaMessageId,
@@ -592,9 +624,135 @@ export async function sendWhatsAppMessageAction(data: {
     }
 
     revalidatePath(`/whatsapp/inbox`);
-    return { success: true, message };
+    return { 
+      success: messageStatus !== 'FAILED', 
+      message,
+      error: metaErrorDetails ? (metaErrorDetails.details || metaErrorDetails.message) : (messageStatus === 'FAILED' ? 'Delivery failed' : undefined),
+      is24hExpired: metaErrorDetails?.is24hExpired || false
+    };
   } catch (error: any) {
     return { success: false, error: error.message };
+  }
+}
+
+// ---------------------------------------------------------
+// 2b. RETRY FAILED WHATSAPP MESSAGE (WITH DYNAMIC ITU COUNTRY CODE)
+// ---------------------------------------------------------
+
+export async function retryFailedWhatsAppMessageAction(messageId: string) {
+  try {
+    const existing = await prisma.whatsAppMessage.findUnique({
+      where: { id: messageId },
+      include: {
+        conversation: {
+          include: {
+            account: true,
+            customer: true
+          }
+        }
+      }
+    });
+
+    if (!existing) {
+      return { success: false, error: "Message record not found" };
+    }
+
+    const conversation = existing.conversation;
+    const token = conversation.account?.accessToken;
+    const phoneId = conversation.account?.phoneId;
+
+    if (!token || !phoneId) {
+      return { success: false, error: "WhatsApp Account credentials not configured" };
+    }
+
+    const recipientPhone = conversation.customer.whatsappNumber 
+      ? conversation.customer.whatsappNumber.replace(/\D/g, '') 
+      : conversation.customer.mobile.replace(/\D/g, '');
+
+    const targetPhone = (recipientPhone.length === 10 && /^[6-9]/.test(recipientPhone)) 
+      ? `91${recipientPhone}` 
+      : recipientPhone;
+
+    const url = `https://graph.facebook.com/v20.0/${phoneId}/messages`;
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+
+    let payload: any = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: targetPhone
+    };
+
+    if (existing.messageType === 'TEXT' || !existing.messageType) {
+      payload.type = 'text';
+      payload.text = { body: existing.content };
+    } else if (existing.mediaUrl) {
+      const isMediaId = !existing.mediaUrl.includes('://') && !existing.mediaUrl.startsWith('/');
+      const mediaField = isMediaId 
+        ? { id: existing.mediaUrl.replace('/api/whatsapp/media/', '') } 
+        : { link: existing.mediaUrl.startsWith('http') ? existing.mediaUrl : `https://espon.in${existing.mediaUrl}` };
+      const mType = existing.messageType.toLowerCase();
+      payload.type = mType;
+      payload[mType] = { ...mediaField, caption: existing.content && !existing.content.startsWith('[') ? existing.content : undefined };
+    } else {
+      payload.type = 'text';
+      payload.text = { body: existing.content };
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+    const resData = await response.json();
+
+    if (resData.messages?.[0]?.id) {
+      const updated = await prisma.whatsAppMessage.update({
+        where: { id: messageId },
+        data: {
+          status: 'SENT',
+          metaMessageId: resData.messages[0].id,
+          sentAt: new Date(),
+          metadata: null // Clear previous error metadata on success
+        }
+      });
+      revalidatePath('/whatsapp/inbox');
+      return { success: true, message: updated };
+    } else {
+      const is24h = resData.error?.code === 131047 || 
+                    resData.error?.error_subcode === 2494010 ||
+                    /24\s*hours|re-engagement/i.test(resData.error?.message || '') ||
+                    /24\s*hours|re-engagement/i.test(resData.error?.error_data?.details || '');
+
+      const errInfo = {
+        code: resData.error?.code,
+        message: resData.error?.message,
+        details: resData.error?.error_data?.details || resData.error?.message,
+        is24hExpired: is24h,
+        failedAt: new Date().toISOString()
+      };
+
+      let meta: any = {};
+      try {
+        meta = existing.metadata ? JSON.parse(existing.metadata) : {};
+      } catch {}
+      meta.error = errInfo;
+
+      await prisma.whatsAppMessage.update({
+        where: { id: messageId },
+        data: { metadata: JSON.stringify(meta) }
+      });
+
+      return { 
+        success: false, 
+        error: errInfo.details || errInfo.message || "Delivery failed", 
+        is24hExpired: is24h 
+      };
+    }
+  } catch (e: any) {
+    return { success: false, error: e.message };
   }
 }
 
