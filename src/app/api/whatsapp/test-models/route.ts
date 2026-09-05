@@ -49,6 +49,19 @@ async function handleKeyValidation(providedKey?: string, preferredModel = 'gemin
     }, { status: 400 });
   }
 
+  // Clean key of surrounding quotes, accidental 'Bearer ' prefix, and whitespace
+  key = key.replace(/^Bearer\s+/i, '').replace(/^["']|["']$/g, '').trim();
+
+  // Diagnostic: If user pasted a Google OAuth Client ID or Client Secret instead of an API Key
+  if (key.includes('.apps.googleusercontent.com') || key.startsWith('GOCSPX-')) {
+    return NextResponse.json({
+      success: false,
+      valid: false,
+      code: 400,
+      error: 'You entered a Google OAuth Client ID or Client Secret (.apps.googleusercontent.com) instead of a Gemini API key. Gemini does not use Google Sign-In credentials. Please generate a permanent Gemini API Key (starts with AIzaSy) at https://aistudio.google.com/apikey.'
+    });
+  }
+
   const isBearer = key.startsWith('ya29.') || key.startsWith('AQ.');
   const listUrl = isBearer
     ? 'https://generativelanguage.googleapis.com/v1beta/models'
@@ -57,6 +70,8 @@ async function handleKeyValidation(providedKey?: string, preferredModel = 'gemin
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (isBearer) {
     headers['Authorization'] = `Bearer ${key}`;
+  } else {
+    headers['x-goog-api-key'] = key;
   }
 
   // Step 1: Query Google's models endpoint to verify authentication and project permissions
@@ -66,7 +81,15 @@ async function handleKeyValidation(providedKey?: string, preferredModel = 'gemin
     const listData = await listRes.json().catch(() => ({}));
 
     if (!listRes.ok) {
-      const errorMsg = listData?.error?.message || `Google API returned status ${listRes.status}`;
+      let errorMsg = listData?.error?.message || `Google API returned status ${listRes.status}`;
+      if (listRes.status === 401) {
+        if (key.startsWith('ya29.')) {
+          errorMsg = `Your temporary Google OAuth access token (ya29...) has expired. Google OAuth tokens expire in 60 minutes! Please generate a permanent Gemini API Key (starts with AIzaSy...) from Google AI Studio: https://aistudio.google.com/apikey.`;
+        } else {
+          errorMsg = `Invalid authentication credentials (401). Gemini API requires a permanent API key (starts with AIzaSy...) generated from Google AI Studio (https://aistudio.google.com/apikey). Do NOT use Google Sign-In, OAuth 2.0 Web Client, or temporary tokens.`;
+        }
+      }
+
       return NextResponse.json({
         success: false,
         valid: false,

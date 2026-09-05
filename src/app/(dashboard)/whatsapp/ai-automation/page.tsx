@@ -419,15 +419,17 @@ export default function WhatsAppAIAutomationPage() {
                       </div>
                     </div>
                   ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700 }}>
                         <AlertCircle size={16} color="#e11d48" /> Google API Error {keyTestResult.code ? `(${keyTestResult.code})` : ''}
                       </div>
-                      <div style={{ fontSize: "11.5px", wordBreak: "break-word", lineHeight: "1.4" }}>
+                      <div style={{ fontSize: "12px", wordBreak: "break-word", lineHeight: "1.4" }}>
                         {keyTestResult.error}
                       </div>
-                      <div style={{ fontSize: "11px", color: "#881337", marginTop: "4px", borderTop: "1px dashed #fda4af", paddingTop: "4px" }}>
-                        💡 <em>Tip: Confirm you copied the full key from Google AI Studio. If using a GCP project, ensure Generative Language API is enabled.</em>
+                      <div style={{ fontSize: "11.5px", color: "#881337", marginTop: "4px", borderTop: "1px dashed #fda4af", paddingTop: "6px", lineHeight: "1.45" }}>
+                        <strong>⚠️ Notice: Do NOT use Google Sign-In or OAuth 2.0 credentials!</strong><br />
+                        Gemini API requires a permanent API key starting with <strong>AIzaSy...</strong>.<br />
+                        👉 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" style={{ color: "#6d28d9", fontWeight: 700, textDecoration: "underline" }}>Click here to get your permanent Gemini API key from Google AI Studio</a>
                       </div>
                     </div>
                   )}

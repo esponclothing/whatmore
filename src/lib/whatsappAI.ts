@@ -26,15 +26,17 @@ export async function callGeminiRest(apiKey: string, modelName: string, prompt: 
     throw new Error('Gemini API Key is not configured in Settings.');
   }
 
-  const cleanKey = apiKey.trim();
+  const cleanKey = apiKey.trim().replace(/^Bearer\s+/i, '').replace(/^["']|["']$/g, '').trim();
   const isBearer = cleanKey.startsWith('ya29.') || cleanKey.startsWith('AQ.');
   const url = isBearer
     ? `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`
-    : `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${cleanKey}`;
+    : `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (isBearer) {
     headers['Authorization'] = `Bearer ${cleanKey}`;
+  } else {
+    headers['x-goog-api-key'] = cleanKey;
   }
 
   const body = {
