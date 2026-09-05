@@ -357,7 +357,7 @@ export default function WhatsAppAIAutomationPage() {
                     setSettings({...settings, geminiApiKey: e.target.value});
                     if (keyTestResult) setKeyTestResult(null); // reset result on edit
                   }}
-                  placeholder="AIzaSy..."
+                  placeholder="AQ... or AIza..."
                   style={{ flex: 1, padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "13px", fontFamily: "monospace" }}
                 />
                 <button
@@ -428,8 +428,8 @@ export default function WhatsAppAIAutomationPage() {
                       </div>
                       <div style={{ fontSize: "11.5px", color: "#881337", marginTop: "4px", borderTop: "1px dashed #fda4af", paddingTop: "6px", lineHeight: "1.45" }}>
                         <strong>⚠️ Notice: Do NOT use Google Sign-In or OAuth 2.0 credentials!</strong><br />
-                        Gemini API requires a permanent API key starting with <strong>AIzaSy...</strong>.<br />
-                        👉 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" style={{ color: "#6d28d9", fontWeight: 700, textDecoration: "underline" }}>Click here to get your permanent Gemini API key from Google AI Studio</a>
+                        Gemini API requires an API key starting with <strong>AQ...</strong> or <strong>AIzaSy...</strong> from Google AI Studio.<br />
+                        👉 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" style={{ color: "#6d28d9", fontWeight: 700, textDecoration: "underline" }}>Click here to open Google AI Studio and copy your key</a>
                       </div>
                     </div>
                   )}

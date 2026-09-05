@@ -62,7 +62,7 @@ async function handleKeyValidation(providedKey?: string, preferredModel = 'gemin
     });
   }
 
-  const isBearer = key.startsWith('ya29.') || key.startsWith('AQ.');
+  const isBearer = key.startsWith('ya29.');
   const listUrl = isBearer
     ? 'https://generativelanguage.googleapis.com/v1beta/models'
     : `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`;

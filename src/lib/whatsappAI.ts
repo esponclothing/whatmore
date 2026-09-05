@@ -27,7 +27,7 @@ export async function callGeminiRest(apiKey: string, modelName: string, prompt: 
   }
 
   const cleanKey = apiKey.trim().replace(/^Bearer\s+/i, '').replace(/^["']|["']$/g, '').trim();
-  const isBearer = cleanKey.startsWith('ya29.') || cleanKey.startsWith('AQ.');
+  const isBearer = cleanKey.startsWith('ya29.');
   const url = isBearer
     ? `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`
     : `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
