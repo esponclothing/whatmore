@@ -8,14 +8,20 @@ const SHOPIFY_ACCESS_TOKEN = process.env.VITE_SHOPIFY_ACCESS_TOKEN || '';
 
 // Mock AI call (You can use @google/genai or fetch in real app)
 
-const GEMINI_MODEL_CASCADE = [
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
+export const GEMINI_MODEL_CASCADE = [
+  'gemini-3.8-flash',
+  'gemini-3.7-flash',
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
   'gemini-2.5-flash',
-  'gemini-1.5-pro'
+  'gemini-2.5-pro',
+  'gemini-3.1-pro-preview',
+  'gemini-2.0-flash'
 ];
 
-async function callGeminiRest(apiKey: string, modelName: string, prompt: string, systemPrompt: string, maxTokens = 600) {
+export async function callGeminiRest(apiKey: string, modelName: string, prompt: string, systemPrompt: string, maxTokens = 600) {
   if (!apiKey || !apiKey.trim()) {
     throw new Error('Gemini API Key is not configured in Settings.');
   }
@@ -303,6 +309,7 @@ export async function searchProducts(userText: string) {
 }
 
 export function recommendSize(userText: string) {
+  const brandName = process.env.BRAND_NAME || 'Espon';
   const weightMatch = userText.match(/(?:weight\s*is\s*|weight\s*|wt\s*|@\s*|^|\D)(\d{2,3})\s*(?:kg|kilo|k)\b/i) || userText.match(/\b(\d{2,3})\s*(?:kg|kilo)\b/i);
   const waistMatch = userText.match(/(?:waist|kamar)\s*(?:is\s*|of\s*|=|-|:)?\s*(\d{2})\b/i) || userText.match(/\b(\d{2})\s*(?:waist|kamar|inch|in)\b/i);
 

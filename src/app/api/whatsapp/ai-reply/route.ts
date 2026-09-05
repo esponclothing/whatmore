@@ -63,60 +63,34 @@ Rules:
     // 5. Call Gemini API
     const apiKey = process.env.GEMINI_API_KEY || settings?.geminiApiKey;
     if (!apiKey) {
-      return NextResponse.json({ error: "GEMINI_API_KEY environment variable is not configured." }, { status: 500 });
+      return NextResponse.json({ error: "Gemini API Key is not configured." }, { status: 500 });
     }
 
-    const ai = new GoogleGenAI({ apiKey });
-    
-    // Map custom UI model strings to actual Gemini model names
-    let geminiModelName = "gemini-2.0-flash";
-    if (aiModel.includes("pro")) {
-      geminiModelName = "gemini-1.5-pro";
-    } else if (aiModel.includes("1.5-flash")) {
-      geminiModelName = "gemini-1.5-flash";
-    } else if (aiModel.includes("2.5-flash")) {
-      geminiModelName = "gemini-2.5-flash";
-    } else {
-      geminiModelName = "gemini-2.0-flash";
-    }
+    const { callGeminiRest, GEMINI_MODEL_CASCADE } = await import('@/lib/whatsappAI');
+
+    const preferredModel = aiModel || 'gemini-3.8-flash';
+    const cascade = [
+      preferredModel,
+      ...GEMINI_MODEL_CASCADE.filter(m => m !== preferredModel)
+    ];
 
     let responseText = "";
-    let finalModelUsed = geminiModelName;
+    let finalModelUsed = preferredModel;
+    let lastError = "";
 
-    try {
-      const response = await ai.models.generateContent({
-        model: geminiModelName,
-        contents: fullPrompt,
-      });
-      responseText = response.text?.trim() || "";
-    } catch (e: any) {
-      if (e.message?.includes("not found")) {
-        console.warn(`[AI Reply] Model ${geminiModelName} not found. Trying fallback...`);
-        // Fallback cascade
-        const fallbacks = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash", "gemini-1.5-pro"];
-        let success = false;
-        
-        for (const fallbackModel of fallbacks) {
-          try {
-            const fallbackResponse = await ai.models.generateContent({
-              model: fallbackModel,
-              contents: fullPrompt,
-            });
-            responseText = fallbackResponse.text?.trim() || "";
-            finalModelUsed = fallbackModel;
-            success = true;
-            break;
-          } catch (err: any) {
-             console.warn(`[AI Reply] Fallback model ${fallbackModel} failed.`);
-          }
-        }
-        
-        if (!success) {
-           throw new Error("All AI models failed or were not found in your region. Check your API key access.");
-        }
-      } else {
-        throw e;
+    for (const model of cascade) {
+      try {
+        responseText = await callGeminiRest(apiKey, model, fullPrompt, aiSystemPrompt, 400);
+        finalModelUsed = model;
+        break;
+      } catch (err: any) {
+        lastError = err.message;
+        console.warn(`[AI Reply] Model ${model} failed:`, err.message);
       }
+    }
+
+    if (!responseText) {
+      throw new Error(`All AI models failed in cascade. Last error: ${lastError}`);
     }
 
     return NextResponse.json({

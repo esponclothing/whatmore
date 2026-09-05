@@ -576,7 +576,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
           
           if (integration && integration.token) {
             let savedAudiences: Record<string, string> = {};
-            try { savedAudiences = JSON.parse(integration.metadata || "{}"); } catch (_) {}
+            try { savedAudiences = JSON.parse((integration as any).metadata || "{}"); } catch (_) {}
             
             let audienceId = node.existingAudienceId || savedAudiences[audienceName];
             if (!audienceId) {
