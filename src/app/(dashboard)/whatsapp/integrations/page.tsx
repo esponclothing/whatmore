@@ -940,90 +940,6 @@ const reloadTeams = async () => {
                 </tbody>
               </table>
             </div>
-
-            {isModalOpen && (
-              <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-                  <div className="flex justify-between items-center p-4 border-b border-slate-100">
-                    <h3 className="font-bold text-slate-800">{editingId ? 'Edit Webhook' : 'Add Webhook'}</h3>
-                    <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
-                  </div>
-                  <form onSubmit={handleSubmitIntegration} className="p-4 flex flex-col gap-4">
-                    {formData.type === 'META_CAPI' && (
-                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-3.5 text-xs text-slate-700 flex flex-col gap-2.5 shadow-sm max-h-[300px] overflow-y-auto">
-                        <div className="flex items-center gap-1.5 font-bold text-blue-900 text-sm">
-                          <Sparkles size={16} className="text-blue-600" />
-                          <span>Meta CAPI Step-by-Step Setup Guide</span>
-                        </div>
-                        <div className="space-y-2 text-[11.5px] leading-relaxed">
-                          <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 shadow-2xs">
-                            <strong className="text-blue-950 block mb-1">Step 1: Create a Meta App for CAPI:</strong>
-                            Go to <a href="https://developers.facebook.com/apps/creation/" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Meta App Creation ↗ <ExternalLink size={11} /></a>
-                            <ol className="list-decimal list-inside text-slate-600 mt-1 space-y-0.5 text-[11px]">
-                              <li>Enter <strong>App Name</strong> & <strong>Contact Email</strong> → Click Next.</li>
-                              <li>Filter by <strong>Ads and monetization</strong>.</li>
-                              <li>Check <strong>Measure ad performance data with Marketing API</strong>.</li>
-                              <li>Select your Business Portfolio & Create App.</li>
-                            </ol>
-                          </div>
-
-                          <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 shadow-2xs">
-                            <strong className="text-blue-950 block mb-1">Step 2: Get Meta Pixel / Dataset ID:</strong>
-                            Open <a href="https://business.facebook.com/events_manager2" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Meta Events Manager ↗ <ExternalLink size={11} /></a>, select your Pixel/Dataset and copy the 15-digit ID.
-                          </div>
-
-                          <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 shadow-2xs">
-                            <strong className="text-blue-950 block mb-1">Step 3: Create System User & Assign Assets:</strong>
-                            Go to <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Business Settings → System Users ↗ <ExternalLink size={11} /></a>
-                            <ol className="list-decimal list-inside text-slate-600 mt-1 space-y-0.5 text-[11px]">
-                              <li>Click <strong>Add</strong> → Name: <em>CAPI Bot Admin</em> (Role: Admin).</li>
-                              <li>Click <strong>Assign Assets</strong> → Assign your <strong>Meta App</strong> (Full Control) and <strong>Pixel</strong> (Full Control).</li>
-                            </ol>
-                          </div>
-
-                          <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 shadow-2xs">
-                            <strong className="text-blue-950 block mb-1">Step 4: Generate Permanent Access Token:</strong>
-                            <ol className="list-decimal list-inside text-slate-600 space-y-0.5 text-[11px]">
-                              <li>Under System User, click <strong>Generate New Token</strong>.</li>
-                              <li>Select your <strong>Meta App</strong> from Step 1.</li>
-                              <li>Select permissions: <code>ads_management</code>, <code>ads_read</code>, <code>business_management</code>.</li>
-                              <li>Copy the permanent token starting with <code>EAAI...</code>.</li>
-                            </ol>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    <div>
-<label className="block text-xs font-bold text-slate-600 mb-1">Category</label>
-                      <select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500">
-                        <option value="CRM_LEAD">CRM (Lead Webhook)</option>
-                        <option value="ERP">ERP</option>
-                        <option value="PAYMENT">Payment</option>
-                        <option value="ZAPIER">Zapier / Webhook</option>
-                        <option value="META_CAPI">Meta Conversions API</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">Name</label>
-                      <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500" placeholder="e.g. ERP Push / Pixel 1" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">{formData.type === 'META_CAPI' ? 'Meta Pixel ID' : 'Webhook URL'}</label>
-                      <input type={formData.type === 'META_CAPI' ? 'text' : 'url'} value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} required className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" placeholder={formData.type === 'META_CAPI' ? 'e.g. 1234567890' : 'https://...'} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">{formData.type === 'META_CAPI' ? 'Access Token' : 'Auth Token (Optional)'}</label>
-                      <input type="text" value={formData.token} onChange={e => setFormData({...formData, token: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" placeholder={formData.type === 'META_CAPI' ? 'EAAI...' : 'Bearer ...'} required={formData.type === 'META_CAPI'} />
-                    </div>
-                    <div className="flex justify-end gap-2 mt-2">
-                      <button type="button" onClick={handleCloseModal} className="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 text-slate-600">Cancel</button>
-                      <button type="submit" className="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700">Save</button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-
           </div>
         </div>
       )}
@@ -1221,10 +1137,10 @@ const reloadTeams = async () => {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex justify-end gap-2">
-                            <button onClick={() => handleOpenModal(wh)} className="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-100">
+                            <button onClick={() => handleOpenModal(wh)} className="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-100" title="Edit Integration">
                               <Edit size={16} />
                             </button>
-                            <button onClick={() => handleDelete(wh.id)} className="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100">
+                            <button onClick={() => handleDeleteIntegration(wh.id)} className="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100" title="Delete Integration">
                               <Trash2 size={16} />
                             </button>
                           </div>
@@ -1267,6 +1183,90 @@ const reloadTeams = async () => {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Global Shared Modal for Adding/Editing Webhooks and Meta Integrations */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="flex justify-between items-center p-4 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800">{editingId ? 'Edit Integration / Webhook' : 'Add Integration / Webhook'}</h3>
+              <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+            </div>
+            <form onSubmit={handleSubmitIntegration} className="p-4 flex flex-col gap-4">
+              {formData.type === 'META_CAPI' && (
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-3.5 text-xs text-slate-700 flex flex-col gap-2.5 shadow-sm max-h-[300px] overflow-y-auto">
+                  <div className="flex items-center gap-1.5 font-bold text-blue-900 text-sm">
+                    <Sparkles size={16} className="text-blue-600" />
+                    <span>Meta CAPI Step-by-Step Setup Guide</span>
+                  </div>
+                  <div className="space-y-2 text-[11.5px] leading-relaxed">
+                    <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 shadow-2xs">
+                      <strong className="text-blue-950 block mb-1">Step 1: Create a Meta App for CAPI:</strong>
+                      Go to <a href="https://developers.facebook.com/apps/creation/" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Meta App Creation ↗ <ExternalLink size={11} /></a>
+                      <ol className="list-decimal list-inside text-slate-600 mt-1 space-y-0.5 text-[11px]">
+                        <li>Enter <strong>App Name</strong> & <strong>Contact Email</strong> → Click Next.</li>
+                        <li>Filter by <strong>Ads and monetization</strong>.</li>
+                        <li>Check <strong>Measure ad performance data with Marketing API</strong>.</li>
+                        <li>Select your Business Portfolio & Create App.</li>
+                      </ol>
+                    </div>
+
+                    <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 shadow-2xs">
+                      <strong className="text-blue-950 block mb-1">Step 2: Get Meta Pixel / Dataset ID:</strong>
+                      Open <a href="https://business.facebook.com/events_manager2" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Meta Events Manager ↗ <ExternalLink size={11} /></a>, select your Pixel/Dataset and copy the 15-digit ID.
+                    </div>
+
+                    <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 shadow-2xs">
+                      <strong className="text-blue-950 block mb-1">Step 3: Create System User & Assign Assets:</strong>
+                      Go to <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Business Settings → System Users ↗ <ExternalLink size={11} /></a>
+                      <ol className="list-decimal list-inside text-slate-600 mt-1 space-y-0.5 text-[11px]">
+                        <li>Click <strong>Add</strong> → Name: <em>CAPI Bot Admin</em> (Role: Admin).</li>
+                        <li>Click <strong>Assign Assets</strong> → Assign your <strong>Meta App</strong> (Full Control) and <strong>Pixel</strong> (Full Control).</li>
+                      </ol>
+                    </div>
+
+                    <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 shadow-2xs">
+                      <strong className="text-blue-950 block mb-1">Step 4: Generate Permanent Access Token:</strong>
+                      <ol className="list-decimal list-inside text-slate-600 space-y-0.5 text-[11px]">
+                        <li>Under System User, click <strong>Generate New Token</strong>.</li>
+                        <li>Select your <strong>Meta App</strong> from Step 1.</li>
+                        <li>Select permissions: <code>ads_management</code>, <code>ads_read</code>, <code>business_management</code>.</li>
+                        <li>Copy the permanent token starting with <code>EAAI...</code> or <code>EAA...</code>.</li>
+                      </ol>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Category</label>
+                <select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500">
+                  <option value="CRM_LEAD">CRM (Lead Webhook)</option>
+                  <option value="ERP">ERP</option>
+                  <option value="PAYMENT">Payment</option>
+                  <option value="ZAPIER">Zapier / Webhook</option>
+                  <option value="META_CAPI">Meta Conversions API</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Name</label>
+                <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500" placeholder="e.g. ERP Push / Pixel 1" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">{formData.type === 'META_CAPI' ? 'Meta Pixel ID' : 'Webhook URL'}</label>
+                <input type={formData.type === 'META_CAPI' ? 'text' : 'url'} value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} required className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" placeholder={formData.type === 'META_CAPI' ? 'e.g. 1234567890' : 'https://...'} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">{formData.type === 'META_CAPI' ? 'Access Token' : 'Auth Token (Optional)'}</label>
+                <input type="text" value={formData.token} onChange={e => setFormData({...formData, token: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" placeholder={formData.type === 'META_CAPI' ? 'EAAI...' : 'Bearer ...'} required={formData.type === 'META_CAPI'} />
+              </div>
+              <div className="flex justify-end gap-2 mt-2">
+                <button type="button" onClick={handleCloseModal} className="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 text-slate-600">Cancel</button>
+                <button type="submit" className="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700">Save</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
