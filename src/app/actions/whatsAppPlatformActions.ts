@@ -389,7 +389,7 @@ export async function sendWhatsAppMessageAction(data: {
         const payload: any = {
           messaging_product: 'whatsapp',
           recipient_type: 'individual',
-          to: (recipientPhone.length === 10 && /^[6-9]/.test(recipientPhone)) ? `91${recipientPhone}` : recipientPhone,
+          to: recipientPhone.length === 10 ? `91${recipientPhone}` : recipientPhone,
         };
 
         const absoluteMediaUrl = data.mediaUrl?.startsWith('http') 
@@ -669,7 +669,7 @@ export async function retryFailedWhatsAppMessageAction(messageId: string) {
       ? conversation.customer.whatsappNumber.replace(/\D/g, '') 
       : conversation.customer.mobile.replace(/\D/g, '');
 
-    const targetPhone = (recipientPhone.length === 10 && /^[6-9]/.test(recipientPhone)) 
+    const targetPhone = recipientPhone.length === 10 
       ? `91${recipientPhone}` 
       : recipientPhone;
 
@@ -832,7 +832,7 @@ export async function generateWhatsAppPaymentLinkAction(data: {
 
     const customer = await prisma.customer.findUnique({ where: { id: data.customerId } });
     const rawContactPhone = customer?.whatsappNumber ? customer.whatsappNumber.replace(/\D/g, '') : (customer?.mobile || '').replace(/\D/g, '') || '9999999999';
-    const dynamicContact = (rawContactPhone.length === 10 && /^[6-9]/.test(rawContactPhone)) ? `+91${rawContactPhone}` : `+${rawContactPhone}`;
+    const dynamicContact = rawContactPhone.length === 10 ? `+91${rawContactPhone}` : `+${rawContactPhone}`;
 
     if (gw === 'RAZORPAY' && creds?.razorpayKeyId && creds?.razorpayKeySecret) {
       const auth = Buffer.from(`${creds.razorpayKeyId}:${creds.razorpayKeySecret}`).toString('base64');

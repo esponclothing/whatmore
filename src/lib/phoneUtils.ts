@@ -145,83 +145,14 @@ export function parseDynamicPhone(input: string | null | undefined): ParsedPhone
   }
 
   // 2. 10-digit numbers
+  // In the WhatsApp CRM database, any 10-digit number without an explicit country code is an Indian number (with 91 prefix required for Meta delivery)
   if (digits.length === 10) {
-    // Indian standard mobile numbers ALWAYS start with 6, 7, 8, or 9
-    if (/^[6-9]/.test(digits)) {
-      return {
-        countryCode: "+91",
-        nationalNumber: digits,
-        formatted: `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`,
-        rawDigits: `91${digits}`
-      };
-    }
-
-    // Peru (+51): e.g. 5118810104 -> Country Code: +51, national number: 18810104
-    if (digits.startsWith("51")) {
-      const nat = digits.slice(2);
-      return {
-        countryCode: "+51",
-        nationalNumber: nat,
-        formatted: `+51 ${nat}`,
-        rawDigits: digits
-      };
-    }
-
-    // Mexico (+52): e.g. 52XXXXXXXX -> Country Code: +52
-    if (digits.startsWith("52")) {
-      const nat = digits.slice(2);
-      return {
-        countryCode: "+52",
-        nationalNumber: nat,
-        formatted: `+52 ${nat}`,
-        rawDigits: digits
-      };
-    }
-
-    // Singapore (+65): e.g. 65XXXXXXXX
-    if (digits.startsWith("65")) {
-      const nat = digits.slice(2);
-      return {
-        countryCode: "+65",
-        nationalNumber: nat,
-        formatted: `+65 ${nat}`,
-        rawDigits: digits
-      };
-    }
-
-    // Malaysia (+60)
-    if (digits.startsWith("60")) {
-      const nat = digits.slice(2);
-      return {
-        countryCode: "+60",
-        nationalNumber: nat,
-        formatted: `+60 ${nat}`,
-        rawDigits: digits
-      };
-    }
-
-    // UK (+44)
-    if (digits.startsWith("44")) {
-      const nat = digits.slice(2);
-      return {
-        countryCode: "+44",
-        nationalNumber: nat,
-        formatted: `+44 ${nat}`,
-        rawDigits: digits
-      };
-    }
-
-    // North America (+1) if 10 digits without leading 1
-    // (e.g. area code starting with 2-9, but not Indian 6-9)
-    // Non-Indian 10-digit number fallback: show as +1 if standard NANP area code
-    if (/^[2-5]/.test(digits)) {
-      return {
-        countryCode: "+1",
-        nationalNumber: digits,
-        formatted: `+1 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`,
-        rawDigits: `1${digits}`
-      };
-    }
+    return {
+      countryCode: "+91",
+      nationalNumber: digits,
+      formatted: `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`,
+      rawDigits: `91${digits}`
+    };
   }
 
   // 3. 11-digit numbers

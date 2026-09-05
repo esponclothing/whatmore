@@ -246,6 +246,23 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: false, error: "Conversation not found" }, { status: 404 });
       }
 
+      // Auto-heal 10-digit customer phone numbers to standard 91 format for Meta API
+      if (conversation.customerId && conversation.customer) {
+        const rawPhone = (conversation.customer.whatsappNumber || conversation.customer.mobile || '').replace(/\D/g, '');
+        if (rawPhone.length === 10) {
+          const fullIndianPhone = `91${rawPhone}`;
+          await prisma.customer.update({
+            where: { id: conversation.customerId },
+            data: {
+              whatsappNumber: fullIndianPhone,
+              mobile: fullIndianPhone
+            }
+          }).catch(() => {});
+          conversation.customer.whatsappNumber = fullIndianPhone;
+          conversation.customer.mobile = fullIndianPhone;
+        }
+      }
+
       // Reset unread count when viewed
       if (conversation.unreadCount > 0) {
         await prisma.whatsAppConversation.update({

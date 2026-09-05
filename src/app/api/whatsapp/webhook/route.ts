@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
       const fromPhone = msg.from;
       const fullPhone = fromPhone.replace(/\D/g, '');
       const last10 = fullPhone.slice(-10);
-      const cleanPhone = (fullPhone.length === 10 && /^[6-9]/.test(fullPhone)) ? `91${fullPhone}` : fullPhone;
+      const cleanPhone = fullPhone.length === 10 ? `91${fullPhone}` : fullPhone;
       
       // Feature: WebRTC Call Handling
       if (msg.type === "interactive" && msg.interactive?.type === "webrtc_call") {
@@ -174,14 +174,14 @@ export async function POST(req: NextRequest) {
       // Step B: Auto-create Contact/Lead if customer does not exist
       if (!customer) {
         const defaultEmployee = await prisma.employee.findFirst();
-        const formattedDisplayPhone = formatWhatsAppPhone(fullPhone);
+        const formattedDisplayPhone = formatWhatsAppPhone(cleanPhone);
         const displayName = whatsappProfileName || formattedDisplayPhone;
         customer = await prisma.customer.create({
           data: {
             businessName: displayName,
             contactPerson: displayName,
-            mobile: fullPhone,
-            whatsappNumber: fullPhone,
+            mobile: cleanPhone,
+            whatsappNumber: cleanPhone,
             customerType: "Wholesaler",
             status: "New Lead",
             leadStage: "New Enquiry",
@@ -192,12 +192,12 @@ export async function POST(req: NextRequest) {
         });
       } else {
         // If customer was previously saved with a truncated number, update to full international phone
-        if (fullPhone.length > (customer.whatsappNumber?.length || 0)) {
+        if (cleanPhone.length > (customer.whatsappNumber?.length || 0)) {
           await prisma.customer.update({
             where: { id: customer.id },
-            data: { whatsappNumber: fullPhone, mobile: fullPhone }
+            data: { whatsappNumber: cleanPhone, mobile: cleanPhone }
           }).catch(() => {});
-          customer = { ...customer, whatsappNumber: fullPhone, mobile: fullPhone };
+          customer = { ...customer, whatsappNumber: cleanPhone, mobile: cleanPhone };
         }
 
         if (whatsappProfileName && (customer.contactPerson?.startsWith("Contact +") || customer.contactPerson?.startsWith("Contact 91") || customer.contactPerson?.startsWith("+") || customer.contactPerson === "Unknown Lead" || !customer.contactPerson)) {
