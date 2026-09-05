@@ -363,12 +363,17 @@ export async function POST(req: NextRequest) {
 
           try {
             aiResponse = await handleIncomingAILogic(fromPhone, textContent, historyLines, conversation.id);
-            // Detect which tools were called from the response content
-            const tools: string[] = [];
-            if (textContent.match(/[12]\d{3}/)) tools.push("lookupOrder");
-            if (/shirt|short|combo|pant|product/i.test(textContent)) tools.push("searchProducts");
-            if (/size|weight|kg|cm|waist/i.test(textContent)) tools.push("recommendSize");
-            toolsCalled = tools.length > 0 ? tools.join(", ") : "ai_reply";
+            if (!aiResponse) {
+              aiStatus = "FAILED";
+              aiError = "AI returned empty response";
+            } else {
+              // Detect which tools were called from the response content
+              const tools: string[] = [];
+              if (textContent.match(/[12]\d{3}/)) tools.push("lookupOrder");
+              if (/shirt|short|combo|pant|product/i.test(textContent)) tools.push("searchProducts");
+              if (/size|weight|kg|cm|waist/i.test(textContent)) tools.push("recommendSize");
+              toolsCalled = tools.length > 0 ? tools.join(", ") : "ai_reply";
+            }
           } catch (e: any) {
             aiStatus = "FAILED";
             aiError = e.message;

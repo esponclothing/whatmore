@@ -8,10 +8,29 @@ const SHOPIFY_ACCESS_TOKEN = process.env.VITE_SHOPIFY_ACCESS_TOKEN || '';
 
 // Mock AI call (You can use @google/genai or fetch in real app)
 
-const GEMINI_MODEL_CASCADE = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-flash-latest'];
+const GEMINI_MODEL_CASCADE = [
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-2.5-flash',
+  'gemini-1.5-pro'
+];
 
-async function callGeminiRest(apiKey, modelName, prompt, systemPrompt, maxTokens = 600) {
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
+async function callGeminiRest(apiKey: string, modelName: string, prompt: string, systemPrompt: string, maxTokens = 600) {
+  if (!apiKey || !apiKey.trim()) {
+    throw new Error('Gemini API Key is not configured in Settings.');
+  }
+
+  const cleanKey = apiKey.trim();
+  const isBearer = cleanKey.startsWith('ya29.') || cleanKey.startsWith('AQ.');
+  const url = isBearer
+    ? `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`
+    : `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${cleanKey}`;
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (isBearer) {
+    headers['Authorization'] = `Bearer ${cleanKey}`;
+  }
+
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -19,12 +38,12 @@ async function callGeminiRest(apiKey, modelName, prompt, systemPrompt, maxTokens
   };
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(body)
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || 'Gemini API error ' + res.status);
+    throw new Error(err?.error?.message || `Gemini API error ${res.status}`);
   }
   const data = await res.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -32,17 +51,19 @@ async function callGeminiRest(apiKey, modelName, prompt, systemPrompt, maxTokens
   return text.trim();
 }
 
-async function callAIEngine(messages, preferredModel, jsonMode = false, maxTokens = 600) {
-  let apiKey = process.env.GEMINI_API_KEY || ['AQ.', 'Ab8RN6J-54eZLq', 'YDuD80EuP-nzMFB', 'gC4gFxwFw74oCeCsfiUHA'].join('');
+async function callAIEngine(messages: any[], preferredModel: string, jsonMode = false, maxTokens = 600) {
+  let apiKey = process.env.GEMINI_API_KEY || '';
   try {
     const settings = await prisma.whatsAppSettings.findFirst();
     if (settings?.geminiApiKey) apiKey = settings.geminiApiKey;
   } catch (_) {}
 
+  if (!apiKey) {
+    throw new Error('No Gemini API Key found in settings or environment.');
+  }
 
-
-  const systemMsg = messages.find(m => m.role === 'system')?.content || '';
-  const userMsgs = messages.filter(m => m.role !== 'system').map(m => (m.role === 'user' ? 'Customer: ' : 'Agent: ') + m.content).join('\n');
+  const systemMsg = messages.find((m: any) => m.role === 'system')?.content || '';
+  const userMsgs = messages.filter((m: any) => m.role !== 'system').map((m: any) => (m.role === 'user' ? 'Customer: ' : 'Agent: ') + m.content).join('\n');
 
   const cascade = [
     preferredModel,
@@ -54,12 +75,12 @@ async function callAIEngine(messages, preferredModel, jsonMode = false, maxToken
     try {
       console.log('[AI] Querying Gemini model:', model);
       return await callGeminiRest(apiKey, model, userMsgs, systemMsg, maxTokens);
-    } catch (err) {
+    } catch (err: any) {
       lastError = err.message;
-      console.warn('[AI] Model failed (' + model + '):', err.message);
+      console.warn(`[AI] Model failed (${model}):`, err.message);
     }
   }
-  throw new Error('All Gemini cascade models failed. Last error: ' + lastError);
+  throw new Error(`All Gemini cascade models failed. Last error: ${lastError}`);
 }
 
 export async function lookupOrder(orderNumber: string, senderPhone = '', userText = '', history = '') {
@@ -493,12 +514,13 @@ CUSTOMER NEW MESSAGE:
 ${userText}`;
 
   try {
+    const preferredModel = settings?.aiModel || "gemini-2.0-flash";
     let aiReply = await callAIEngine(
       [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userText }
       ],
-      "gemini-3.6-flash", false, 2000
+      preferredModel, false, 2000
     );
 
     let sendCarousel = carouselCards.length > 0;
@@ -551,8 +573,8 @@ ${userText}`;
 
     return aiReply;
   } catch (err: any) {
-    console.error("AI Generation failed:", err.message);
-    return null;
+    console.error("[WhatsApp AI] Generation failed:", err.message);
+    throw err;
   }
 }
 

@@ -237,12 +237,12 @@ export default function WhatsAppAIAutomationPage() {
                 onChange={(e) => setSettings({...settings, aiModel: e.target.value})}
                 style={{ width: "100%", padding: "8px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "14px" }}
               >
-                <option value="gemini-2.0-flash">Gemini 3.6 Flash (Primary - Fastest)</option>
-                <option value="gemini-2.0-flash">Gemini 3.5 Flash (Fallback 1)</option>
-                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Fallback 2)</option>
+                <option value="gemini-2.0-flash">Gemini 2.0 Flash (Recommended - Ultra Fast)</option>
+                <option value="gemini-1.5-flash">Gemini 1.5 Flash (Reliable & Stable)</option>
+                <option value="gemini-1.5-pro">Gemini 1.5 Pro (Complex Reasoning)</option>
               </select>
               <p style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
-                AI tries in order: 3.6 Flash then 3.5 Flash then 3.1 Pro if rate limited.
+                AI auto-cascades to fallback models if rate-limited or unavailable.
               </p>
             </div>
 
