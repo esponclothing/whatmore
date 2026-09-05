@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Users, Search, MessageSquare, Phone, Tag, Building, MapPin } from "lucide-react";
 import { getWhatsAppConversations } from "@/app/actions/whatsAppPlatformActions";
+import { formatWhatsAppPhone } from "@/lib/phoneUtils";
 
 export default function WhatsAppContactsPage() {
   const [contacts, setContacts] = useState<any[]>([]);
@@ -60,7 +61,7 @@ export default function WhatsAppContactsPage() {
                     <div style={{ fontWeight: 700, color: "#111827" }}>{c?.businessName || c?.contactPerson}</div>
                     <div style={{ fontSize: "11.5px", color: "#6b7280" }}>{c?.contactPerson}</div>
                   </td>
-                  <td style={{ padding: "12px 16px", color: "#059669", fontWeight: 600 }}>+91 {c?.mobile}</td>
+                  <td style={{ padding: "12px 16px", color: "#059669", fontWeight: 600 }}>{formatWhatsAppPhone(c?.whatsappNumber || c?.mobile)}</td>
                   <td style={{ padding: "12px 16px", color: "#4b5563" }}>{c?.city || "Surat"}, {c?.state || "Gujarat"}</td>
                   <td style={{ padding: "12px 16px" }}>
                     <span style={{ fontSize: "11px", fontWeight: 600, background: "#e0e7ff", color: "#3730a3", padding: "2px 6px", borderRadius: "4px" }}>

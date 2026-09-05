@@ -106,15 +106,19 @@ export async function GET(req: NextRequest) {
 
       const chats = conversations.map((conv) => {
         const lastMsg = conv.messages[0];
-        const phone = conv.customer?.mobile || conv.customer?.whatsappNumber || "";
+        const rawPhone = conv.customer?.whatsappNumber || conv.customer?.mobile || "";
+        const cleanDigits = rawPhone.replace(/\D/g, "");
+        const resolvedPhone = (cleanDigits.length === 10 && /^[6-9]/.test(cleanDigits))
+          ? `91${cleanDigits}`
+          : cleanDigits;
         const hoursElapsed = conv.lastMessageAt
           ? (Date.now() - new Date(conv.lastMessageAt).getTime()) / (1000 * 3600)
           : 999;
 
         return {
           id: conv.id,
-          phone: `91${phone.replace(/\D/g, "").slice(-10)}`,
-          customer_name: conv.customer?.contactPerson || conv.customer?.businessName || phone,
+          phone: resolvedPhone,
+          customer_name: conv.customer?.contactPerson || conv.customer?.businessName || resolvedPhone,
           last_message: lastMsg?.content || "",
           last_role: lastMsg?.senderType === "CUSTOMER" ? "user" : "assistant",
           created_at: conv.lastMessageAt?.toISOString() || new Date().toISOString(),
@@ -158,12 +162,15 @@ export async function GET(req: NextRequest) {
       if (convId) {
         conversation = await prisma.whatsAppConversation.findUnique({ where: { id: convId } });
       } else {
-        const cleanPhone = String(phone).replace(/\D/g, "").slice(-10);
+        const rawDigits = String(phone).replace(/\D/g, "");
+        const last10 = rawDigits.slice(-10);
         const customer = await prisma.customer.findFirst({
           where: {
             OR: [
-              { mobile: { contains: cleanPhone } },
-              { whatsappNumber: { contains: cleanPhone } },
+              { mobile: rawDigits },
+              { whatsappNumber: rawDigits },
+              { mobile: { contains: last10 } },
+              { whatsappNumber: { contains: last10 } },
             ],
           },
         });
@@ -376,7 +383,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "phone or convId required" }, { status: 400 });
     }
 
-    const cleanPhone = String(phone || "").replace(/\D/g, "").slice(-10);
+    const rawDigits = String(phone || "").replace(/\D/g, "");
+    const last10 = rawDigits.slice(-10);
+    const phoneFilter = [
+      { mobile: rawDigits },
+      { whatsappNumber: rawDigits },
+      { mobile: { contains: last10 } },
+      { whatsappNumber: { contains: last10 } }
+    ];
 
     // -- A. Toggle AI ---------------------------------------------------------
     if (postAction === "toggle_ai") {
@@ -385,7 +399,7 @@ export async function POST(req: NextRequest) {
         conversation = await prisma.whatsAppConversation.findUnique({ where: { id: convId } });
       } else {
         const customer = await prisma.customer.findFirst({
-          where: { OR: [{ mobile: { contains: cleanPhone } }, { whatsappNumber: { contains: cleanPhone } }] },
+          where: { OR: phoneFilter },
         });
         if (customer) {
           conversation = await prisma.whatsAppConversation.findFirst({ where: { customerId: customer.id } });
@@ -407,7 +421,7 @@ export async function POST(req: NextRequest) {
         conversation = await prisma.whatsAppConversation.findUnique({ where: { id: convId } });
       } else {
         const customer = await prisma.customer.findFirst({
-          where: { OR: [{ mobile: { contains: cleanPhone } }, { whatsappNumber: { contains: cleanPhone } }] },
+          where: { OR: phoneFilter },
         });
         if (customer) {
           conversation = await prisma.whatsAppConversation.findFirst({ where: { customerId: customer.id } });
@@ -426,7 +440,7 @@ export async function POST(req: NextRequest) {
     if (postAction === "send_message" || postAction === "send_template") {
       // Find or create conversation
       const customer = await prisma.customer.findFirst({
-        where: { OR: [{ mobile: { contains: cleanPhone } }, { whatsappNumber: { contains: cleanPhone } }] },
+        where: { OR: phoneFilter },
       });
 
       let conversation: any = null;

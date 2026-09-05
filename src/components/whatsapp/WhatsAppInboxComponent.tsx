@@ -88,6 +88,7 @@ import {
 } from "@/app/actions/whatsAppPlatformActions";
 import { getWhatsAppIntegrationsAction, pushLeadToIntegrationAction } from "@/app/actions/whatsAppIntegrationActions";
 import { useWhatsAppStore } from "@/store/whatsappStore";
+import { formatWhatsAppPhone } from "@/lib/phoneUtils";
 import "./WhatsAppInbox.css";
 
 // Helper to force download media instead of opening in a new tab
@@ -1453,7 +1454,7 @@ export default function WhatsAppInboxComponent() {
                       </div>
 
                       <div className="conv-contact-sub">
-                        <span>+91 {String(cust?.mobile || cust?.whatsappNumber || "").replace(/^91/, '').replace(/^\+91/, '').trim()}</span>
+                        <span>{formatWhatsAppPhone(cust?.whatsappNumber || cust?.mobile)}</span>
                       </div>
 
                       <div className="conv-snippet-line">
@@ -1634,7 +1635,7 @@ export default function WhatsAppInboxComponent() {
                     <span className="chat-wa-connected-badge">Connected</span>
                   </div>
                   <div className="chat-sub-line">
-                    <span>+91 {String(activeConvDetail.customer?.mobile || activeConvDetail.customer?.whatsappNumber || "").replace(/^91/, '').replace(/^\+91/, '').trim()}</span>
+                    <span>{formatWhatsAppPhone(activeConvDetail.customer?.whatsappNumber || activeConvDetail.customer?.mobile)}</span>
                   </div>
                 </div>
               </div>
@@ -2574,7 +2575,7 @@ export default function WhatsAppInboxComponent() {
               <div className="crm-info-list">
                 <div className="info-item">
                   <Phone size={14} />
-                  <span>+91 {activeConvDetail.customer?.mobile}</span>
+                  <span>{formatWhatsAppPhone(activeConvDetail.customer?.whatsappNumber || activeConvDetail.customer?.mobile)}</span>
                 </div>
                 <div className="info-item">
                   <Mail size={14} />

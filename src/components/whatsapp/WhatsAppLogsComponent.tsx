@@ -18,6 +18,7 @@ import {
   getWhatsAppWebhookLogsAction
 } from "@/app/actions/whatsAppPlatformActions";
 import { useWhatsAppStore } from "@/store/whatsappStore";
+import { formatWhatsAppPhone } from "@/lib/phoneUtils";
 import "./WhatsAppInbox.css"; // Reuse the same CSS file for .logs-panel styles
 
 export default function WhatsAppLogsComponent() {
@@ -315,7 +316,7 @@ export default function WhatsAppLogsComponent() {
                       <tbody>
                         {webhookEvents.map((evt: any, i) => (
                           <tr key={i}>
-                            <td className="log-phone">{evt.conversation?.customer?.mobile || evt.senderName || '-'}</td>
+                            <td className="log-phone">{formatWhatsAppPhone(evt.conversation?.customer?.whatsappNumber || evt.conversation?.customer?.mobile) || evt.senderName || '-'}</td>
                             <td>{evt.conversation?.customer?.contactPerson || <span className="log-muted">-</span>}</td>
                             <td><span className="log-code">{evt.messageType || 'TEXT'}</span></td>
                             <td><div className="log-truncate" title={evt.content}>{evt.content}</div></td>

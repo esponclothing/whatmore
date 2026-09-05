@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { seedWhatsAppPlatformData } from "@/lib/seedWhatsApp";
 import { revalidatePath } from "next/cache";
+import { formatWhatsAppPhone } from "@/lib/phoneUtils";
 
 export async function getWhatsAppChatbotLogsAction(phone: string) {
   try {
@@ -301,7 +302,7 @@ export async function sendDirectWhatsAppDispatchAction(phone: string, content: s
       customer = await prisma.customer.create({
         data: {
           businessName: "WhatsApp Lead",
-          contactPerson: `+91 ${cleanPhone}`,
+          contactPerson: formatWhatsAppPhone(cleanPhone),
           mobile: cleanPhone,
           whatsappNumber: cleanPhone,
           source: "Direct Dispatch",
@@ -388,7 +389,7 @@ export async function sendWhatsAppMessageAction(data: {
         const payload: any = {
           messaging_product: 'whatsapp',
           recipient_type: 'individual',
-          to: recipientPhone.startsWith('91') ? recipientPhone : `91${recipientPhone}`,
+          to: (recipientPhone.length === 10 && /^[6-9]/.test(recipientPhone)) ? `91${recipientPhone}` : recipientPhone,
         };
 
         const absoluteMediaUrl = data.mediaUrl?.startsWith('http') 
@@ -672,7 +673,8 @@ export async function generateWhatsAppPaymentLinkAction(data: {
     let paymentUrl = `${domain}/pay`;
 
     const customer = await prisma.customer.findUnique({ where: { id: data.customerId } });
-    const contactPhone = customer?.whatsappNumber ? customer.whatsappNumber.replace(/\D/g, '') : (customer?.mobile || '').replace(/\D/g, '').slice(-10) || '9999999999';
+    const rawContactPhone = customer?.whatsappNumber ? customer.whatsappNumber.replace(/\D/g, '') : (customer?.mobile || '').replace(/\D/g, '') || '9999999999';
+    const dynamicContact = (rawContactPhone.length === 10 && /^[6-9]/.test(rawContactPhone)) ? `+91${rawContactPhone}` : `+${rawContactPhone}`;
 
     if (gw === 'RAZORPAY' && creds?.razorpayKeyId && creds?.razorpayKeySecret) {
       const auth = Buffer.from(`${creds.razorpayKeyId}:${creds.razorpayKeySecret}`).toString('base64');
@@ -683,7 +685,7 @@ export async function generateWhatsAppPaymentLinkAction(data: {
           amount: Math.round(data.amount * 100),
           currency: 'INR',
           description: data.description,
-          customer: { name: customer?.contactPerson || 'Customer', contact: `+91${contactPhone}` },
+          customer: { name: customer?.contactPerson || 'Customer', contact: dynamicContact },
           notify: { sms: false, email: false },
           reminder_enable: false
         })

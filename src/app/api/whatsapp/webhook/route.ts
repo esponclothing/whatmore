@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { handleIncomingAILogic } from "@/lib/whatsappAI";
 import { executeFlowEngine } from "@/lib/whatsappFlowEngine";
 import { assignWhatsAppLeadAction } from "@/app/actions/whatsAppPlatformActions";
+import { formatWhatsAppPhone } from "@/lib/phoneUtils";
 
 const PROCESSED_WEBHOOK_IDS = new Set<string>();
 
@@ -97,7 +98,9 @@ export async function POST(req: NextRequest) {
       }
 
       const fromPhone = msg.from;
-      const cleanPhone = fromPhone.replace(/\D/g, '').slice(-10);
+      const fullPhone = fromPhone.replace(/\D/g, '');
+      const last10 = fullPhone.slice(-10);
+      const cleanPhone = (fullPhone.length === 10 && /^[6-9]/.test(fullPhone)) ? `91${fullPhone}` : fullPhone;
       
       // Feature: WebRTC Call Handling
       if (msg.type === "interactive" && msg.interactive?.type === "webrtc_call") {
@@ -160,8 +163,10 @@ export async function POST(req: NextRequest) {
       let customer = await prisma.customer.findFirst({
         where: {
           OR: [
-            { mobile: { contains: cleanPhone } },
-            { whatsappNumber: { contains: cleanPhone } }
+            { whatsappNumber: fullPhone },
+            { mobile: fullPhone },
+            { whatsappNumber: { contains: last10 } },
+            { mobile: { contains: last10 } }
           ]
         }
       });
@@ -169,12 +174,14 @@ export async function POST(req: NextRequest) {
       // Step B: Auto-create Contact/Lead if customer does not exist
       if (!customer) {
         const defaultEmployee = await prisma.employee.findFirst();
+        const formattedDisplayPhone = formatWhatsAppPhone(fullPhone);
+        const displayName = whatsappProfileName || formattedDisplayPhone;
         customer = await prisma.customer.create({
           data: {
-            businessName: whatsappProfileName || `+91 ${cleanPhone}`,
-            contactPerson: whatsappProfileName || `+91 ${cleanPhone}`,
-            mobile: cleanPhone,
-            whatsappNumber: cleanPhone,
+            businessName: displayName,
+            contactPerson: displayName,
+            mobile: fullPhone,
+            whatsappNumber: fullPhone,
             customerType: "Wholesaler",
             status: "New Lead",
             leadStage: "New Enquiry",
@@ -183,13 +190,24 @@ export async function POST(req: NextRequest) {
             tags: null
           }
         });
-      } else if (whatsappProfileName && (customer.contactPerson?.startsWith("Contact +91") || customer.contactPerson === "Unknown Lead" || !customer.contactPerson)) {
-        // Feature 5: Update contact name if it was an auto-placeholder or Unknown
-        await prisma.customer.update({
-          where: { id: customer.id },
-          data: { contactPerson: whatsappProfileName }
-        });
-        customer = { ...customer, contactPerson: whatsappProfileName };
+      } else {
+        // If customer was previously saved with a truncated number, update to full international phone
+        if (fullPhone.length > (customer.whatsappNumber?.length || 0)) {
+          await prisma.customer.update({
+            where: { id: customer.id },
+            data: { whatsappNumber: fullPhone, mobile: fullPhone }
+          }).catch(() => {});
+          customer = { ...customer, whatsappNumber: fullPhone, mobile: fullPhone };
+        }
+
+        if (whatsappProfileName && (customer.contactPerson?.startsWith("Contact +") || customer.contactPerson?.startsWith("Contact 91") || customer.contactPerson?.startsWith("+") || customer.contactPerson === "Unknown Lead" || !customer.contactPerson)) {
+          // Feature 5: Update contact name if it was an auto-placeholder or Unknown
+          await prisma.customer.update({
+            where: { id: customer.id },
+            data: { contactPerson: whatsappProfileName }
+          });
+          customer = { ...customer, contactPerson: whatsappProfileName };
+        }
       }
 
       // Step C: Link/Find Conversation
@@ -330,12 +348,12 @@ export async function POST(req: NextRequest) {
         }).catch(() => {});
       }
 
-      console.log(`[WhatsApp Webhook] Incoming message from +91 ${cleanPhone}: "${textContent.slice(0, 50)}"`);
+      console.log(`[WhatsApp Webhook] Incoming message from ${formatWhatsAppPhone(fullPhone)}: "${textContent.slice(0, 50)}"`);
 
       // Removed old global auto-assignment logic to rely purely on Chatbot Engine routing.
         // Feature 1: Send Web Push Notification to assigned agent or all if unassigned
         sendPushNotificationToAgents(
-          `New Message from ${customer.contactPerson || '+91 ' + cleanPhone}`,
+          `New Message from ${customer.contactPerson || formatWhatsAppPhone(fullPhone)}`,
           textContent.slice(0, 100),
           `/whatsapp/inbox`,
           conversation.assignedEmployeeId

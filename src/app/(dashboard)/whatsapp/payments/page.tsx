@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { CreditCard, CheckCircle2, Clock, Plus, RefreshCw, Link as LinkIcon } from "lucide-react";
 import { getWhatsAppPaymentLinks } from "@/app/actions/whatsAppPlatformActions";
+import { formatWhatsAppPhone } from "@/lib/phoneUtils";
 
 export default function WhatsAppPaymentsPage() {
   const [links, setLinks] = useState<any[]>([]);
@@ -79,7 +80,7 @@ export default function WhatsAppPaymentsPage() {
                     {link.conversation?.customer?.businessName || link.conversation?.customer?.contactPerson || "Unknown"}
                   </td>
                   <td style={{ padding: "12px 16px", color: "#059669" }}>
-                    +{link.conversation?.customer?.whatsappNumber || link.conversation?.customer?.mobile || "—"}
+                    {formatWhatsAppPhone(link.conversation?.customer?.whatsappNumber || link.conversation?.customer?.mobile) || "—"}
                   </td>
                   <td style={{ padding: "12px 16px", color: "#374151" }}>{link.description || "—"}</td>
                   <td style={{ padding: "12px 16px", fontWeight: 800, color: "#111827" }}>
