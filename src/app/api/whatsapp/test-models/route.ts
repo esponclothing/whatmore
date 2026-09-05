@@ -41,7 +41,13 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, keySaved: true, results });
+    return NextResponse.json({ 
+      success: true, 
+      keySaved: true, 
+      keyPrefix: key.slice(0, 8) + '...' + key.slice(-4),
+      keyLength: key.length,
+      results 
+    });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message });
   }
