@@ -13,7 +13,8 @@ import {
   getWhatsAppTemplates,
   saveWhatsAppTemplateAction,
   deleteWhatsAppTemplateAction,
-  sendWhatsAppTemplateAction
+  sendWhatsAppTemplateAction,
+  getWhatsAppBrandDetailsAction
 } from "@/app/actions/whatsAppPlatformActions";
 
 // Meta API Constraints
@@ -51,34 +52,34 @@ const CATEGORIES = [
   { value: "AUTHENTICATION", label: "🔐 Authentication", desc: "One-time passwords (OTP) and login account verification codes" },
 ];
 
-const UTILITY_PRESETS = [
+const getUtilityPresetsList = (brand: string, domain: string) => [
   {
     id: "ORDER_CONFIRMATION",
     label: "📦 Order Confirmation",
     header: "Order Confirmed!",
-    body: "Hi {{1}}, thank you for shopping with 11FIT! Your order #{{2}} of ₹{{3}} has been confirmed and is being packed with care.",
-    footer: "11FIT Sports | Need help? Reply to this chat"
+    body: `Hi {{1}}, thank you for shopping with ${brand}! Your order #{{2}} of ₹{{3}} has been confirmed and is being packed with care.`,
+    footer: `${brand} | Need help? Reply to this chat`
   },
   {
     id: "SHIPPING_UPDATE",
     label: "🚚 Shipping & Tracking",
     header: "Your Order is on the Way!",
-    body: "Hi {{1}}, great news! Your order #{{2}} has been dispatched via {{3}}. Track your delivery live here: {{4}}",
-    footer: "11FIT Sports Logistics"
+    body: `Hi {{1}}, great news! Your order #{{2}} from ${brand} has been dispatched via {{3}}. Track your delivery live here: {{4}}`,
+    footer: `${brand} Logistics`
   },
   {
     id: "PAYMENT_RECEIPT",
     label: "💳 Payment Receipt",
     header: "Payment Received",
-    body: "Hi {{1}}, we have received your payment of ₹{{2}} for invoice #{{3}}. Thank you for your business!",
-    footer: "11FIT Accounts"
+    body: `Hi {{1}}, we have received your payment of ₹{{2}} for invoice #{{3}}. Thank you for choosing ${brand}!`,
+    footer: `${brand} Accounts`
   },
   {
     id: "ACCOUNT_ALERT",
     label: "🔔 Account Alert",
-    header: "Security / Account Notice",
-    body: "Hi {{1}}, this is an important update regarding your 11FIT account: {{2}}. If this was not you, please reply immediately.",
-    footer: "11FIT Security Desk"
+    header: "Security Notice",
+    body: `Hi {{1}}, this is an important update regarding your ${brand} account: {{2}}. If this was not you, please reply immediately.`,
+    footer: `${brand} Security Desk`
   },
   {
     id: "CUSTOM_UTILITY",
@@ -107,6 +108,10 @@ export default function WhatsAppTemplatesComponent() {
   const [timeRangeFilter, setTimeRangeFilter] = useState<"ALL" | "TODAY" | "7D" | "30D">("ALL");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "most_used" | "highest_read" | "alphabetical">("newest");
   
+  // Dynamic Brand Details from Database
+  const [brandName, setBrandName] = useState("Espon Sports");
+  const [brandDomain, setBrandDomain] = useState("esponsports.com");
+
   // Page View Mode: 'LIST' or 'CREATE'
   const [viewMode, setViewMode] = useState<"LIST" | "CREATE">("LIST");
 
@@ -126,6 +131,41 @@ export default function WhatsAppTemplatesComponent() {
     updateTime();
     const interval = setInterval(updateTime, 10000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Fetch brand details on component mount
+  useEffect(() => {
+    getWhatsAppBrandDetailsAction().then((res) => {
+      if (res && res.brandName) {
+        setBrandName(res.brandName);
+        if (res.brandDomain) setBrandDomain(res.brandDomain);
+        // Also update initial carousel cards with real brand name & domain
+        setCarouselCards([
+          {
+            id: "card_1",
+            mediaUrl: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&auto=format&fit=crop&q=80",
+            headerType: "IMAGE",
+            title: `${res.brandName} Performance Tee`,
+            bodyText: "₹899 • Breathable 4-way stretch fabric",
+            buttons: [
+              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "esponsports.com"}/products/tee` },
+              { type: "QUICK_REPLY", text: "View Sizes" }
+            ]
+          },
+          {
+            id: "card_2",
+            mediaUrl: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=500&auto=format&fit=crop&q=80",
+            headerType: "IMAGE",
+            title: `${res.brandName} Pro Shorts`,
+            bodyText: "₹1,199 • Zipper pockets & sweat-wicking",
+            buttons: [
+              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "esponsports.com"}/products/shorts` },
+              { type: "QUICK_REPLY", text: "More Colors" }
+            ]
+          }
+        ]);
+      }
+    });
   }, []);
 
   // -------------------------------------------------------------
@@ -157,10 +197,10 @@ export default function WhatsAppTemplatesComponent() {
       id: "card_1",
       mediaUrl: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&auto=format&fit=crop&q=80",
       headerType: "IMAGE",
-      title: "11FIT Performance Tee",
+      title: "Espon Performance Tee",
       bodyText: "₹899 • Breathable 4-way stretch fabric",
       buttons: [
-        { type: "URL", text: "Buy Now", url: "https://11fit.in/products/pro-tee" },
+        { type: "URL", text: "Buy Now", url: "https://esponsports.com/products/tee" },
         { type: "QUICK_REPLY", text: "View Sizes" }
       ]
     },
@@ -168,10 +208,10 @@ export default function WhatsAppTemplatesComponent() {
       id: "card_2",
       mediaUrl: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=500&auto=format&fit=crop&q=80",
       headerType: "IMAGE",
-      title: "Pro Training Shorts",
+      title: "Espon Pro Shorts",
       bodyText: "₹1,199 • Zipper pockets & sweat-wicking",
       buttons: [
-        { type: "URL", text: "Buy Now", url: "https://11fit.in/products/training-shorts" },
+        { type: "URL", text: "Buy Now", url: "https://esponsports.com/products/shorts" },
         { type: "QUICK_REPLY", text: "More Colors" }
       ]
     }
@@ -204,32 +244,11 @@ export default function WhatsAppTemplatesComponent() {
     fetchTemplates();
   }, []);
 
-  // Category Switch Handler
-  const handleCategorySelect = (selectedCat: "MARKETING" | "UTILITY" | "AUTHENTICATION") => {
-    setCategory(selectedCat);
-    if (selectedCat === "UTILITY") {
-      setTemplateType("STANDARD");
-      applyUtilityPreset("ORDER_CONFIRMATION");
-    } else if (selectedCat === "AUTHENTICATION") {
-      setTemplateType("AUTHENTICATION");
-      setHeaderType("NONE");
-      setHeaderContent("");
-      setHeaderMediaPreview(null);
-      setBodyText("{{1}} is your 11FIT verification code. For your security, do not share this code.");
-      setFooterText("Code expires in 10 minutes");
-      setButtons([{ type: "COPY_CODE", text: "Copy Code", code: "{{1}}" }]);
-    } else {
-      // Marketing
-      setTemplateType("STANDARD");
-      setBodyText("");
-      setFooterText("Reply STOP to unsubscribe");
-    }
-  };
-
   // Utility Preset Handler
-  const applyUtilityPreset = (presetId: string) => {
+  const applyUtilityPreset = (presetId: string, activeBrand = brandName, activeDomain = brandDomain) => {
     setUtilityPreset(presetId);
-    const preset = UTILITY_PRESETS.find((p) => p.id === presetId);
+    const presets = getUtilityPresetsList(activeBrand, activeDomain);
+    const preset = presets.find((p) => p.id === presetId);
     if (preset) {
       if (preset.header) {
         setHeaderType("TEXT");
@@ -241,10 +260,32 @@ export default function WhatsAppTemplatesComponent() {
       setBodyText(preset.body);
       setFooterText(preset.footer);
       if (presetId === "ORDER_CONFIRMATION" || presetId === "SHIPPING_UPDATE") {
-        setButtons([{ type: "URL", text: "Track Order", url: "https://11fit.in/account/orders" }]);
+        setButtons([{ type: "URL", text: "Track Order", url: `https://${activeDomain}/account/orders` }]);
       } else {
         setButtons([]);
       }
+    }
+  };
+
+  // Category Switch Handler
+  const handleCategorySelect = (selectedCat: "MARKETING" | "UTILITY" | "AUTHENTICATION") => {
+    setCategory(selectedCat);
+    if (selectedCat === "UTILITY") {
+      setTemplateType("STANDARD");
+      applyUtilityPreset("ORDER_CONFIRMATION", brandName, brandDomain);
+    } else if (selectedCat === "AUTHENTICATION") {
+      setTemplateType("AUTHENTICATION");
+      setHeaderType("NONE");
+      setHeaderContent("");
+      setHeaderMediaPreview(null);
+      setBodyText(`{{1}} is your ${brandName} verification code. For your security, do not share this code.`);
+      setFooterText("Code expires in 10 minutes");
+      setButtons([{ type: "COPY_CODE", text: "Copy Code", code: "{{1}}" }]);
+    } else {
+      // Marketing
+      setTemplateType("STANDARD");
+      setBodyText("");
+      setFooterText(`${brandName} | Reply STOP to unsubscribe`);
     }
   };
 
@@ -318,10 +359,10 @@ export default function WhatsAppTemplatesComponent() {
       id: `card_${Date.now()}`,
       mediaUrl: "https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=500&auto=format&fit=crop&q=80",
       headerType: "IMAGE",
-      title: `Product Item ${newIdx}`,
+      title: `${brandName} Item ${newIdx}`,
       bodyText: "₹999 • Premium Collection",
       buttons: [
-        { type: "URL", text: "Buy Now", url: "https://11fit.in" },
+        { type: "URL", text: "Buy Now", url: `https://${brandDomain}` },
         { type: "QUICK_REPLY", text: "Inquire" }
       ]
     };
@@ -354,7 +395,7 @@ export default function WhatsAppTemplatesComponent() {
       showToast("Meta Carousel cards support up to 2 CTA buttons per card.", "error");
       return;
     }
-    const updatedButtons = [...card.buttons, { type: "URL" as const, text: "Buy Now", url: "https://11fit.in" }];
+    const updatedButtons = [...card.buttons, { type: "URL" as const, text: "Buy Now", url: `https://${brandDomain}` }];
     updateActiveCard("buttons", updatedButtons);
   };
 
@@ -401,7 +442,7 @@ export default function WhatsAppTemplatesComponent() {
     setHeaderContent("");
     setHeaderMediaPreview(null);
     setBodyText("");
-    setFooterText("");
+    setFooterText(`${brandName} | Reply STOP to unsubscribe`);
     setButtons([]);
     setNameError("");
     setCouponCode("FLAT30");
@@ -575,9 +616,12 @@ export default function WhatsAppTemplatesComponent() {
       .replace(/\{\{1\}\}/g, "Alex")
       .replace(/\{\{2\}\}/g, "ORD-8921")
       .replace(/\{\{3\}\}/g, "₹1,499")
-      .replace(/\{\{4\}\}/g, "https://11fit.in/track")
+      .replace(/\{\{4\}\}/g, `https://${brandDomain}/track`)
       .replace(/\{\{(\d+)\}\}/g, "[Var $1]");
   };
+
+  // Utility Presets List for active brand
+  const utilityPresets = getUtilityPresetsList(brandName, brandDomain);
 
   // -------------------------------------------------------------
   // RENDER: FULL-PAGE CREATE STUDIO
@@ -652,7 +696,7 @@ export default function WhatsAppTemplatesComponent() {
                 WhatsApp Template Creation Studio
               </h2>
               <p className="text-gray-500 text-xs mt-0.5">
-                Design Meta-compliant Marketing, Utility, and Authentication templates with drag-and-drop media & live smartphone preview.
+                Brand Account: <span className="font-bold text-indigo-600 dark:text-indigo-400">{brandName}</span> ({brandDomain}) • Drag-and-drop media & live smartphone preview.
               </p>
             </div>
           </div>
@@ -749,7 +793,7 @@ export default function WhatsAppTemplatesComponent() {
                     type="button"
                     onClick={() => {
                       setTemplateType("CAROUSEL");
-                      if (!bodyText) setBodyText("Check out our top sports collections this festive season:");
+                      if (!bodyText) setBodyText(`Check out our top ${brandName} collections this season:`);
                     }}
                     className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between h-28 relative overflow-hidden cursor-pointer ${
                       templateType === "CAROUSEL"
@@ -774,7 +818,7 @@ export default function WhatsAppTemplatesComponent() {
                     type="button"
                     onClick={() => {
                       setTemplateType("LTO_COUPON");
-                      if (!bodyText) setBodyText("Special offer! Get FLAT 30% OFF on all sports gear. Use coupon code below at checkout:");
+                      if (!bodyText) setBodyText(`Special offer! Get FLAT 30% OFF on all ${brandName} gear. Use coupon code below at checkout:`);
                     }}
                     className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between h-28 cursor-pointer ${
                       templateType === "LTO_COUPON"
@@ -800,11 +844,11 @@ export default function WhatsAppTemplatesComponent() {
                     Select a transactional template preset or write a custom utility notification:
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                    {UTILITY_PRESETS.map((p) => (
+                    {utilityPresets.map((p) => (
                       <button
                         key={p.id}
                         type="button"
-                        onClick={() => applyUtilityPreset(p.id)}
+                        onClick={() => applyUtilityPreset(p.id, brandName, brandDomain)}
                         className={`p-3 rounded-xl border text-left transition cursor-pointer flex flex-col gap-1 ${
                           utilityPreset === p.id
                             ? "border-indigo-600 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-900 dark:text-indigo-200 font-black shadow-2xs"
@@ -842,7 +886,7 @@ export default function WhatsAppTemplatesComponent() {
                     value={templateName}
                     onChange={(e) => handleNameChange(e.target.value)}
                     required
-                    placeholder="e.g. order_dispatch_update"
+                    placeholder={`e.g. ${brandName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_order_dispatch`}
                     className={`w-full px-4 py-2.5 bg-white dark:bg-slate-800 border ${
                       nameError ? "border-red-500" : "border-gray-200 dark:border-slate-700"
                     } rounded-xl text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-indigo-500`}
@@ -919,7 +963,7 @@ export default function WhatsAppTemplatesComponent() {
                   <input
                     value={headerContent}
                     onChange={(e) => setHeaderContent(e.target.value)}
-                    placeholder="e.g. Exclusive Weekend Sale!"
+                    placeholder={`e.g. ${brandName} Exclusive Sale!`}
                     maxLength={60}
                     className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
                   />
@@ -1012,8 +1056,8 @@ export default function WhatsAppTemplatesComponent() {
                 maxLength={META_LIMITS.BODY_MAX}
                 placeholder={
                   category === "UTILITY"
-                    ? "Hi {{1}}, your order {{2}} has been confirmed! Total amount: {{3}}"
-                    : "Hi {{1}}, get FLAT 30% OFF on all premium fitness gear today only! Use code: {{2}}"
+                    ? `Hi {{1}}, thank you for shopping with ${brandName}! Your order #{{2}} of ₹{{3}} is confirmed and packed.`
+                    : `Hi {{1}}, get FLAT 30% OFF on all ${brandName} collections today only! Use code: {{2}}`
                 }
                 className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl text-xs font-sans outline-none focus:ring-2 focus:ring-indigo-500 leading-relaxed"
               />
@@ -1161,7 +1205,7 @@ export default function WhatsAppTemplatesComponent() {
                       <input
                         value={carouselCards[activeCarouselCardIndex].title}
                         onChange={(e) => updateActiveCard("title", e.target.value)}
-                        placeholder="e.g. 11FIT Oversized Gym Tee"
+                        placeholder={`e.g. ${brandName} Performance Tee`}
                         maxLength={80}
                         className="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none"
                       />
@@ -1219,7 +1263,7 @@ export default function WhatsAppTemplatesComponent() {
                               <input
                                 value={b.url || ""}
                                 onChange={(e) => updateCardButton(bIdx, "url", e.target.value)}
-                                placeholder="https://11fit.in/..."
+                                placeholder={`https://${brandDomain}/...`}
                                 className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-mono"
                               />
                             )}
@@ -1252,7 +1296,7 @@ export default function WhatsAppTemplatesComponent() {
               <input
                 value={footerText}
                 onChange={(e) => setFooterText(e.target.value)}
-                placeholder="e.g. 11FIT Sports | Reply STOP to opt out"
+                placeholder={`e.g. ${brandName} | Reply STOP to opt out`}
                 maxLength={META_LIMITS.FOOTER_MAX}
                 className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
               />
@@ -1306,7 +1350,7 @@ export default function WhatsAppTemplatesComponent() {
                       <input
                         value={btn.url}
                         onChange={(e) => updateButton(idx, "url", e.target.value)}
-                        placeholder="https://11fit.in/..."
+                        placeholder={`https://${brandDomain}/...`}
                         className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-mono"
                       />
                     )}
@@ -1348,15 +1392,15 @@ export default function WhatsAppTemplatesComponent() {
 
               {/* Realistic Phone Frame */}
               <div className="w-full max-w-[340px] mx-auto bg-[#efeae2] dark:bg-slate-950 rounded-3xl border-4 border-gray-800 dark:border-slate-700 shadow-xl overflow-hidden flex flex-col">
-                {/* WhatsApp Chat Header */}
+                {/* WhatsApp Chat Header with Dynamic Brand Name & Avatar */}
                 <div className="bg-[#075e54] text-white p-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-white/20 text-white font-bold text-xs flex items-center justify-center">
-                      11
+                    <div className="w-7 h-7 rounded-full bg-white/20 text-white font-black text-xs flex items-center justify-center uppercase">
+                      {brandName.slice(0, 2).toUpperCase()}
                     </div>
                     <div>
                       <div className="text-xs font-black flex items-center gap-1">
-                        11FIT Official
+                        {brandName} Official
                         <CheckCircle2 size={11} className="text-emerald-300 fill-emerald-300 text-[#075e54]" />
                       </div>
                       <div className="text-[9px] text-emerald-200">Verified Business Account</div>
@@ -1568,7 +1612,7 @@ export default function WhatsAppTemplatesComponent() {
             Meta Message Templates & Live Preview
           </h2>
           <p className="text-gray-500 text-xs mt-0.5">
-            Meta Cloud API verified templates. Supports Standard, Product Carousel (Swipeable), and Coupon templates.
+            Connected Brand: <span className="font-bold text-indigo-600 dark:text-indigo-400">{brandName}</span> • Standard, Product Carousel (Swipeable), and Coupon templates.
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">

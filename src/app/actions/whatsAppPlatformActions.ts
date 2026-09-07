@@ -4017,9 +4017,15 @@ export async function getMetaPhoneHealthAndLimitsAction() {
       };
     }
 
+    const [clientRec, accountRec] = await Promise.all([
+      prisma.client.findFirst(),
+      prisma.whatsAppAccount.findFirst()
+    ]);
+    const fallbackBrandName = clientRec?.businessName || accountRec?.name || "Espon";
+
     let qualityRating = "GREEN";
     let status = "CONNECTED";
-    let verifiedName = "11FIT WhatsApp";
+    let verifiedName = fallbackBrandName;
     let dailyLimitTier = "10,000 / 24h";
     let throughput = 80;
 
@@ -4778,6 +4784,28 @@ export async function createWhatsAppContactAction(data: {
     return { success: true, customer };
   } catch (error: any) {
     return { success: false, error: error.message };
+  }
+}
+
+// ---------------------------------------------------------
+// GET WHATSAPP BRAND & ACCOUNT DETAILS
+// ---------------------------------------------------------
+export async function getWhatsAppBrandDetailsAction() {
+  try {
+    const [client, account] = await Promise.all([
+      prisma.client.findFirst(),
+      prisma.whatsAppAccount.findFirst()
+    ]);
+    const brandName = client?.businessName || account?.name || "Espon Sports";
+    const brandDomain = client?.shopifyDomain ? client.shopifyDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : "esponsports.com";
+    return {
+      success: true,
+      brandName,
+      brandDomain,
+      phoneNumber: account?.phoneNumber || "+91 74043 88242"
+    };
+  } catch (e: any) {
+    return { success: false, brandName: "Espon Sports", brandDomain: "esponsports.com", phoneNumber: "+91 74043 88242" };
   }
 }
 

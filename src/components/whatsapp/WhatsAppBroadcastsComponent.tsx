@@ -89,7 +89,7 @@ export default function WhatsAppBroadcastsComponent() {
     dailyLimitTier: "10,000 / 24h",
     throughput: 80,
     optedOutCount: 0,
-    verifiedName: "11FIT WhatsApp",
+    verifiedName: "WhatsApp Account",
     isConnected: true
   });
   const [syncingMetaServer, setSyncingMetaServer] = useState<boolean>(false);
@@ -169,7 +169,7 @@ export default function WhatsAppBroadcastsComponent() {
           dailyLimitTier: healthRes.dailyLimitTier || "10,000 / 24h",
           throughput: healthRes.throughput || 80,
           optedOutCount: healthRes.optedOutCount || 0,
-          verifiedName: healthRes.verifiedName || "11FIT WhatsApp",
+          verifiedName: healthRes.verifiedName || "WhatsApp Account",
           isConnected: healthRes.isConnected ?? true
         });
       }

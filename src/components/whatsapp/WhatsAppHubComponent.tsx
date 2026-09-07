@@ -39,7 +39,7 @@ function WhatsAppHubContent({ initialTab = "templates" }: WhatsAppHubProps) {
     dailyLimitTier: "10,000 / 24h",
     throughput: 80,
     optedOutCount: 0,
-    verifiedName: "11FIT WhatsApp",
+    verifiedName: "WhatsApp Account",
     displayPhoneNumber: "+91 74043 88242",
     isConnected: true
   });
@@ -55,7 +55,7 @@ function WhatsAppHubContent({ initialTab = "templates" }: WhatsAppHubProps) {
           dailyLimitTier: res.dailyLimitTier || "10,000 / 24h",
           throughput: res.throughput || 80,
           optedOutCount: res.optedOutCount || 0,
-          verifiedName: res.verifiedName || "11FIT WhatsApp",
+          verifiedName: res.verifiedName || "WhatsApp Account",
           displayPhoneNumber: res.displayPhoneNumber || "+91 74043 88242",
           isConnected: res.isConnected ?? true
         });
