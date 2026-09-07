@@ -20,7 +20,7 @@ export async function GET() {
         whatsAppConversations: {
           include: {
             messages: {
-              orderBy: { createdAt: "desc" },
+              orderBy: { sentAt: "desc" },
               take: 10
             }
           }
