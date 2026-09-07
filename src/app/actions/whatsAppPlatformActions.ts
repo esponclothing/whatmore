@@ -3446,3 +3446,317 @@ export async function syncSessionRoleAction() {
     return null;
   }
 }
+
+// ---------------------------------------------------------
+// 23. WHATSAPP CONTACTS & CRM DIRECTORY ACTIONS
+// ---------------------------------------------------------
+
+export async function getWhatsAppContactsListAction(params?: {
+  search?: string;
+  crmFilter?: 'ALL' | 'DONE' | 'NOT_DONE';
+  tag?: string;
+}) {
+  try {
+    const search = params?.search?.trim() || "";
+    const crmFilter = params?.crmFilter || "ALL";
+    const tagFilter = params?.tag?.trim() || "";
+
+    const where: any = {};
+
+    if (search) {
+      where.OR = [
+        { contactPerson: { contains: search, mode: "insensitive" } },
+        { businessName: { contains: search, mode: "insensitive" } },
+        { mobile: { contains: search } },
+        { whatsappNumber: { contains: search } },
+        { tags: { contains: search, mode: "insensitive" } }
+      ];
+    }
+
+    if (tagFilter && tagFilter !== "ALL") {
+      where.tags = { contains: tagFilter, mode: "insensitive" };
+    }
+
+    if (crmFilter === "DONE") {
+      where.OR = [
+        { leadStage: "CRM Synced" },
+        { status: "CRM_SYNCED" },
+        { notes: { contains: "PUSHED_TO_CRM" } }
+      ];
+    } else if (crmFilter === "NOT_DONE") {
+      where.AND = [
+        { leadStage: { not: "CRM Synced" } },
+        { status: { not: "CRM_SYNCED" } },
+        { OR: [{ notes: null }, { notes: { not: { contains: "PUSHED_TO_CRM" } } }] }
+      ];
+    }
+
+    const customers = await prisma.customer.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: {
+        whatsAppConversations: {
+          select: { id: true, tags: true, lastMessageAt: true },
+          take: 1,
+          orderBy: { updatedAt: "desc" }
+        }
+      },
+      take: 200
+    });
+
+    const contacts = customers.map((c) => {
+      const isDone = Boolean(
+        c.leadStage === "CRM Synced" ||
+        c.status === "CRM_SYNCED" ||
+        c.notes?.includes("PUSHED_TO_CRM")
+      );
+
+      // Collect merged tags
+      const custTags = (c.tags || "").split(",").map(t => t.trim()).filter(Boolean);
+      const convTags = (c.whatsAppConversations?.[0]?.tags || "").split(",").map(t => t.trim()).filter(Boolean);
+      const allTags = Array.from(new Set([...custTags, ...convTags]));
+
+      return {
+        id: c.id,
+        name: c.contactPerson || c.businessName || "Unknown Customer",
+        businessName: c.businessName || "",
+        mobile: c.mobile || c.whatsappNumber || "",
+        whatsappNumber: c.whatsappNumber || c.mobile || "",
+        createdAt: c.createdAt,
+        tags: allTags,
+        pushedToCrm: isDone,
+        leadStage: c.leadStage,
+        status: c.status,
+        city: c.city || "",
+        conversationId: c.whatsAppConversations?.[0]?.id || null
+      };
+    });
+
+    // Compute summary stats
+    const totalCount = await prisma.customer.count();
+    const doneCount = await prisma.customer.count({
+      where: {
+        OR: [
+          { leadStage: "CRM Synced" },
+          { status: "CRM_SYNCED" },
+          { notes: { contains: "PUSHED_TO_CRM" } }
+        ]
+      }
+    });
+    const notDoneCount = totalCount - doneCount;
+
+    return {
+      success: true,
+      contacts,
+      stats: {
+        total: totalCount,
+        done: doneCount,
+        notDone: notDoneCount
+      }
+    };
+  } catch (error: any) {
+    console.error("Error fetching WhatsApp contacts list:", error);
+    return { success: false, error: error.message, contacts: [], stats: { total: 0, done: 0, notDone: 0 } };
+  }
+}
+
+export async function toggleContactCrmStatusAction(customerId: string, markDone: boolean) {
+  try {
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+      include: {
+        whatsAppConversations: {
+          take: 1,
+          orderBy: { updatedAt: "desc" }
+        }
+      }
+    });
+
+    if (!customer) throw new Error("Contact not found");
+
+    if (markDone) {
+      // If there is an active CRM_LEAD webhook integration, trigger it!
+      const integrations = await prisma.whatsAppIntegration.findMany({
+        where: { isActive: true }
+      });
+      const crmIntegration = integrations.find(i => i.type === 'CRM_LEAD' || i.type === 'ERP');
+      
+      if (crmIntegration && crmIntegration.url) {
+        try {
+          const payload = {
+            name: customer.contactPerson || customer.businessName || 'Unknown',
+            mobile: customer.mobile || customer.whatsappNumber,
+            whatsappNumber: customer.whatsappNumber || customer.mobile,
+            tags: customer.tags || '',
+            createdAt: customer.createdAt,
+            city: customer.city || '',
+            source: 'WhatsApp Contacts Hub'
+          };
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (crmIntegration.token) headers['Authorization'] = crmIntegration.token;
+          await fetch(crmIntegration.url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload)
+          }).catch((e) => console.error("Webhook trigger error:", e));
+        } catch (webhookErr) {
+          console.error("Failed to fire CRM webhook:", webhookErr);
+        }
+      }
+
+      // Update customer record
+      const existingNotes = customer.notes || "";
+      const updatedNotes = existingNotes.includes("PUSHED_TO_CRM")
+        ? existingNotes
+        : (existingNotes ? `${existingNotes} | PUSHED_TO_CRM` : "PUSHED_TO_CRM");
+
+      await prisma.customer.update({
+        where: { id: customerId },
+        data: {
+          leadStage: "CRM Synced",
+          notes: updatedNotes
+        }
+      });
+    } else {
+      // Mark as NOT done
+      const existingNotes = customer.notes || "";
+      const updatedNotes = existingNotes
+        .replace(/\|\s*PUSHED_TO_CRM/g, "")
+        .replace(/PUSHED_TO_CRM/g, "")
+        .trim();
+
+      await prisma.customer.update({
+        where: { id: customerId },
+        data: {
+          leadStage: "Contacted",
+          notes: updatedNotes || null
+        }
+      });
+    }
+
+    revalidatePath("/whatsapp/templates");
+    revalidatePath("/whatsapp/contacts");
+    return { success: true, pushedToCrm: markDone };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateContactTagsAction(customerId: string, tags: string[]) {
+  try {
+    const cleanTags = tags.map(t => t.trim()).filter(Boolean);
+    const tagsStr = cleanTags.join(", ");
+
+    await prisma.customer.update({
+      where: { id: customerId },
+      data: { tags: tagsStr }
+    });
+
+    // Also update active WhatsApp conversation if exists
+    await prisma.whatsAppConversation.updateMany({
+      where: { customerId },
+      data: { tags: tagsStr }
+    });
+
+    // Ensure all individual tags exist in WhatsAppTag model
+    for (const tagName of cleanTags) {
+      const existing = await prisma.whatsAppTag.findFirst({
+        where: { name: { equals: tagName, mode: 'insensitive' } }
+      });
+      if (!existing) {
+        await prisma.whatsAppTag.create({
+          data: { name: tagName, color: '#e0e7ff' }
+        }).catch(() => {});
+      }
+    }
+
+    revalidatePath("/whatsapp/templates");
+    revalidatePath("/whatsapp/contacts");
+    return { success: true, tags: cleanTags };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function createWhatsAppContactAction(data: {
+  name: string;
+  mobile: string;
+  tags?: string[];
+  pushToCrm?: boolean;
+}) {
+  try {
+    const cleanPhone = data.mobile.replace(/\D/g, "");
+    if (!cleanPhone || cleanPhone.length < 7) {
+      return { success: false, error: "Valid mobile number is required." };
+    }
+
+    const cleanTags = (data.tags || []).map(t => t.trim()).filter(Boolean);
+    const tagsStr = cleanTags.join(", ");
+
+    // Check if customer already exists by phone
+    let customer = await prisma.customer.findFirst({
+      where: {
+        OR: [
+          { mobile: { contains: cleanPhone } },
+          { whatsappNumber: { contains: cleanPhone } }
+        ]
+      }
+    });
+
+    if (customer) {
+      // Update existing
+      customer = await prisma.customer.update({
+        where: { id: customer.id },
+        data: {
+          contactPerson: data.name || customer.contactPerson,
+          tags: tagsStr || customer.tags,
+          leadStage: data.pushToCrm ? "CRM Synced" : customer.leadStage,
+          notes: data.pushToCrm && !customer.notes?.includes("PUSHED_TO_CRM")
+            ? (customer.notes ? `${customer.notes} | PUSHED_TO_CRM` : "PUSHED_TO_CRM")
+            : customer.notes
+        }
+      });
+    } else {
+      customer = await prisma.customer.create({
+        data: {
+          contactPerson: data.name,
+          businessName: data.name,
+          mobile: cleanPhone,
+          whatsappNumber: cleanPhone,
+          tags: tagsStr || null,
+          status: "New Lead",
+          leadStage: data.pushToCrm ? "CRM Synced" : "Contacted",
+          notes: data.pushToCrm ? "PUSHED_TO_CRM" : null
+        }
+      });
+    }
+
+    // Link or create WhatsApp conversation
+    const account = await prisma.whatsAppAccount.findFirst();
+    if (account) {
+      const conv = await prisma.whatsAppConversation.findFirst({
+        where: { customerId: customer.id }
+      });
+      if (!conv) {
+        await prisma.whatsAppConversation.create({
+          data: {
+            accountId: account.id,
+            customerId: customer.id,
+            tags: tagsStr || null,
+            status: "OPEN"
+          }
+        });
+      }
+    }
+
+    if (data.pushToCrm) {
+      await toggleContactCrmStatusAction(customer.id, true);
+    }
+
+    revalidatePath("/whatsapp/templates");
+    revalidatePath("/whatsapp/contacts");
+    return { success: true, customer };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

@@ -2,32 +2,33 @@
 
 import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { FileCode, Zap, Bot } from "lucide-react";
+import { FileCode, Zap, Bot, Users } from "lucide-react";
 import WhatsAppTemplatesComponent from "@/components/whatsapp/WhatsAppTemplatesComponent";
 import WhatsAppFlowsComponent from "@/components/whatsapp/WhatsAppFlowsComponent";
 import WhatsAppChatbotsComponent from "@/components/whatsapp/WhatsAppChatbotsComponent";
+import WhatsAppContactsComponent from "@/components/whatsapp/WhatsAppContactsComponent";
 
 interface WhatsAppHubProps {
-  initialTab?: "templates" | "flows" | "chatbots";
+  initialTab?: "templates" | "flows" | "chatbots" | "contacts";
 }
 
 function WhatsAppHubContent({ initialTab = "templates" }: WhatsAppHubProps) {
   const searchParams = useSearchParams();
-  const tabFromQuery = searchParams.get("tab") as "templates" | "flows" | "chatbots" | null;
+  const tabFromQuery = searchParams.get("tab") as "templates" | "flows" | "chatbots" | "contacts" | null;
 
-  const [activeTab, setActiveTab] = useState<"templates" | "flows" | "chatbots">(
-    tabFromQuery && ["templates", "flows", "chatbots"].includes(tabFromQuery)
+  const [activeTab, setActiveTab] = useState<"templates" | "flows" | "chatbots" | "contacts">(
+    tabFromQuery && ["templates", "flows", "chatbots", "contacts"].includes(tabFromQuery)
       ? tabFromQuery
       : initialTab
   );
 
   useEffect(() => {
-    if (tabFromQuery && ["templates", "flows", "chatbots"].includes(tabFromQuery)) {
+    if (tabFromQuery && ["templates", "flows", "chatbots", "contacts"].includes(tabFromQuery)) {
       setActiveTab(tabFromQuery);
     }
   }, [tabFromQuery]);
 
-  const handleTabChange = (tab: "templates" | "flows" | "chatbots") => {
+  const handleTabChange = (tab: "templates" | "flows" | "chatbots" | "contacts") => {
     setActiveTab(tab);
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
@@ -44,7 +45,7 @@ function WhatsAppHubContent({ initialTab = "templates" }: WhatsAppHubProps) {
           WhatsApp Hub
         </h1>
         <p className="text-gray-500 dark:text-gray-400 text-sm">
-          Manage Meta-approved message templates, interactive native flows, and automated chatbot logic.
+          Manage Meta-approved templates, interactive flows, automated chatbots, and CRM-synced contacts.
         </p>
       </div>
 
@@ -82,6 +83,17 @@ function WhatsAppHubContent({ initialTab = "templates" }: WhatsAppHubProps) {
         >
           <Bot size={16} /> Chatbots
         </button>
+
+        <button
+          onClick={() => handleTabChange("contacts")}
+          className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${
+            activeTab === "contacts"
+              ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400"
+              : "border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+          }`}
+        >
+          <Users size={16} /> Contacts
+        </button>
       </nav>
 
       {/* Tab Panels */}
@@ -89,6 +101,7 @@ function WhatsAppHubContent({ initialTab = "templates" }: WhatsAppHubProps) {
         {activeTab === "templates" && <WhatsAppTemplatesComponent />}
         {activeTab === "flows" && <WhatsAppFlowsComponent />}
         {activeTab === "chatbots" && <WhatsAppChatbotsComponent />}
+        {activeTab === "contacts" && <WhatsAppContactsComponent />}
       </div>
     </div>
   );
