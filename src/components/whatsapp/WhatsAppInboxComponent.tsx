@@ -536,20 +536,46 @@ export default function WhatsAppInboxComponent() {
         
         if (!silent) {
           if (filtered.length > 0) {
-            const isCurrentInList = filtered.some((c) => c.id === selectedConvId);
-            if (!selectedConvId || !isCurrentInList) {
-              setSelectedConvId(filtered[0].id);
+            let matchedConv: any = null;
+            if (typeof window !== "undefined") {
+              const sp = new URLSearchParams(window.location.search);
+              const paramConvId = sp.get("convId");
+              const paramPhone = sp.get("phone") || sp.get("search");
+              if (paramConvId) {
+                matchedConv = filtered.find((c) => c.id === paramConvId);
+              }
+              if (!matchedConv && paramPhone) {
+                const clean = paramPhone.replace(/\D/g, '').slice(-10);
+                matchedConv = filtered.find((c) => 
+                  (c.customer?.mobile && c.customer.mobile.includes(clean)) ||
+                  (c.customer?.whatsappNumber && c.customer.whatsappNumber.includes(clean)) ||
+                  (c.customer?.contactPerson && c.customer.contactPerson.toLowerCase().includes(paramPhone.toLowerCase()))
+                );
+              }
+            }
+
+            if (matchedConv) {
+              setSelectedConvId(matchedConv.id);
+            } else {
+              const isCurrentInList = filtered.some((c) => c.id === selectedConvId);
+              if (!selectedConvId || !isCurrentInList) {
+                setSelectedConvId(filtered[0].id);
+              }
             }
           } else {
-            setSelectedConvId(null);
-            setActiveConvDetail(null);
+            if (!selectedConvId) {
+              setSelectedConvId(null);
+              setActiveConvDetail(null);
+            }
           }
         }
       } else {
         if (!silent) {
           setConversations([]);
-          setSelectedConvId(null);
-          setActiveConvDetail(null);
+          if (!selectedConvId) {
+            setSelectedConvId(null);
+            setActiveConvDetail(null);
+          }
         }
       }
     } catch (err) {
@@ -559,6 +585,22 @@ export default function WhatsAppInboxComponent() {
       if (!silent) setLoadingConvs(false);
     }
   };
+
+  // Read URL query params on mount for direct chat opening
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      const paramConvId = sp.get("convId");
+      const paramPhone = sp.get("phone") || sp.get("search");
+      if (paramConvId) {
+        setSelectedConvId(paramConvId);
+        fetchConversationDetail(paramConvId, false);
+      }
+      if (paramPhone) {
+        setSearchQuery(paramPhone);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     fetchConversationsList(conversations.length > 0);

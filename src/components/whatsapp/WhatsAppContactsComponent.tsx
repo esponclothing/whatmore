@@ -27,7 +27,8 @@ import {
   getWhatsAppContactsListAction,
   toggleContactCrmStatusAction,
   updateContactTagsAction,
-  createWhatsAppContactAction
+  createWhatsAppContactAction,
+  getOrCreateWhatsAppConversationForContactAction
 } from "@/app/actions/whatsAppPlatformActions";
 import { formatWhatsAppPhone } from "@/lib/phoneUtils";
 
@@ -117,6 +118,32 @@ export default function WhatsAppContactsComponent() {
       );
     } else {
       showToast(res.error || "Failed to update CRM status", "error");
+    }
+  };
+
+  const [openingChatId, setOpeningChatId] = useState<string | null>(null);
+
+  const handleOpenChat = async (contact: any) => {
+    setOpeningChatId(contact.id);
+    try {
+      let convId = contact.conversationId;
+      if (!convId) {
+        const res = await getOrCreateWhatsAppConversationForContactAction(contact.id);
+        if (res.success && res.conversationId) {
+          convId = res.conversationId;
+        }
+      }
+
+      const phoneParam = contact.mobile || contact.whatsappNumber || "";
+      if (convId) {
+        router.push(`/whatsapp/inbox?convId=${convId}&phone=${encodeURIComponent(phoneParam)}`);
+      } else {
+        router.push(`/whatsapp/inbox?phone=${encodeURIComponent(phoneParam)}`);
+      }
+    } catch (err: any) {
+      router.push(`/whatsapp/inbox?phone=${encodeURIComponent(contact.mobile)}`);
+    } finally {
+      setOpeningChatId(null);
     }
   };
 
@@ -519,12 +546,17 @@ export default function WhatsAppContactsComponent() {
                     <td className="py-3.5 px-5 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => router.push(`/whatsapp/inbox?search=${encodeURIComponent(c.mobile)}`)}
-                          className="px-3 py-1.5 bg-gray-100 dark:bg-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-gray-700 dark:text-gray-200 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                          onClick={() => handleOpenChat(c)}
+                          disabled={openingChatId === c.id}
+                          className="px-3 py-1.5 bg-gray-100 dark:bg-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-gray-700 dark:text-gray-200 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-50"
                           title="Open in WhatsApp Inbox"
                         >
-                          <MessageSquare size={13} />
-                          <span>Chat</span>
+                          {openingChatId === c.id ? (
+                            <RefreshCw size={13} className="animate-spin text-indigo-600" />
+                          ) : (
+                            <MessageSquare size={13} />
+                          )}
+                          <span>{openingChatId === c.id ? "Opening..." : "Chat"}</span>
                         </button>
 
                         <button
