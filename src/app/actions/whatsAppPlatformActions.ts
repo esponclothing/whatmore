@@ -2226,10 +2226,10 @@ export async function getBroadcastCampaignAnalyticsAction(campaignId: string) {
     const aov = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
 
     const deliveryRate = totalSent > 0 ? Math.round((totalDelivered / totalSent) * 100) : 0;
-    const readRate = totalDelivered > 0 ? Math.round((totalRead / totalDelivered) * 100) : (totalSent > 0 ? Math.round((totalRead / totalSent) * 100) : 0);
-    const clickRate = totalDelivered > 0 ? Math.round((totalClicks / totalDelivered) * 100) : (totalSent > 0 ? Math.round((totalClicks / totalSent) * 100) : 0);
-    const replyRate = totalDelivered > 0 ? Math.round((totalReplies / totalDelivered) * 100) : (totalSent > 0 ? Math.round((totalReplies / totalSent) * 100) : 0);
-    const conversionRate = totalDelivered > 0 ? ((totalOrders / totalDelivered) * 100).toFixed(1) : "0.0";
+    const readRate = totalSent > 0 ? Math.round((totalRead / totalSent) * 100) : 0;
+    const clickRate = totalSent > 0 ? Math.round((totalClicks / totalSent) * 100) : 0;
+    const replyRate = totalSent > 0 ? Math.round((totalReplies / totalSent) * 100) : 0;
+    const conversionRate = totalSent > 0 ? ((totalOrders / totalSent) * 100).toFixed(1) : "0.0";
 
     return {
       success: true,

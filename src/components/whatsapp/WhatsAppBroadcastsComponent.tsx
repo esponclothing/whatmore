@@ -364,8 +364,8 @@ export default function WhatsAppBroadcastsComponent() {
   const totalRevenue = campaigns.reduce((acc, c) => acc + (c.revenueGenerated || 0), 0);
 
   const avgDeliveryRate = totalDispatched > 0 ? Math.round((totalDelivered / totalDispatched) * 100) : 0;
-  const avgReadRate = totalDelivered > 0 ? Math.round((totalRead / totalDelivered) * 100) : (totalDispatched > 0 ? Math.round((totalRead / totalDispatched) * 100) : 0);
-  const avgClickRate = totalDelivered > 0 ? Math.round((totalClicks / totalDelivered) * 100) : (totalDispatched > 0 ? Math.round((totalClicks / totalDispatched) * 100) : 0);
+  const avgReadRate = totalDispatched > 0 ? Math.round((totalRead / totalDispatched) * 100) : 0;
+  const avgClickRate = totalDispatched > 0 ? Math.round((totalClicks / totalDispatched) * 100) : 0;
 
   // Recipient activity log filter in Analytics Modal
   const filteredRecipients = useMemo(() => {
@@ -501,8 +501,8 @@ export default function WhatsAppBroadcastsComponent() {
             <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
               {avgDeliveryRate}%
             </div>
-            <div className="text-[10px] text-emerald-600/80 font-semibold mt-0.5">
-              {totalDelivered.toLocaleString()} delivered
+            <div className="text-[10px] text-emerald-600/90 font-semibold mt-0.5">
+              {totalDelivered.toLocaleString()} of {totalDispatched.toLocaleString()} delivered
             </div>
           </div>
           <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
@@ -517,8 +517,8 @@ export default function WhatsAppBroadcastsComponent() {
             <div className="text-2xl font-black text-cyan-600 dark:text-cyan-400 mt-1">
               {avgReadRate}%
             </div>
-            <div className="text-[10px] text-cyan-600/80 font-semibold mt-0.5">
-              {totalRead.toLocaleString()} read ticks
+            <div className="text-[10px] text-cyan-600/90 font-semibold mt-0.5">
+              {totalRead.toLocaleString()} of {totalDispatched.toLocaleString()} read ticks
             </div>
           </div>
           <div className="w-11 h-11 rounded-xl bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
@@ -533,8 +533,8 @@ export default function WhatsAppBroadcastsComponent() {
             <div className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-1">
               {avgClickRate}%
             </div>
-            <div className="text-[10px] text-purple-600/80 font-semibold mt-0.5">
-              {totalClicks.toLocaleString()} CTA clicks
+            <div className="text-[10px] text-purple-600/90 font-semibold mt-0.5">
+              {totalClicks.toLocaleString()} of {totalDispatched.toLocaleString()} CTA clicks
             </div>
           </div>
           <div className="w-11 h-11 rounded-xl bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
@@ -640,8 +640,8 @@ export default function WhatsAppBroadcastsComponent() {
                   const revenue = c.revenueGenerated || 0;
 
                   const delPct = sent > 0 ? Math.round((delivered / sent) * 100) : 0;
-                  const readPct = delivered > 0 ? Math.round((read / delivered) * 100) : 0;
-                  const clickPct = delivered > 0 ? Math.round((clicks / delivered) * 100) : 0;
+                  const readPct = sent > 0 ? Math.round((read / sent) * 100) : 0;
+                  const clickPct = sent > 0 ? Math.round((clicks / sent) * 100) : 0;
 
                   return (
                     <tr
@@ -668,34 +668,34 @@ export default function WhatsAppBroadcastsComponent() {
 
                       {/* 3. Funnel & Engagement */}
                       <td className="py-3.5 px-4">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-3 text-[11px]">
-                            <span className="font-extrabold text-gray-900 dark:text-white">
-                              {c.totalAudience?.toLocaleString() || 0} <span className="text-[10px] text-gray-400 font-normal">recipients</span>
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center gap-2 text-[11px] flex-wrap">
+                            <span className="font-black text-gray-900 dark:text-white">
+                              {c.totalAudience?.toLocaleString() || sent || 0} <span className="text-[10px] text-gray-400 font-normal">recipients</span>
                             </span>
                             {sent > 0 && (
-                              <span className="text-[10px] font-bold text-emerald-600">
-                                {delPct}% Del.
+                              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/40">
+                                {delPct}% Del. ({delivered}/{sent})
                               </span>
                             )}
-                            {read > 0 && (
-                              <span className="text-[10px] font-bold text-cyan-600">
-                                {readPct}% Read 👁️
+                            {sent > 0 && (
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${read > 0 ? "text-cyan-600 bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800/40" : "text-gray-400 bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700"}`}>
+                                {readPct}% Read 👁️ ({read}/{sent})
                               </span>
                             )}
                             {clicks > 0 && (
-                              <span className="text-[10px] font-bold text-purple-600">
-                                {clicks} Clicks 👆
+                              <span className="text-[10px] font-bold text-purple-600 bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800/40">
+                                {clickPct}% Clicks 👆 ({clicks})
                               </span>
                             )}
                           </div>
 
                           {/* Mini visual progress bar */}
                           {sent > 0 && (
-                            <div className="w-40 h-1.5 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden flex">
-                              <div style={{ width: `${delPct}%` }} className="bg-emerald-500 h-full" title={`Delivered: ${delPct}%`} />
-                              <div style={{ width: `${readPct}%` }} className="bg-cyan-500 h-full" title={`Read: ${readPct}%`} />
-                              <div style={{ width: `${clickPct}%` }} className="bg-purple-500 h-full" title={`Clicked: ${clickPct}%`} />
+                            <div className="w-44 h-1.5 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden flex">
+                              <div style={{ width: `${delPct}%` }} className="bg-emerald-500 h-full" title={`Delivered: ${delPct}% (${delivered}/${sent})`} />
+                              <div style={{ width: `${readPct}%` }} className="bg-cyan-500 h-full" title={`Read: ${readPct}% (${read}/${sent})`} />
+                              <div style={{ width: `${clickPct}%` }} className="bg-purple-500 h-full" title={`Clicked: ${clickPct}% (${clicks}/${sent})`} />
                             </div>
                           )}
                         </div>
