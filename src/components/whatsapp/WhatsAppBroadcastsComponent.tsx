@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import * as XLSX from "xlsx";
 import {
   Send,
   Plus,
@@ -41,7 +42,11 @@ import {
   Filter,
   CheckCheck,
   CornerDownRight,
-  MessageCircle
+  MessageCircle,
+  Download,
+  FileSpreadsheet,
+  Globe,
+  Info
 } from "lucide-react";
 import {
   getWhatsAppCampaigns,
@@ -51,6 +56,11 @@ import {
   getBroadcastCampaignAnalyticsAction,
   deleteWhatsAppBroadcastCampaignAction
 } from "@/app/actions/whatsAppPlatformActions";
+import {
+  parseDynamicPhone,
+  resolveWhatsAppDispatchPhone,
+  formatWhatsAppPhone
+} from "@/lib/phoneUtils";
 
 export default function WhatsAppBroadcastsComponent() {
   const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -79,7 +89,10 @@ export default function WhatsAppBroadcastsComponent() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagSearchQuery, setTagSearchQuery] = useState<string>("");
   const [customPhonesInput, setCustomPhonesInput] = useState<string>("");
+  const [customRecipientsList, setCustomRecipientsList] = useState<Array<{ id: string; contactPerson: string; mobile: string; city: string; tags?: string }>>([]);
+  const [uploadedFileName, setUploadedFileName] = useState<string>("");
   const [previewSearchQuery, setPreviewSearchQuery] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Variable Mappings & Media State
   const [variableMappings, setVariableMappings] = useState<Array<{ varIndex: number; mappedTo: string; staticValue: string }>>([]);
@@ -99,7 +112,7 @@ export default function WhatsAppBroadcastsComponent() {
 
   const showToast = (text: string, type: "success" | "error" = "success") => {
     setToastMsg({ text, type });
-    setTimeout(() => setToastMsg(null), 4000);
+    setTimeout(() => setToastMsg(null), 4500);
   };
 
   const fetchCampaignsAndTemplates = async () => {
@@ -161,12 +174,214 @@ export default function WhatsAppBroadcastsComponent() {
     setSelectedTags([]);
     setTagSearchQuery("");
     setCustomPhonesInput("");
+    setCustomRecipientsList([]);
+    setUploadedFileName("");
     setPreviewSearchQuery("");
     setIsScheduled(false);
     setScheduledAt("");
     setHeaderMediaUrl("");
     setCurrentStep(1);
     setShowWizard(true);
+  };
+
+  // Sample Excel Template Generator
+  const handleDownloadSampleExcel = () => {
+    try {
+      const sampleData = [
+        {
+          "Phone Number": "919876543210",
+          "Customer Name": "Rahul Sharma",
+          "City": "Mumbai",
+          "Notes": "India (+91 auto-formatted)"
+        },
+        {
+          "Phone Number": "+91 98888 77777",
+          "Customer Name": "Priya Verma",
+          "City": "Delhi",
+          "Notes": "With +91 Country Code"
+        },
+        {
+          "Phone Number": "9812345678",
+          "Customer Name": "Amit Patel",
+          "City": "Ahmedabad",
+          "Notes": "10-digit without code (auto +91 added)"
+        },
+        {
+          "Phone Number": "+1 555 234 5678",
+          "Customer Name": "John Smith",
+          "City": "New York",
+          "Notes": "USA (+1 Country Code)"
+        },
+        {
+          "Phone Number": "+971 50 123 4567",
+          "Customer Name": "Tariq Al-Mansoor",
+          "City": "Dubai",
+          "Notes": "UAE (+971 Country Code)"
+        },
+        {
+          "Phone Number": "+44 7911 123456",
+          "Customer Name": "Oliver Brown",
+          "City": "London",
+          "Notes": "UK (+44 Country Code)"
+        }
+      ];
+
+      const worksheet = XLSX.utils.json_to_sheet(sampleData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Recipients");
+
+      worksheet["!cols"] = [
+        { wch: 22 },
+        { wch: 22 },
+        { wch: 18 },
+        { wch: 32 }
+      ];
+
+      XLSX.writeFile(workbook, "WhatsApp_Broadcast_Audience_Sample.xlsx");
+      showToast("✓ Sample Excel template downloaded!");
+    } catch (e: any) {
+      console.error(e);
+      showToast("Failed to generate sample Excel file.", "error");
+    }
+  };
+
+  // Excel / CSV File Upload Handler
+  const handleExcelFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadedFileName(file.name);
+    const reader = new FileReader();
+
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonRows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+        if (!jsonRows || jsonRows.length === 0) {
+          showToast("Uploaded file is empty.", "error");
+          return;
+        }
+
+        const firstRow = jsonRows[0];
+        const keys = Object.keys(firstRow);
+
+        const phoneKey = keys.find((k) =>
+          /phone|mobile|whatsapp|contact|number|cell|tel/i.test(k)
+        ) || keys[0];
+
+        const nameKey = keys.find((k) =>
+          /name|customer|person|client|full/i.test(k)
+        );
+
+        const cityKey = keys.find((k) =>
+          /city|location|state|address|place/i.test(k)
+        );
+
+        const parsedRecipients: Array<{ id: string; contactPerson: string; mobile: string; city: string; tags?: string }> = [];
+        let invalidCount = 0;
+
+        jsonRows.forEach((row, idx) => {
+          const rawPhone = String(row[phoneKey] || "").trim();
+          const cleanPhone = resolveWhatsAppDispatchPhone(rawPhone);
+
+          if (cleanPhone && cleanPhone.length >= 10) {
+            const customerName = nameKey ? String(row[nameKey] || "").trim() : "";
+            const customerCity = cityKey ? String(row[cityKey] || "").trim() : "";
+
+            parsedRecipients.push({
+              id: `excel-${idx}`,
+              contactPerson: customerName || "Customer",
+              mobile: cleanPhone,
+              city: customerCity || "-",
+              tags: "Excel Upload"
+            });
+          } else if (rawPhone) {
+            invalidCount++;
+          }
+        });
+
+        if (parsedRecipients.length === 0) {
+          showToast("No valid phone numbers found in the uploaded file.", "error");
+          return;
+        }
+
+        setCustomRecipientsList(parsedRecipients);
+        setCustomPhonesInput(parsedRecipients.map((r) => r.mobile).join("\n"));
+        showToast(
+          `✓ Loaded ${parsedRecipients.length} recipients from ${file.name}${invalidCount > 0 ? ` (${invalidCount} invalid rows skipped)` : ""}`
+        );
+      } catch (err: any) {
+        console.error(err);
+        showToast("Failed to parse Excel file. Please ensure valid .xlsx, .xls, or .csv format.", "error");
+      }
+    };
+
+    reader.readAsArrayBuffer(file);
+  };
+
+  // Handle direct textarea paste (supports raw phones or tab-separated Excel copy-paste)
+  const handleCustomTextInputChange = (text: string) => {
+    setCustomPhonesInput(text);
+    if (!text.trim()) {
+      setCustomRecipientsList([]);
+      return;
+    }
+
+    const lines = text.split(/[\r\n]+/);
+    const parsed: Array<{ id: string; contactPerson: string; mobile: string; city: string; tags?: string }> = [];
+
+    lines.forEach((line, idx) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+
+      if (trimmed.includes("\t")) {
+        const parts = trimmed.split("\t").map((p) => p.trim());
+        let phone = "";
+        let name = "";
+        let city = "";
+
+        for (const part of parts) {
+          const clean = resolveWhatsAppDispatchPhone(part);
+          if (clean && clean.length >= 10 && !phone) {
+            phone = clean;
+          } else if (!name) {
+            name = part;
+          } else if (!city) {
+            city = part;
+          }
+        }
+
+        if (phone) {
+          parsed.push({
+            id: `paste-${idx}`,
+            contactPerson: name || "Customer",
+            mobile: phone,
+            city: city || "-",
+            tags: "Pasted Data"
+          });
+        }
+      } else {
+        const subParts = trimmed.split(/[,;]+/).map((p) => p.trim()).filter(Boolean);
+        subParts.forEach((sp, spIdx) => {
+          const clean = resolveWhatsAppDispatchPhone(sp);
+          if (clean && clean.length >= 10) {
+            parsed.push({
+              id: `paste-${idx}-${spIdx}`,
+              contactPerson: "Customer",
+              mobile: clean,
+              city: "-",
+              tags: "Manual Entry"
+            });
+          }
+        });
+      }
+    });
+
+    setCustomRecipientsList(parsed);
   };
 
   const handleLaunchBroadcast = async () => {
@@ -179,14 +394,9 @@ export default function WhatsAppBroadcastsComponent() {
       return;
     }
 
-    let customPhonesList: string[] = [];
     if (audienceType === "CUSTOM") {
-      customPhonesList = customPhonesInput
-        .split(/[\n,]+/)
-        .map((p) => p.trim())
-        .filter(Boolean);
-      if (customPhonesList.length === 0) {
-        showToast("Please enter at least one valid phone number.", "error");
+      if (customRecipientsList.length === 0) {
+        showToast("Please upload an Excel file or paste valid recipient phone numbers.", "error");
         return;
       }
     }
@@ -214,7 +424,8 @@ export default function WhatsAppBroadcastsComponent() {
       languageCode: selectedTemplate.language || "en_US",
       audienceType,
       selectedTags: audienceType === "TAGS" ? selectedTags : undefined,
-      customPhones: audienceType === "CUSTOM" ? customPhonesList : undefined,
+      customPhones: audienceType === "CUSTOM" ? customRecipientsList.map((r) => r.mobile) : undefined,
+      customRecipients: audienceType === "CUSTOM" ? customRecipientsList.map((r) => ({ toPhone: r.mobile, customerName: r.contactPerson, customerCity: r.city })) : undefined,
       scheduledAt: isScheduled && scheduledAt ? scheduledAt : undefined,
       variablesMap: JSON.stringify(formattedMappings),
       headerMediaUrl: headerMediaUrl.trim() || undefined,
@@ -275,24 +486,10 @@ export default function WhatsAppBroadcastsComponent() {
       });
     }
     if (audienceType === "CUSTOM") {
-      const rawPhones = customPhonesInput
-        .split(/[\n,]+/)
-        .map((p) => p.replace(/\D/g, ""))
-        .filter((p) => p.length >= 10);
-      return rawPhones.map((p, idx) => {
-        const match = contacts.find((c) => (c.mobile || "").replace(/\D/g, "").endsWith(p.slice(-10)));
-        return {
-          id: match?.id || `custom-${idx}`,
-          contactPerson: match?.contactPerson || "Custom Recipient",
-          businessName: match?.businessName || "",
-          mobile: p,
-          city: match?.city || "-",
-          tags: match?.tags || "Manual Entry"
-        };
-      });
+      return customRecipientsList;
     }
     return [];
-  }, [audienceType, selectedTags, customPhonesInput, contacts]);
+  }, [audienceType, selectedTags, customRecipientsList, contacts]);
 
   // Preview search filtering
   const searchedPreviewContacts = useMemo(() => {
@@ -356,7 +553,7 @@ export default function WhatsAppBroadcastsComponent() {
     return text;
   };
 
-  // Overall aggregate stats calculated purely from real campaigns
+  // Overall aggregate stats calculated purely from real campaigns (based on total sent)
   const totalDispatched = campaigns.reduce((acc, c) => acc + (c.sentCount || 0), 0);
   const totalDelivered = campaigns.reduce((acc, c) => acc + (c.deliveredCount || 0), 0);
   const totalRead = campaigns.reduce((acc, c) => acc + (c.readCount || 0), 0);
@@ -441,7 +638,7 @@ export default function WhatsAppBroadcastsComponent() {
                 </span>
               </h2>
               <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
-                Target segmented audiences by tags, track read rates (blue ticks), button CTR, inbound replies & sales ROI.
+                Target segmented audiences by tags or Excel upload, track read rates (blue ticks), button CTR, and sales ROI.
               </p>
             </div>
           </div>
@@ -812,7 +1009,7 @@ export default function WhatsAppBroadcastsComponent() {
                     {currentStep === 1
                       ? "Select Meta Template"
                       : currentStep === 2
-                      ? "Target Audience Segments & Tags"
+                      ? "Target Audience, Tags & Excel Upload"
                       : currentStep === 3
                       ? "Map Dynamic Variables & Media"
                       : "Review & Dispatch"}
@@ -831,7 +1028,7 @@ export default function WhatsAppBroadcastsComponent() {
             <div className="grid grid-cols-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-900/50">
               {[
                 { step: 1, label: "1. Template" },
-                { step: 2, label: "2. Audience & Tags" },
+                { step: 2, label: "2. Audience & Excel" },
                 { step: 3, label: "3. Variables & Media" },
                 { step: 4, label: "4. Review & Schedule" }
               ].map((s) => (
@@ -985,7 +1182,7 @@ export default function WhatsAppBroadcastsComponent() {
               )}
 
               {/* ----------------------------------------------------------------- */}
-              {/* STEP 2: SELECT AUDIENCE & TAGS */}
+              {/* STEP 2: SELECT AUDIENCE, TAGS & EXCEL IMPORT */}
               {/* ----------------------------------------------------------------- */}
               {currentStep === 2 && (
                 <div className="flex flex-col gap-4">
@@ -996,9 +1193,9 @@ export default function WhatsAppBroadcastsComponent() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       {[
-                        { type: "ALL", label: "All Contacts", icon: <Users size={16} />, desc: "Blast to complete CRM address book" },
+                        { type: "ALL", label: "All CRM Contacts", icon: <Users size={16} />, desc: "Complete CRM address book" },
                         { type: "TAGS", label: "Filter by Tags 🏷️", icon: <Tag size={16} />, desc: "Target specific VIPs, buyers, leads" },
-                        { type: "CUSTOM", label: "Paste Numbers / CSV", icon: <UploadCloud size={16} />, desc: "Direct phone number list" }
+                        { type: "CUSTOM", label: "Upload Excel / Paste 📊", icon: <FileSpreadsheet size={16} />, desc: "Excel (.xlsx) import or direct paste" }
                       ].map((item) => (
                         <button
                           key={item.type}
@@ -1118,23 +1315,98 @@ export default function WhatsAppBroadcastsComponent() {
                     </div>
                   )}
 
-                  {/* Custom Number Paste Mode */}
+                  {/* Excel Upload & Country Code Compatible Paste Section */}
                   {audienceType === "CUSTOM" && (
-                    <div className="p-4 bg-gray-50 dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-700">
-                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1.5">
-                        Paste Mobile Numbers (Comma or Newline Separated):
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={customPhonesInput}
-                        onChange={(e) => setCustomPhonesInput(e.target.value)}
-                        placeholder="919876543210&#10;918888877777&#10;919999900000"
-                        className="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-mono outline-none"
-                      />
+                    <div className="p-4 bg-gray-50 dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-700 flex flex-col gap-4">
+                      {/* Download Template Banner */}
+                      <div className="p-3.5 bg-indigo-50/80 dark:bg-indigo-950/40 rounded-2xl border border-indigo-200 dark:border-indigo-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                            <FileSpreadsheet size={18} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-black text-indigo-950 dark:text-white">
+                              Official Excel Audience Template
+                            </div>
+                            <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                              Download format with columns for Phone, Name, City & Country Codes
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleDownloadSampleExcel}
+                          className="px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-black transition flex items-center gap-2 border border-indigo-200 dark:border-indigo-700 shadow-2xs whitespace-nowrap active:scale-95"
+                        >
+                          <Download size={14} />
+                          <span>Download Sample Excel (.xlsx)</span>
+                        </button>
+                      </div>
+
+                      {/* Drag & Drop File Dropzone */}
+                      <div>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".xlsx, .xls, .csv"
+                          onChange={handleExcelFileUpload}
+                          className="hidden"
+                        />
+                        <div
+                          onClick={() => fileInputRef.current?.click()}
+                          className="p-5 border-2 border-dashed border-indigo-300 dark:border-indigo-800 hover:border-indigo-500 rounded-2xl bg-white dark:bg-slate-800/60 cursor-pointer transition flex flex-col items-center justify-center gap-2 group"
+                        >
+                          <div className="w-11 h-11 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition">
+                            <UploadCloud size={24} />
+                          </div>
+                          <div className="text-center">
+                            <span className="text-xs font-black text-gray-900 dark:text-white">
+                              {uploadedFileName ? `✓ ${uploadedFileName}` : "Click to Browse or Drag & Drop Excel / CSV"}
+                            </span>
+                            <span className="block text-[11px] text-gray-400 mt-0.5">
+                              Supports .xlsx, .xls, .csv (Auto-detects phone & country codes)
+                            </span>
+                          </div>
+                          {customRecipientsList.length > 0 && (
+                            <span className="text-[11px] font-black px-3 py-1 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 rounded-full">
+                              ✓ {customRecipientsList.length} recipients parsed & ready
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Direct Copy-Paste Area */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase flex items-center gap-1.5">
+                            <Globe size={13} className="text-indigo-600" />
+                            Or Paste Numbers Directly (Excel Table / Text):
+                          </label>
+                          <span className="text-[10px] text-gray-400 font-mono">
+                            Auto +91 for 10 digits • Keeps +1, +971, +44
+                          </span>
+                        </div>
+                        <textarea
+                          rows={3}
+                          value={customPhonesInput}
+                          onChange={(e) => handleCustomTextInputChange(e.target.value)}
+                          placeholder="Paste Excel columns or numbers:&#10;Rahul Sharma	919876543210	Mumbai&#10;Amit Patel	9812345678	Delhi&#10;+1 555 234 5678&#10;+971 50 123 4567"
+                          className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      {/* Country Code Compatibility Notice */}
+                      <div className="p-3 bg-gray-100/80 dark:bg-slate-800 rounded-xl flex items-center gap-2.5 text-[11px] text-gray-600 dark:text-gray-400">
+                        <Info size={16} className="text-indigo-500 shrink-0" />
+                        <div>
+                          <strong>Country Code Engine:</strong> 10-digit numbers without country code automatically get standard Indian prefix (<span className="font-mono text-indigo-600 font-bold">+91</span>). International numbers (<span className="font-mono">+1</span> USA, <span className="font-mono">+971</span> UAE, <span className="font-mono">+44</span> UK, etc.) are automatically formatted and preserved.
+                        </div>
+                      </div>
                     </div>
                   )}
 
-                  {/* Audience Reach Calculation Banner */}
+                  {/* Audience Reach Banner */}
                   <div className="p-4 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent dark:from-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-800/40 flex items-center justify-between">
                     <div>
                       <div className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wide">
@@ -1181,6 +1453,8 @@ export default function WhatsAppBroadcastsComponent() {
                       <div className="p-6 text-center text-gray-400 text-xs">
                         {audienceType === "TAGS" && selectedTags.length === 0
                           ? "Select at least one tag above to view matching contacts."
+                          : audienceType === "CUSTOM"
+                          ? "Upload an Excel file or paste phone numbers above to preview."
                           : "No contacts match the selected audience filter."}
                       </div>
                     ) : (
@@ -1189,9 +1463,9 @@ export default function WhatsAppBroadcastsComponent() {
                           <thead className="bg-gray-50/90 dark:bg-slate-800/90 text-[10px] font-black text-gray-500 uppercase sticky top-0 backdrop-blur-sm z-10 border-b border-gray-100 dark:border-slate-800">
                             <tr>
                               <th className="py-2.5 px-4">Customer</th>
-                              <th className="py-2.5 px-4">Phone / WhatsApp</th>
+                              <th className="py-2.5 px-4">Formatted WhatsApp Number</th>
                               <th className="py-2.5 px-4">City</th>
-                              <th className="py-2.5 px-4">Tags</th>
+                              <th className="py-2.5 px-4">Source / Tag</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100 dark:divide-slate-800/60 font-medium">
@@ -1205,8 +1479,11 @@ export default function WhatsAppBroadcastsComponent() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="py-2 px-4 font-mono text-gray-600 dark:text-gray-300">
-                                  {contact.mobile || contact.whatsappNumber || "-"}
+                                <td className="py-2 px-4 font-mono text-gray-700 dark:text-gray-300">
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 dark:bg-slate-800 rounded-md font-bold">
+                                    <Phone size={10} className="text-emerald-500" />
+                                    {formatWhatsAppPhone(contact.mobile || contact.whatsappNumber)}
+                                  </span>
                                 </td>
                                 <td className="py-2 px-4 text-gray-500 dark:text-gray-400">
                                   {contact.city || "-"}
@@ -1225,9 +1502,9 @@ export default function WhatsAppBroadcastsComponent() {
                                             {t.trim()}
                                           </span>
                                         ))
-                                      ) : (
-                                        <span className="text-gray-400 text-[10px]">-</span>
-                                      )}
+                                    ) : (
+                                      <span className="text-gray-400 text-[10px]">-</span>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
@@ -1892,7 +2169,7 @@ export default function WhatsAppBroadcastsComponent() {
                                       {r.customerName || "Customer"}
                                     </div>
                                     <div className="font-mono text-[11px] text-gray-500">
-                                      +{r.toPhone}
+                                      {formatWhatsAppPhone(r.toPhone)}
                                     </div>
                                   </td>
 

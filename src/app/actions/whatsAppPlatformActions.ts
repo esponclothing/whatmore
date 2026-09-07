@@ -1961,6 +1961,7 @@ export async function launchWhatsAppBroadcastAction(data: {
   audienceType: 'ALL' | 'HOT' | 'WARM' | 'COLD' | 'LEADS' | 'TAGS' | 'CUSTOM';
   selectedTags?: string[];
   customPhones?: string[];
+  customRecipients?: Array<{ toPhone: string; customerName?: string; customerCity?: string }>;
   scheduledAt?: string; // ISO datetime string
   variablesMap?: string; // JSON string of variable mapping rules
   headerMediaUrl?: string;
@@ -1975,18 +1976,30 @@ export async function launchWhatsAppBroadcastAction(data: {
       customerCity: string;
     }> = [];
 
-    if (data.audienceType === 'CUSTOM' && data.customPhones && data.customPhones.length > 0) {
-      contactsToQueue = data.customPhones
-        .map(p => {
-          const raw = p.replace(/\D/g, "");
-          const formatted = raw.length === 10 ? `91${raw}` : raw;
-          return {
-            toPhone: formatted,
-            customerName: "Customer",
-            customerCity: "India"
-          };
-        })
-        .filter(c => c.toPhone && c.toPhone.length >= 10);
+    if (data.audienceType === 'CUSTOM') {
+      if (data.customRecipients && data.customRecipients.length > 0) {
+        contactsToQueue = data.customRecipients
+          .map((r) => {
+            const raw = resolveWhatsAppDispatchPhone(r.toPhone);
+            return {
+              toPhone: raw,
+              customerName: r.customerName || "Customer",
+              customerCity: r.customerCity || "India"
+            };
+          })
+          .filter((c) => c.toPhone && c.toPhone.length >= 10);
+      } else if (data.customPhones && data.customPhones.length > 0) {
+        contactsToQueue = data.customPhones
+          .map((p) => {
+            const raw = resolveWhatsAppDispatchPhone(p);
+            return {
+              toPhone: raw,
+              customerName: "Customer",
+              customerCity: "India"
+            };
+          })
+          .filter((c) => c.toPhone && c.toPhone.length >= 10);
+      }
     } else {
       const whereClause: any = { mobile: { not: '' } };
 
