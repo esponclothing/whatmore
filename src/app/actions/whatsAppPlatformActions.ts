@@ -2152,10 +2152,11 @@ export async function getBroadcastCampaignAnalyticsAction(campaignId: string) {
       prisma.whatsAppCampaignQueue.count({ where: { campaignId, status: 'FAILED' } })
     ]);
 
-    const totalSent = sentCount + deliveredCount + readCount + campaign.sentCount;
-    const totalDelivered = deliveredCount + readCount + campaign.deliveredCount;
-    const totalRead = readCount + campaign.readCount;
-    const totalFailed = failedCount + campaign.failedCount;
+    const queueDispatched = sentCount + deliveredCount + readCount;
+    const totalSent = queueDispatched > 0 ? queueDispatched : (campaign.sentCount || 0);
+    const totalDelivered = (deliveredCount + readCount) > 0 ? (deliveredCount + readCount) : (campaign.deliveredCount || 0);
+    const totalRead = readCount > 0 ? readCount : (campaign.readCount || 0);
+    const totalFailed = failedCount > 0 ? failedCount : (campaign.failedCount || 0);
 
     return {
       success: true,
@@ -2169,8 +2170,8 @@ export async function getBroadcastCampaignAnalyticsAction(campaignId: string) {
         replied: campaign.repliedCount || 0,
         failed: totalFailed,
         cost: campaign.cost,
-        deliveryRate: campaign.totalAudience > 0 ? Math.round((totalDelivered / campaign.totalAudience) * 100) : 0,
-        readRate: totalDelivered > 0 ? Math.round((totalRead / totalDelivered) * 100) : 0
+        deliveryRate: totalSent > 0 ? Math.round((totalDelivered / totalSent) * 100) : 0,
+        readRate: totalDelivered > 0 ? Math.round((totalRead / totalDelivered) * 100) : (totalSent > 0 ? Math.round((totalRead / totalSent) * 100) : 0)
       },
       recentRecipients: campaign.queues || []
     };
@@ -3315,6 +3316,14 @@ export async function processCampaignQueueAction(campaignId: string) {
       mappings = JSON.parse(campaign.variablesMap || '[]');
     } catch (_) {}
 
+    const localTemplate = await prisma.whatsAppTemplate.findFirst({
+      where: { name: campaign.templateId }
+    });
+
+    const account = (await prisma.whatsAppAccount.findFirst()) || (await prisma.whatsAppAccount.create({
+      data: { name: "11FIT WhatsApp", phoneNumber: "917404388242", status: "CONNECTED" }
+    }));
+
     for (const item of queueItems) {
       try {
         const phone = item.toPhone;
@@ -3354,11 +3363,93 @@ export async function processCampaignQueueAction(campaignId: string) {
           throw new Error(json.error.message);
         }
 
+        const metaMsgId = json.messages?.[0]?.id;
+
         sentCount++;
         await prisma.whatsAppCampaignQueue.update({
           where: { id: item.id },
           data: { status: 'SENT' }
         });
+
+        // Resolve conversation & save message to inbox and chatbox
+        try {
+          let readableContent = localTemplate?.bodyText || `[Broadcast: ${campaign.templateId}]`;
+          parameters.forEach((param: any, pIdx: number) => {
+            readableContent = readableContent.replace(new RegExp(`\\{\\{${pIdx + 1}\\}\\}`, 'g'), param.text);
+          });
+
+          const displayContent = localTemplate?.headerContent && localTemplate.headerType === 'TEXT'
+            ? `${localTemplate.headerContent}\n\n${readableContent}`
+            : readableContent;
+
+          const last10 = phone.slice(-10);
+          let conv = await prisma.whatsAppConversation.findFirst({
+            where: {
+              OR: [
+                { customer: { mobile: { contains: last10 } } },
+                { customer: { whatsappNumber: { contains: last10 } } }
+              ]
+            }
+          });
+
+          if (!conv) {
+            let customer = await prisma.customer.findFirst({
+              where: {
+                OR: [
+                  { mobile: { contains: last10 } },
+                  { whatsappNumber: { contains: last10 } }
+                ]
+              }
+            });
+
+            if (!customer) {
+              customer = await prisma.customer.create({
+                data: {
+                  businessName: item.customerName || "Customer",
+                  contactPerson: item.customerName || "Customer",
+                  mobile: phone,
+                  whatsappNumber: phone,
+                  city: item.customerCity || "India"
+                }
+              });
+            }
+
+            conv = await prisma.whatsAppConversation.create({
+              data: {
+                accountId: account.id,
+                customerId: customer.id,
+                status: "OPEN",
+                lastMessageText: displayContent.slice(0, 150),
+                lastMessageAt: new Date()
+              }
+            });
+          }
+
+          if (conv) {
+            await prisma.whatsAppMessage.create({
+              data: {
+                conversationId: conv.id,
+                senderType: 'AGENT',
+                senderName: 'Broadcast Campaign',
+                messageType: 'TEMPLATE',
+                content: displayContent,
+                status: 'SENT',
+                whatsappMessageId: metaMsgId || undefined,
+                sentAt: new Date()
+              }
+            });
+
+            await prisma.whatsAppConversation.update({
+              where: { id: conv.id },
+              data: {
+                lastMessageText: displayContent.slice(0, 150),
+                lastMessageAt: new Date()
+              }
+            });
+          }
+        } catch (inboxErr) {
+          console.error("[Broadcast Inbox Sync] Error creating inbox message:", inboxErr);
+        }
       } catch (err: any) {
         failedCount++;
         await prisma.whatsAppCampaignQueue.update({
@@ -3368,16 +3459,25 @@ export async function processCampaignQueueAction(campaignId: string) {
       }
     }
 
+    const finalSent = await prisma.whatsAppCampaignQueue.count({
+      where: { campaignId, status: { in: ['SENT', 'DELIVERED', 'READ'] } }
+    });
+    const finalFailed = await prisma.whatsAppCampaignQueue.count({
+      where: { campaignId, status: 'FAILED' }
+    });
+
     await prisma.whatsAppCampaign.update({
       where: { id: campaignId },
       data: {
         status: 'COMPLETED',
-        sentCount: { increment: sentCount },
-        failedCount: { increment: failedCount }
+        sentCount: finalSent,
+        failedCount: finalFailed
       }
     });
 
     revalidatePath('/whatsapp/broadcasts');
+    revalidatePath('/whatsapp/inbox');
+    revalidatePath('/whatsapp/team-inbox');
     return { success: true, processed: queueItems.length, sentCount, failedCount };
   } catch (e: any) {
      console.error("[processCampaignQueueAction] Error:", e);

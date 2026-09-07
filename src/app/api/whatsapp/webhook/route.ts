@@ -77,6 +77,59 @@ export async function POST(req: NextRequest) {
     */
 
     // ══════════════════════════════════════════════════════
+    // 0. PROCESS MESSAGE STATUS UPDATES (SENT, DELIVERED, READ, FAILED)
+    // ══════════════════════════════════════════════════════
+    if (value.statuses && Array.isArray(value.statuses)) {
+      for (const st of value.statuses) {
+        try {
+          const wamid = st.id;
+          const status = (st.status || "").toLowerCase(); // "sent", "delivered", "read", "failed"
+          const recipientId = st.recipient_id ? st.recipient_id.replace(/\D/g, "") : "";
+          const last10 = recipientId.slice(-10);
+
+          let targetStatus: 'SENT' | 'DELIVERED' | 'READ' | 'FAILED' | null = null;
+          if (status === 'delivered') targetStatus = 'DELIVERED';
+          else if (status === 'read') targetStatus = 'READ';
+          else if (status === 'failed') targetStatus = 'FAILED';
+          else if (status === 'sent') targetStatus = 'SENT';
+
+          if (targetStatus && last10) {
+            // Update Campaign Queue Item status
+            await prisma.whatsAppCampaignQueue.updateMany({
+              where: {
+                toPhone: { endsWith: last10 },
+                status: { notIn: targetStatus === 'READ' ? ['FAILED'] : ['READ', 'FAILED'] }
+              },
+              data: {
+                status: targetStatus,
+                deliveredAt: targetStatus === 'DELIVERED' ? new Date() : undefined,
+                readAt: targetStatus === 'READ' ? new Date() : undefined,
+                errorMsg: targetStatus === 'FAILED' ? (st.errors?.[0]?.message || 'Delivery failed') : undefined
+              }
+            });
+
+            // Update matching WhatsAppMessage record
+            await prisma.whatsAppMessage.updateMany({
+              where: {
+                OR: [
+                  { whatsappMessageId: wamid },
+                  { conversation: { customer: { mobile: { endsWith: last10 } } } }
+                ]
+              },
+              data: {
+                status: targetStatus,
+                deliveredAt: targetStatus === 'DELIVERED' ? new Date() : undefined,
+                readAt: targetStatus === 'READ' ? new Date() : undefined
+              }
+            });
+          }
+        } catch (err) {
+          console.error("[Webhook Status Receipt Error]:", err);
+        }
+      }
+    }
+
+    // ══════════════════════════════════════════════════════
     // 1. PROCESS INCOMING MESSAGES
     // ══════════════════════════════════════════════════════
     if (value.messages && value.messages.length > 0) {
