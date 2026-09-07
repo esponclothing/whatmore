@@ -1205,54 +1205,130 @@ export async function saveWhatsAppApiCredentialsAction(data: {
 export async function getWhatsAppTemplates() {
   try {
     await ensureSeeded();
-    
-    const localTemplates = await prisma.whatsAppTemplate.findMany({ orderBy: { createdAt: 'desc' } });
+    const creds = await getMetaApiCredentials();
 
-    // Try to fetch from Meta API
-    const account = await prisma.whatsAppAccount.findFirst();
-    if (account?.businessAccountId && account?.accessToken && !account.accessToken.startsWith("EAAG")) {
-      const url = `https://graph.facebook.com/v20.0/${account.businessAccountId}/message_templates?access_token=${account.accessToken}`;
+    // 1. Fetch live templates from Meta Graph API if credentials are valid
+    if (creds.isConnected && creds.wabaId) {
       try {
-        const response = await fetch(url);
+        const url = `https://graph.facebook.com/v21.0/${creds.wabaId}/message_templates?fields=id,name,status,category,language,components,quality_score,rejected_reason&limit=250`;
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${creds.accessToken}` }
+        });
         const data = await response.json();
-        
+
         if (data.data && Array.isArray(data.data)) {
-           const metaTemplates = data.data.map((t: any) => {
-             const bodyComponent = t.components.find((c: any) => c.type === 'BODY');
-             const headerComponent = t.components.find((c: any) => c.type === 'HEADER');
-             const footerComponent = t.components.find((c: any) => c.type === 'FOOTER');
-             const buttonsComponent = t.components.find((c: any) => c.type === 'BUTTONS');
-             
-             let headerType = 'NONE';
-             if (headerComponent?.format) headerType = headerComponent.format;
-             
-             return {
-               id: t.id,
-               name: t.name,
-               category: t.category,
-               language: t.language,
-               status: t.status,
-               headerType: headerType,
-               headerContent: headerComponent?.text || '',
-               bodyText: bodyComponent?.text || '',
-               footerText: footerComponent?.text || '',
-               buttons: buttonsComponent ? JSON.stringify(buttonsComponent.buttons) : '[]',
-               variables: '[]',
-               createdAt: new Date(),
-               updatedAt: new Date()
-             };
-           });
-           
-           if (metaTemplates.length > 0) {
-              return { success: true, templates: metaTemplates };
-           }
+          for (const t of data.data) {
+            const bodyComponent = t.components?.find((c: any) => c.type === 'BODY');
+            const headerComponent = t.components?.find((c: any) => c.type === 'HEADER');
+            const footerComponent = t.components?.find((c: any) => c.type === 'FOOTER');
+            const buttonsComponent = t.components?.find((c: any) => c.type === 'BUTTONS');
+
+            let headerType = 'NONE';
+            if (headerComponent?.format) headerType = headerComponent.format;
+
+            await prisma.whatsAppTemplate.upsert({
+              where: { id: t.id },
+              update: {
+                status: t.status || 'APPROVED',
+                category: t.category || 'MARKETING',
+                language: t.language || 'en_US',
+                headerType,
+                headerContent: headerComponent?.text || '',
+                bodyText: bodyComponent?.text || '',
+                footerText: footerComponent?.text || '',
+                buttons: buttonsComponent ? JSON.stringify(buttonsComponent.buttons) : '[]',
+                rejectionReason: t.rejected_reason || null
+              },
+              create: {
+                id: t.id,
+                name: t.name,
+                status: t.status || 'APPROVED',
+                category: t.category || 'MARKETING',
+                language: t.language || 'en_US',
+                headerType,
+                headerContent: headerComponent?.text || '',
+                bodyText: bodyComponent?.text || '',
+                footerText: footerComponent?.text || '',
+                buttons: buttonsComponent ? JSON.stringify(buttonsComponent.buttons) : '[]',
+                rejectionReason: t.rejected_reason || null
+              }
+            }).catch(async () => {
+              // If ID matches standard name
+              const existingByName = await prisma.whatsAppTemplate.findFirst({ where: { name: t.name } });
+              if (existingByName) {
+                await prisma.whatsAppTemplate.update({
+                  where: { id: existingByName.id },
+                  data: {
+                    status: t.status || 'APPROVED',
+                    category: t.category || 'MARKETING',
+                    language: t.language || 'en_US',
+                    headerType,
+                    headerContent: headerComponent?.text || '',
+                    bodyText: bodyComponent?.text || '',
+                    footerText: footerComponent?.text || '',
+                    buttons: buttonsComponent ? JSON.stringify(buttonsComponent.buttons) : '[]'
+                  }
+                }).catch(() => {});
+              }
+            });
+          }
         }
-      } catch (e) {
-        console.error("Failed to fetch templates from Meta API:", e);
+      } catch (metaErr) {
+        console.warn("[getWhatsAppTemplates] Meta Graph API fetch warning:", metaErr);
       }
     }
 
-    return { success: true, templates: localTemplates };
+    // 2. Fetch all local templates sorted by creation date
+    const allTemplates = await prisma.whatsAppTemplate.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // 3. Fetch all campaigns to calculate real-time usage and engagement stats per template
+    const campaigns = await prisma.whatsAppCampaign.findMany({
+      select: {
+        id: true,
+        templateId: true,
+        sentCount: true,
+        deliveredCount: true,
+        readCount: true,
+        clicksCount: true,
+        createdAt: true
+      }
+    });
+
+    // 4. Enrich each template with its performance analytics & timestamps
+    const enrichedTemplates = allTemplates.map((t) => {
+      const templateCampaigns = campaigns.filter((c) => c.templateId === t.name);
+      const campaignsCount = templateCampaigns.length;
+      const totalSent = templateCampaigns.reduce((acc, c) => acc + (c.sentCount || 0), 0);
+      const totalDelivered = templateCampaigns.reduce((acc, c) => acc + (c.deliveredCount || 0), 0);
+      const totalRead = templateCampaigns.reduce((acc, c) => acc + (c.readCount || 0), 0);
+      const totalClicks = templateCampaigns.reduce((acc, c) => acc + (c.clicksCount || 0), 0);
+
+      const readRate = totalSent > 0 ? Math.round((totalRead / totalSent) * 100) : 0;
+      const clickRate = totalSent > 0 ? Math.round((totalClicks / totalSent) * 100) : 0;
+
+      // Find the most recent campaign timestamp
+      let lastUsedAt: Date | null = null;
+      if (templateCampaigns.length > 0) {
+        const sorted = [...templateCampaigns].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        lastUsedAt = sorted[0].createdAt;
+      }
+
+      return {
+        ...t,
+        campaignsCount,
+        totalSent,
+        totalDelivered,
+        totalRead,
+        readRate,
+        totalClicks,
+        clickRate,
+        lastUsedAt
+      };
+    });
+
+    return { success: true, templates: enrichedTemplates };
   } catch (e: any) {
     return { success: false, error: e.message, templates: [] };
   }
