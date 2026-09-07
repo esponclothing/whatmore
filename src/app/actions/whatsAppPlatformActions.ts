@@ -1952,32 +1952,77 @@ export async function unassignWhatsAppConversationAction(conversationId: string)
 }
 
 // ---------------------------------------------------------
+// ---------------------------------------------------------
 // NEW: REAL BROADCAST DISPATCH (calls Meta API for each contact)
 // ---------------------------------------------------------
 export async function launchWhatsAppBroadcastAction(data: {
   name: string;
   templateName: string;
   languageCode?: string;
-  audienceType: 'ALL' | 'HOT' | 'WARM' | 'COLD' | 'LEADS';
+  audienceType: 'ALL' | 'HOT' | 'WARM' | 'COLD' | 'LEADS' | 'TAGS' | 'CUSTOM';
+  selectedTags?: string[];
+  customPhones?: string[];
   scheduledAt?: string; // ISO datetime string
   variablesMap?: string; // JSON string of variable mapping rules
+  headerMediaUrl?: string;
+  headerMediaType?: string;
   category?: string;     // MARKETING, UTILITY, AUTHENTICATION
   flowId?: string;       // Dynamic Flows Campaign support!
 }) {
   try {
-    const whereClause: any = { mobile: { not: null } };
-    if (data.audienceType === 'HOT') whereClause.temperature = 'HOT';
-    else if (data.audienceType === 'WARM') whereClause.temperature = 'WARM';
-    else if (data.audienceType === 'COLD') whereClause.temperature = 'COLD';
-    else if (data.audienceType === 'LEADS') whereClause.status = 'New Lead';
+    let contactsToQueue: Array<{
+      toPhone: string;
+      customerName: string;
+      customerCity: string;
+    }> = [];
 
-    const contacts = await prisma.customer.findMany({
-      where: whereClause,
-      select: { id: true, mobile: true, whatsappNumber: true, contactPerson: true, city: true },
-      take: 1000
-    });
+    if (data.audienceType === 'CUSTOM' && data.customPhones && data.customPhones.length > 0) {
+      contactsToQueue = data.customPhones
+        .map(p => {
+          const raw = p.replace(/\D/g, "");
+          const formatted = raw.length === 10 ? `91${raw}` : raw;
+          return {
+            toPhone: formatted,
+            customerName: "Customer",
+            customerCity: "India"
+          };
+        })
+        .filter(c => c.toPhone && c.toPhone.length >= 10);
+    } else {
+      const whereClause: any = { mobile: { not: '' } };
 
-    const totalAudience = contacts.length;
+      if (data.audienceType === 'HOT') {
+        whereClause.temperature = 'HOT';
+      } else if (data.audienceType === 'WARM') {
+        whereClause.temperature = 'WARM';
+      } else if (data.audienceType === 'COLD') {
+        whereClause.temperature = 'COLD';
+      } else if (data.audienceType === 'LEADS') {
+        whereClause.status = 'New Lead';
+      } else if (data.audienceType === 'TAGS' && data.selectedTags && data.selectedTags.length > 0) {
+        whereClause.OR = data.selectedTags.map(t => ({
+          tags: { contains: t, mode: 'insensitive' }
+        }));
+      }
+
+      const customers = await prisma.customer.findMany({
+        where: whereClause,
+        select: { id: true, mobile: true, whatsappNumber: true, contactPerson: true, businessName: true, city: true },
+        take: 5000
+      });
+
+      contactsToQueue = customers.map(c => {
+        const raw = (c.whatsappNumber || c.mobile || '').replace(/\D/g, '');
+        const formatted = raw.length === 10 ? `91${raw}` : raw;
+        return {
+          toPhone: formatted,
+          customerName: c.contactPerson || c.businessName || 'Customer',
+          customerCity: c.city || 'India'
+        };
+      }).filter(q => q.toPhone && q.toPhone.length >= 10);
+    }
+
+    const totalAudience = contactsToQueue.length;
     const isFuture = data.scheduledAt ? new Date(data.scheduledAt).getTime() > Date.now() + 10000 : false;
     const campaignStatus = isFuture ? 'SCHEDULED' : 'PROCESSING';
 
@@ -1990,22 +2035,28 @@ export async function launchWhatsAppBroadcastAction(data: {
         totalAudience,
         variablesMap: data.variablesMap || '[]',
         category: data.category || 'MARKETING',
-        sentCount: 0, deliveredCount: 0, readCount: 0,
-        repliedCount: 0, leadsGenerated: 0, ordersGenerated: 0,
-        revenueGenerated: 0, cost: totalAudience * 0.72
+        sentCount: 0,
+        deliveredCount: 0,
+        readCount: 0,
+        repliedCount: 0,
+        failedCount: 0,
+        leadsGenerated: 0,
+        ordersGenerated: 0,
+        revenueGenerated: 0,
+        cost: totalAudience * 0.72
       }
     });
 
-    // Populate the queue table for all contacts
-    if (contacts.length > 0) {
+    // Populate queue table
+    if (contactsToQueue.length > 0) {
       await prisma.whatsAppCampaignQueue.createMany({
-        data: contacts.map(c => ({
+        data: contactsToQueue.map(c => ({
           campaignId: campaign.id,
-          toPhone: (c.whatsappNumber || c.mobile || '').replace(/\D/g, ''),
-          customerName: c.contactPerson || '',
-          customerCity: c.city || 'India',
+          toPhone: c.toPhone,
+          customerName: c.customerName,
+          customerCity: c.customerCity,
           status: 'PENDING'
-        })).filter(q => q.toPhone && q.toPhone.length >= 10)
+        }))
       });
     }
 
@@ -2015,36 +2066,126 @@ export async function launchWhatsAppBroadcastAction(data: {
     }
 
     revalidatePath('/whatsapp/broadcasts');
-    return { success: true, campaignId: campaign.id, scheduled: isFuture };
+    revalidatePath('/whatsapp/templates');
+    return { success: true, campaignId: campaign.id, scheduled: isFuture, totalAudience };
+  } catch (e: any) {
+    console.error("Error in launchWhatsAppBroadcastAction:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+// ---------------------------------------------------------
+// GET AUDIENCE SEGMENTS & TAG COUNTS FOR BROADCAST WIZARD
+// ---------------------------------------------------------
+export async function getWhatsAppAudienceSegments() {
+  try {
+    const [all, hot, warm, cold, leads, allCustomersWithTags] = await Promise.all([
+      prisma.customer.count({ where: { mobile: { not: '' } } }),
+      prisma.customer.count({ where: { temperature: 'HOT', mobile: { not: '' } } }),
+      prisma.customer.count({ where: { temperature: 'WARM', mobile: { not: '' } } }),
+      prisma.customer.count({ where: { temperature: 'COLD', mobile: { not: '' } } }),
+      prisma.customer.count({ where: { status: 'New Lead', mobile: { not: '' } } }),
+      prisma.customer.findMany({ select: { tags: true }, where: { mobile: { not: '' } } })
+    ]);
+
+    const tagCounts: Record<string, number> = {};
+    allCustomersWithTags.forEach(c => {
+      if (c.tags) {
+        c.tags.split(',').map(t => t.trim()).filter(Boolean).forEach(t => {
+          tagCounts[t] = (tagCounts[t] || 0) + 1;
+        });
+      }
+    });
+
+    const tagSegments = Object.entries(tagCounts)
+      .map(([tag, count]) => ({
+        key: `TAG:${tag}`,
+        tagName: tag,
+        label: `🏷️ ${tag}`,
+        count
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    return {
+      success: true,
+      segments: [
+        { key: 'ALL', label: 'All Contacts', count: all },
+        { key: 'HOT', label: 'Hot Leads 🔥', count: hot },
+        { key: 'WARM', label: 'Warm Leads ⚡', count: warm },
+        { key: 'COLD', label: 'Cold Leads ❄️', count: cold },
+        { key: 'LEADS', label: 'New Enquiries ✨', count: leads }
+      ],
+      tagSegments
+    };
+  } catch (e: any) {
+    return { success: false, error: e.message, segments: [], tagSegments: [] };
+  }
+}
+
+// ---------------------------------------------------------
+// GET BROADCAST CAMPAIGN ANALYTICS & LOGS
+// ---------------------------------------------------------
+export async function getBroadcastCampaignAnalyticsAction(campaignId: string) {
+  try {
+    const campaign = await prisma.whatsAppCampaign.findUnique({
+      where: { id: campaignId },
+      include: {
+        queues: {
+          take: 100,
+          orderBy: { updatedAt: 'desc' }
+        }
+      }
+    });
+    if (!campaign) throw new Error("Campaign not found");
+
+    const [pendingCount, sentCount, deliveredCount, readCount, failedCount] = await Promise.all([
+      prisma.whatsAppCampaignQueue.count({ where: { campaignId, status: 'PENDING' } }),
+      prisma.whatsAppCampaignQueue.count({ where: { campaignId, status: 'SENT' } }),
+      prisma.whatsAppCampaignQueue.count({ where: { campaignId, status: 'DELIVERED' } }),
+      prisma.whatsAppCampaignQueue.count({ where: { campaignId, status: 'READ' } }),
+      prisma.whatsAppCampaignQueue.count({ where: { campaignId, status: 'FAILED' } })
+    ]);
+
+    const totalSent = sentCount + deliveredCount + readCount + campaign.sentCount;
+    const totalDelivered = deliveredCount + readCount + campaign.deliveredCount;
+    const totalRead = readCount + campaign.readCount;
+    const totalFailed = failedCount + campaign.failedCount;
+
+    return {
+      success: true,
+      campaign,
+      stats: {
+        total: campaign.totalAudience,
+        pending: pendingCount,
+        sent: totalSent,
+        delivered: totalDelivered,
+        read: totalRead,
+        replied: campaign.repliedCount || 0,
+        failed: totalFailed,
+        cost: campaign.cost,
+        deliveryRate: campaign.totalAudience > 0 ? Math.round((totalDelivered / campaign.totalAudience) * 100) : 0,
+        readRate: totalDelivered > 0 ? Math.round((totalRead / totalDelivered) * 100) : 0
+      },
+      recentRecipients: campaign.queues || []
+    };
   } catch (e: any) {
     return { success: false, error: e.message };
   }
 }
 
 // ---------------------------------------------------------
-// NEW: GET REAL AUDIENCE COUNTS FOR BROADCAST WIZARD
+// DELETE BROADCAST CAMPAIGN
 // ---------------------------------------------------------
-export async function getWhatsAppAudienceSegments() {
+export async function deleteWhatsAppBroadcastCampaignAction(campaignId: string) {
   try {
-    const [all, hot, warm, cold, leads] = await Promise.all([
-      prisma.customer.count({ where: { mobile: { not: '' } } }),
-      prisma.customer.count({ where: { temperature: 'HOT', mobile: { not: '' } } }),
-      prisma.customer.count({ where: { temperature: 'WARM', mobile: { not: '' } } }),
-      prisma.customer.count({ where: { temperature: 'COLD', mobile: { not: '' } } }),
-      prisma.customer.count({ where: { status: 'New Lead', mobile: { not: '' } } })
-    ]);
-    return {
-      success: true,
-      segments: [
-        { key: 'ALL', label: 'All Customers', count: all },
-        { key: 'HOT', label: 'Hot Leads 🔥', count: hot },
-        { key: 'WARM', label: 'Warm Leads', count: warm },
-        { key: 'COLD', label: 'Cold Leads', count: cold },
-        { key: 'LEADS', label: 'New Enquiries', count: leads }
-      ]
-    };
+    await prisma.whatsAppCampaign.delete({
+      where: { id: campaignId }
+    });
+    revalidatePath('/whatsapp/broadcasts');
+    revalidatePath('/whatsapp/templates');
+    return { success: true };
   } catch (e: any) {
-    return { success: false, error: e.message, segments: [] };
+    return { success: false, error: e.message };
   }
 }
 
