@@ -2607,6 +2607,7 @@ export default function WhatsAppInboxComponent() {
       {showTemplatePicker && (
         <TemplatePickerModal
           onClose={() => setShowTemplatePicker(false)}
+          activeConvDetail={activeConvDetail}
           onSendTemplate={async (templateName, language, components) => {
             const phone = (activeConvDetail?.customer?.whatsappNumber || activeConvDetail?.customer?.mobile || "").replace(/\D/g,"");
             if (!phone) return;

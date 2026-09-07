@@ -1,18 +1,20 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { X, Search, CheckCircle2, Clock, AlertCircle, Send, ChevronRight } from "lucide-react";
+import { X, Search, CheckCircle2, Clock, AlertCircle, Send, ChevronRight, Sparkles, Check, Tag, User, Phone, MapPin, Building } from "lucide-react";
 
 interface Template {
   id?: string; name: string; category: string; status: string;
   bodyText: string; headerContent?: string; footerText?: string;
   buttons?: string; language?: string;
 }
+
 interface Props {
   onClose: () => void;
+  activeConvDetail?: any;
   onSendTemplate: (templateName: string, language: string, components: any[]) => Promise<void>;
 }
 
-export default function TemplatePickerModal({ onClose, onSendTemplate }: Props) {
+export default function TemplatePickerModal({ onClose, activeConvDetail, onSendTemplate }: Props) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -37,6 +39,61 @@ export default function TemplatePickerModal({ onClose, onSendTemplate }: Props) 
   };
 
   const bodyVars = selected ? extractVariables(selected.bodyText) : [];
+
+  // Extract contextual customer, agent, brand, and tag variables from active conversation
+  const customerName = activeConvDetail?.customer?.contactPerson || activeConvDetail?.contactName || activeConvDetail?.customer?.businessName || "";
+  const businessName = activeConvDetail?.customer?.businessName || "";
+  const phone = activeConvDetail?.customer?.whatsappNumber || activeConvDetail?.customer?.mobile || "";
+  const agentName = activeConvDetail?.assignedEmployee?.user?.name || "Sales Rep";
+  const brandName = "Espon";
+  const city = activeConvDetail?.customer?.city || "";
+  const state = activeConvDetail?.customer?.state || "";
+
+  // Extract clean tags
+  const tagsList = (() => {
+    const t1 = (activeConvDetail?.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
+    const t2 = (activeConvDetail?.customer?.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
+    return Array.from(new Set([...t1, ...t2])).filter(t => {
+      const l = t.toLowerCase();
+      return l !== 'whatsapp lead' && l !== 'auto created';
+    });
+  })();
+
+  const suggestions: { label: string; value: string; icon: string; category: string }[] = [
+    ...(customerName ? [{ label: "Customer Name", value: customerName, icon: "👤", category: "Customer" }] : []),
+    ...(businessName && businessName !== customerName ? [{ label: "Business Name", value: businessName, icon: "🏢", category: "Customer" }] : []),
+    ...(agentName ? [{ label: "Agent Name", value: agentName, icon: "👨‍💼", category: "Agent" }] : []),
+    { label: "Brand Name", value: brandName, icon: "🏬", category: "Company" },
+    ...(phone ? [{ label: "Customer Phone", value: phone, icon: "📱", category: "Contact" }] : []),
+    ...(city ? [{ label: "City", value: city, icon: "📍", category: "Location" }] : []),
+    ...(state ? [{ label: "State", value: state, icon: "🗺️", category: "Location" }] : []),
+    ...tagsList.map(tag => ({ label: `Tag: ${tag}`, value: tag, icon: "🏷️", category: "Tag" })),
+  ];
+
+  // Auto-fill variables helper
+  const handleAutoFill = () => {
+    const newVars: Record<string, string> = { ...variables };
+    if (bodyVars[0] && !newVars[bodyVars[0]]) {
+      newVars[bodyVars[0]] = customerName || "Customer";
+    }
+    if (bodyVars[1] && !newVars[bodyVars[1]]) {
+      newVars[bodyVars[1]] = agentName || brandName;
+    }
+    if (bodyVars[2] && !newVars[bodyVars[2]]) {
+      newVars[bodyVars[2]] = brandName;
+    }
+    setVariables(newVars);
+  };
+
+  const handleSelectTemplate = (t: Template) => {
+    setSelected(t);
+    const vars = extractVariables(t.bodyText);
+    const initialVars: Record<string, string> = {};
+    if (vars[0] && customerName) {
+      initialVars[vars[0]] = customerName;
+    }
+    setVariables(initialVars);
+  };
 
   const previewBody = (text: string) => {
     if (!text) return "";
@@ -78,24 +135,31 @@ export default function TemplatePickerModal({ onClose, onSendTemplate }: Props) 
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-      <div style={{ background: "white", borderRadius: "16px", width: "100%", maxWidth: "720px", maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 25px 60px rgba(0,0,0,0.2)" }}>
+      <div style={{ background: "white", borderRadius: "16px", width: "100%", maxWidth: "780px", maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 25px 60px rgba(0,0,0,0.2)", overflow: "hidden" }}>
         {/* Header */}
-        <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ padding: "18px 24px 14px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8fafc" }}>
           <div>
-            <h3 style={{ fontWeight: 800, fontSize: "16px", color: "#111827", margin: 0 }}>📄 Send Template Message</h3>
-            <p style={{ fontSize: "13px", color: "#6b7280", margin: "2px 0 0 0" }}>Choose an approved template to send</p>
+            <h3 style={{ fontWeight: 800, fontSize: "16px", color: "#0f172a", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+              <span>📄 Send Template Message</span>
+              {customerName && (
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "#4f46e5", background: "#eef2ff", padding: "2px 8px", borderRadius: "12px" }}>
+                  To: {customerName}
+                </span>
+              )}
+            </h3>
+            <p style={{ fontSize: "12.5px", color: "#64748b", margin: "2px 0 0 0" }}>Choose an approved template & customize dynamic variables</p>
           </div>
-          <button onClick={onClose} style={{ background: "#f3f4f6", border: "none", borderRadius: "8px", cursor: "pointer", padding: "6px" }}><X size={16} color="#6b7280" /></button>
+          <button onClick={onClose} style={{ background: "#e2e8f0", border: "none", borderRadius: "8px", cursor: "pointer", padding: "6px" }}><X size={16} color="#475569" /></button>
         </div>
 
         <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
           {/* Left: Template List */}
-          <div style={{ width: "55%", borderRight: "1px solid #f3f4f6", display: "flex", flexDirection: "column" }}>
-            <div style={{ padding: "12px 16px", borderBottom: "1px solid #f3f4f6" }}>
+          <div style={{ width: "50%", borderRight: "1px solid #f1f5f9", display: "flex", flexDirection: "column" }}>
+            <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }}>
               <div style={{ position: "relative" }}>
                 <Search size={13} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#9ca3af" }} />
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search templates..."
-                  style={{ width: "100%", padding: "7px 10px 7px 30px", border: "1px solid #e5e7eb", borderRadius: "8px", fontSize: "13px", outline: "none", boxSizing: "border-box" }} />
+                  style={{ width: "100%", padding: "7px 10px 7px 30px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", outline: "none", boxSizing: "border-box" }} />
               </div>
             </div>
             <div style={{ flex: 1, overflowY: "auto" }}>
@@ -108,66 +172,158 @@ export default function TemplatePickerModal({ onClose, onSendTemplate }: Props) 
                 </div>
               ) : (
                 filtered.map(t => (
-                  <div key={t.name} onClick={() => { setSelected(t); setVariables({}); }}
-                    style={{ padding: "12px 16px", borderBottom: "1px solid #f9fafb", cursor: "pointer",
-                      background: selected?.name === t.name ? "#f0f0ff" : "white",
-                      borderLeft: selected?.name === t.name ? "3px solid #4f46e5" : "3px solid transparent",
-                      display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px" }}>
+                  <div key={t.name} onClick={() => handleSelectTemplate(t)}
+                    style={{ padding: "12px 16px", borderBottom: "1px solid #f8fafc", cursor: "pointer",
+                      background: selected?.name === t.name ? "#eef2ff" : "white",
+                      borderLeft: selected?.name === t.name ? "4px solid #4f46e5" : "4px solid transparent",
+                      display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px",
+                      transition: "background 0.15s" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: "13px", color: "#111827", marginBottom: "3px" }}>{t.name}</div>
-                      <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "5px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <div style={{ fontWeight: 700, fontSize: "13px", color: selected?.name === t.name ? "#3730a3" : "#1e293b", marginBottom: "3px" }}>{t.name}</div>
+                      <div style={{ fontSize: "11.5px", color: "#64748b", marginBottom: "5px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {t.bodyText?.slice(0, 60)}...
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                         {statusBadge(t.status)}
-                        <span style={{ fontSize: "10px", color: "#9ca3af" }}>{t.category}</span>
+                        <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 600 }}>{t.category}</span>
                       </div>
                     </div>
-                    <ChevronRight size={14} color="#9ca3af" style={{ flexShrink: 0, marginTop: "2px" }} />
+                    <ChevronRight size={14} color={selected?.name === t.name ? "#4f46e5" : "#94a3b8"} style={{ flexShrink: 0, marginTop: "2px" }} />
                   </div>
                 ))
               )}
             </div>
           </div>
 
-          {/* Right: Preview + Variables */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          {/* Right: Preview + Selectable Variables */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "#f8fafc" }}>
             {selected ? (
               <>
                 <div style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
                   {/* WhatsApp Bubble Preview */}
                   <div style={{ marginBottom: "16px" }}>
-                    <div style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Preview</div>
-                    <div style={{ background: "#e2ffc7", borderRadius: "12px 12px 3px 12px", padding: "12px 14px", boxShadow: "0 1px 2px rgba(0,0,0,0.1)" }}>
-                      {selected.headerContent && <div style={{ fontWeight: 800, fontSize: "14px", color: "#111827", marginBottom: "6px" }}>{selected.headerContent}</div>}
-                      <div style={{ fontSize: "13px", color: "#1c1c1e", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Preview</div>
+                    <div style={{ background: "#dcf8c6", borderRadius: "12px 12px 3px 12px", padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)", border: "1px solid #cbe9b2" }}>
+                      {selected.headerContent && <div style={{ fontWeight: 800, fontSize: "14px", color: "#0f172a", marginBottom: "6px" }}>{selected.headerContent}</div>}
+                      <div style={{ fontSize: "13px", color: "#1e293b", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
                         {previewBody(selected.bodyText)}
                       </div>
-                      {selected.footerText && <div style={{ fontSize: "11px", color: "#8696a0", marginTop: "6px" }}>{selected.footerText}</div>}
+                      {selected.footerText && <div style={{ fontSize: "11px", color: "#64748b", marginTop: "6px" }}>{selected.footerText}</div>}
                     </div>
                   </div>
 
-                  {/* Variable Inputs */}
-                  {bodyVars.length > 0 && (
+                  {/* Variable Inputs & Selectable Chips */}
+                  {bodyVars.length > 0 ? (
                     <div>
-                      <div style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", marginBottom: "10px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Fill Variables</div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+                        <div style={{ fontSize: "11px", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                          Fill Variables ({bodyVars.length})
+                        </div>
+                        {suggestions.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleAutoFill}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              background: "#e0e7ff",
+                              color: "#4338ca",
+                              border: "1px solid #c7d2fe",
+                              borderRadius: "6px",
+                              padding: "3px 8px",
+                              fontSize: "11px",
+                              fontWeight: 700,
+                              cursor: "pointer"
+                            }}
+                            title="Auto-fill dynamic values from customer details"
+                          >
+                            <Sparkles size={12} /> Auto-Fill
+                          </button>
+                        )}
+                      </div>
+
                       {bodyVars.map(v => (
-                        <div key={v} style={{ marginBottom: "10px" }}>
-                          <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{v}</label>
+                        <div key={v} style={{ marginBottom: "14px", background: "white", padding: "10px 12px", borderRadius: "10px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px rgba(0,0,0,0.03)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                            <label style={{ fontSize: "12px", fontWeight: 700, color: "#1e293b" }}>{v}</label>
+                            {variables[v] && (
+                              <button
+                                type="button"
+                                onClick={() => setVariables(prev => ({ ...prev, [v]: "" }))}
+                                style={{ background: "none", border: "none", color: "#94a3b8", fontSize: "11px", cursor: "pointer", padding: "0 4px" }}
+                                title="Clear value"
+                              >
+                                Clear
+                              </button>
+                            )}
+                          </div>
                           <input
                             value={variables[v] || ""}
                             onChange={e => setVariables(prev => ({ ...prev, [v]: e.target.value }))}
-                            placeholder={`Value for ${v}`}
-                            style={{ width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: "8px", fontSize: "13px", outline: "none", boxSizing: "border-box" }}
+                            placeholder={`Type or click a variable chip below...`}
+                            style={{
+                              width: "100%",
+                              padding: "8px 10px",
+                              border: "1px solid #cbd5e1",
+                              borderRadius: "8px",
+                              fontSize: "13px",
+                              outline: "none",
+                              boxSizing: "border-box",
+                              background: "#f8fafc",
+                              marginBottom: "8px"
+                            }}
                           />
+
+                          {/* Quick Selectable Chips */}
+                          <div>
+                            <div style={{ fontSize: "10.5px", fontWeight: 600, color: "#64748b", marginBottom: "4px" }}>Click to select value:</div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
+                              {suggestions.map((s, sIdx) => {
+                                const isSelected = variables[v] === s.value;
+                                return (
+                                  <button
+                                    key={sIdx}
+                                    type="button"
+                                    onClick={() => setVariables(prev => ({ ...prev, [v]: s.value }))}
+                                    title={`Use "${s.value}" for ${v}`}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "4px",
+                                      padding: "3px 8px",
+                                      borderRadius: "14px",
+                                      fontSize: "11px",
+                                      fontWeight: isSelected ? 700 : 500,
+                                      background: isSelected ? "#4f46e5" : "#f1f5f9",
+                                      color: isSelected ? "white" : "#334155",
+                                      border: `1px solid ${isSelected ? "#4f46e5" : "#cbd5e1"}`,
+                                      cursor: "pointer",
+                                      transition: "all 0.15s ease",
+                                      boxShadow: isSelected ? "0 1px 3px rgba(79, 70, 229, 0.3)" : "none"
+                                    }}
+                                  >
+                                    <span>{s.icon}</span>
+                                    <span>{s.label}: <strong>{s.value}</strong></span>
+                                    {isSelected && <Check size={11} strokeWidth={3} />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
+                  ) : (
+                    <div style={{ padding: "12px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", color: "#166534", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+                      <CheckCircle2 size={16} color="#16a34a" />
+                      <span>This template has no variable placeholders. It is ready to send as-is!</span>
+                    </div>
                   )}
                 </div>
-                <div style={{ padding: "12px 16px", borderTop: "1px solid #f3f4f6" }}>
+                <div style={{ padding: "12px 16px", borderTop: "1px solid #e2e8f0", background: "white" }}>
                   <button onClick={handleSend} disabled={sending}
-                    style={{ width: "100%", padding: "12px", background: sending ? "#9ca3af" : "#4f46e5", color: "white", border: "none", borderRadius: "10px", fontWeight: 700, fontSize: "14px", cursor: sending ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+                    style={{ width: "100%", padding: "12px", background: sending ? "#9ca3af" : "#4f46e5", color: "white", border: "none", borderRadius: "10px", fontWeight: 700, fontSize: "14px", cursor: sending ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", boxShadow: "0 4px 12px rgba(79, 70, 229, 0.25)" }}>
                     <Send size={15} />
                     {sending ? "Sending..." : "Send Template"}
                   </button>
@@ -175,7 +331,7 @@ export default function TemplatePickerModal({ onClose, onSendTemplate }: Props) 
               </>
             ) : (
               <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: "13px", padding: "24px", textAlign: "center" }}>
-                ← Select a template to preview and send
+                ← Select a template from the left to preview and send
               </div>
             )}
           </div>
@@ -184,3 +340,4 @@ export default function TemplatePickerModal({ onClose, onSendTemplate }: Props) 
     </div>
   );
 }
+
