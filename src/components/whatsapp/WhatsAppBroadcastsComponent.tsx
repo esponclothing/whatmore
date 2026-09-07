@@ -572,11 +572,17 @@ export default function WhatsAppBroadcastsComponent() {
     if (analyticsTab === "CLICKED") {
       list = list.filter((r: any) => r.status === "CLICKED" || r.clickedAt || r.buttonClicked);
     } else if (analyticsTab === "READ") {
-      list = list.filter((r: any) => r.status === "READ" || r.readAt);
+      list = list.filter((r: any) => r.status === "READ" || r.readAt || r.status === "CLICKED" || r.clickedAt || r.status === "REPLIED" || r.repliedAt);
     } else if (analyticsTab === "REPLIED") {
       list = list.filter((r: any) => r.status === "REPLIED" || r.repliedAt || r.replyText);
     } else if (analyticsTab === "DELIVERED") {
-      list = list.filter((r: any) => r.status === "DELIVERED" || r.deliveredAt);
+      list = list.filter((r: any) =>
+        ['DELIVERED', 'READ', 'CLICKED', 'REPLIED'].includes(r.status) ||
+        r.deliveredAt ||
+        r.readAt ||
+        r.clickedAt ||
+        r.repliedAt
+      );
     } else if (analyticsTab === "FAILED") {
       list = list.filter((r: any) => r.status === "FAILED");
     }

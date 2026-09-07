@@ -1599,9 +1599,57 @@ export async function getWhatsAppForms() {
 
 export async function getWhatsAppCampaigns() {
   try {
-    const campaigns = await prisma.whatsAppCampaign.findMany({ orderBy: { createdAt: 'desc' } });
+    const campaigns = await prisma.whatsAppCampaign.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        queues: {
+          select: {
+            status: true,
+            deliveredAt: true,
+            readAt: true,
+            clickedAt: true,
+            buttonClicked: true,
+            repliedAt: true
+          }
+        }
+      }
+    });
+
+    const enrichedCampaigns = campaigns.map((c) => {
+      if (c.queues && c.queues.length > 0) {
+        const sent = c.queues.filter((q) => ['SENT', 'DELIVERED', 'READ', 'CLICKED', 'REPLIED'].includes(q.status)).length;
+        const delivered = c.queues.filter((q) =>
+          ['DELIVERED', 'READ', 'CLICKED', 'REPLIED'].includes(q.status) || q.deliveredAt || q.readAt
+        ).length;
+        const read = c.queues.filter((q) =>
+          ['READ', 'CLICKED', 'REPLIED'].includes(q.status) || q.readAt
+        ).length;
+        const clicks = c.queues.filter((q) =>
+          q.status === 'CLICKED' || q.clickedAt || q.buttonClicked
+        ).length;
+        const replies = c.queues.filter((q) =>
+          q.status === 'REPLIED' || q.repliedAt
+        ).length;
+        const failed = c.queues.filter((q) => q.status === 'FAILED').length;
+
+        return {
+          ...c,
+          sentCount: Math.max(c.sentCount || 0, sent),
+          deliveredCount: Math.max(c.deliveredCount || 0, delivered, read),
+          readCount: Math.max(c.readCount || 0, read),
+          clicksCount: Math.max(c.clicksCount || 0, clicks),
+          repliedCount: Math.max(c.repliedCount || 0, replies),
+          failedCount: Math.max(c.failedCount || 0, failed)
+        };
+      }
+      return {
+        ...c,
+        deliveredCount: Math.max(c.deliveredCount || 0, c.readCount || 0)
+      };
+    });
+
     const segments = await prisma.whatsAppSegment.findMany({ orderBy: { createdAt: 'desc' } });
-    return { success: true, campaigns, segments };
+    return { success: true, campaigns: enrichedCampaigns, segments };
   } catch (e: any) {
     return { success: false, error: e.message, campaigns: [], segments: [] };
   }

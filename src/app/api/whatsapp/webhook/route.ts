@@ -104,12 +104,13 @@ export async function POST(req: NextRequest) {
             });
 
             if (queueItems.length > 0) {
+              const now = new Date();
               await prisma.whatsAppCampaignQueue.updateMany({
                 where: { id: { in: queueItems.map((q) => q.id) } },
                 data: {
                   status: targetStatus,
-                  deliveredAt: targetStatus === 'DELIVERED' ? new Date() : undefined,
-                  readAt: targetStatus === 'READ' ? new Date() : undefined,
+                  deliveredAt: targetStatus === 'DELIVERED' || targetStatus === 'READ' ? now : undefined,
+                  readAt: targetStatus === 'READ' ? now : undefined,
                   errorMsg: targetStatus === 'FAILED' ? (st.errors?.[0]?.message || 'Delivery failed') : undefined
                 }
               });
@@ -120,11 +121,16 @@ export async function POST(req: NextRequest) {
                     where: { id: q.campaignId },
                     data: { deliveredCount: { increment: 1 } }
                   }).catch(() => {});
-                } else if (targetStatus === 'READ' && q.status !== 'READ') {
-                  await prisma.whatsAppCampaign.update({
-                    where: { id: q.campaignId },
-                    data: { readCount: { increment: 1 } }
-                  }).catch(() => {});
+                } else if (targetStatus === 'READ') {
+                  if (q.status !== 'READ') {
+                    await prisma.whatsAppCampaign.update({
+                      where: { id: q.campaignId },
+                      data: {
+                        readCount: { increment: 1 },
+                        deliveredCount: q.status !== 'DELIVERED' ? { increment: 1 } : undefined
+                      }
+                    }).catch(() => {});
+                  }
                 } else if (targetStatus === 'FAILED') {
                   await prisma.whatsAppCampaign.update({
                     where: { id: q.campaignId },
