@@ -351,6 +351,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
             let customerUpdate: any = {};
             if (node.leadStage) customerUpdate.leadStage = node.leadStage;
             if (node.customerType) customerUpdate.customerType = node.customerType;
+            if (node.temperature) customerUpdate.temperature = node.temperature;
             if (node.tags) {
               let existingTags = (customer.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
               if (!existingTags.includes(node.tags)) { existingTags.push(node.tags); }
@@ -358,6 +359,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
             }
             if (Object.keys(customerUpdate).length > 0) {
               await prisma.customer.update({ where: { id: customer.id }, data: customerUpdate });
+              console.log(`[CRM Node] Customer ${customer.id} updated with temperature="${customerUpdate.temperature || ''}" tags="${customerUpdate.tags || ''}"`);
             }
 
             if (!conv) {
@@ -370,8 +372,8 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
 
             if (conv) {
               let convUpdate: any = {};
-              if (node.temperature) convUpdate.temperature = node.temperature;
               if (node.leadStage) convUpdate.leadStatus = node.leadStage;
+              if (node.customerType) convUpdate.customerType = node.customerType;
               if (node.tags) {
                 let convTags = (conv.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
                 if (!convTags.includes(node.tags)) convTags.push(node.tags);
@@ -379,7 +381,7 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
               }
               if (Object.keys(convUpdate).length > 0) {
                 await prisma.whatsAppConversation.update({ where: { id: conv.id }, data: convUpdate });
-                console.log(`[CRM Node] Conversation ${conv.id} updated with tags="${convUpdate.tags}" leadStatus="${convUpdate.leadStatus}"`);
+                console.log(`[CRM Node] Conversation ${conv.id} updated with tags="${convUpdate.tags}" leadStatus="${convUpdate.leadStatus}" customerType="${convUpdate.customerType || ''}"`);
               }
             }
           } else {
