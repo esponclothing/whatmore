@@ -2016,6 +2016,9 @@ export async function launchWhatsAppBroadcastAction(data: {
   headerMediaType?: string;
   category?: string;     // MARKETING, UTILITY, AUTHENTICATION
   flowId?: string;       // Dynamic Flows Campaign support!
+  couponCode?: string;   // Limited-Time Offer Coupon Code
+  offerExpiration?: string; // LTO Expiration Date
+  carouselCardsJson?: string;
 }) {
   try {
     let contactsToQueue: Array<{
@@ -2049,7 +2052,10 @@ export async function launchWhatsAppBroadcastAction(data: {
           .filter((c) => c.toPhone && c.toPhone.length >= 10);
       }
     } else {
-      const whereClause: any = { mobile: { not: '' } };
+      const whereClause: any = {
+        mobile: { not: '' },
+        marketingOptOut: { not: true } // Auto DND Suppression to protect Meta Quality Rating
+      };
 
       if (data.audienceType === 'HOT') {
         whereClause.temperature = 'HOT';
@@ -2095,6 +2101,9 @@ export async function launchWhatsAppBroadcastAction(data: {
         totalAudience,
         variablesMap: data.variablesMap || '[]',
         category: data.category || 'MARKETING',
+        couponCode: data.couponCode || null,
+        offerExpiration: data.offerExpiration ? new Date(data.offerExpiration) : null,
+        carouselCardsJson: data.carouselCardsJson || null,
         sentCount: 0,
         deliveredCount: 0,
         readCount: 0,
@@ -2304,6 +2313,7 @@ export async function getBroadcastCampaignAnalyticsAction(campaignId: string) {
         clicks: totalClicks,
         replied: totalReplies,
         failed: totalFailed,
+        optOutCount: campaign.optOutCount || 0,
         orders: totalOrders,
         revenue: totalRevenue,
         cost: campaignCost,
@@ -3466,43 +3476,148 @@ export async function processCampaignQueueAction(campaignId: string) {
       data: { name: "11FIT WhatsApp", phoneNumber: "917404388242", status: "CONNECTED" }
     }));
 
-    for (const item of queueItems) {
+    for (let i = 0; i < queueItems.length; i++) {
+      const item = queueItems[i];
       try {
         const phone = item.toPhone;
-        const parameters: any[] = [];
-        mappings.forEach((m: any) => {
-          if (m.mappedTo === 'contactPerson') {
-            parameters.push({ type: "text", text: item.customerName || 'Customer' });
-          } else if (m.mappedTo === 'city') {
-            parameters.push({ type: "text", text: item.customerCity || 'India' });
-          } else if (m.mappedTo.startsWith('static:')) {
-            parameters.push({ type: "text", text: m.mappedTo.slice(7) });
-          } else {
-            parameters.push({ type: "text", text: item.customerName || 'Customer' });
+        const last10 = phone.slice(-10);
+
+        // 1. Check if recipient has Opted Out of Marketing (DND Protection)
+        const isOptedOut = await prisma.customer.findFirst({
+          where: {
+            OR: [
+              { mobile: { contains: last10 } },
+              { whatsappNumber: { contains: last10 } }
+            ],
+            marketingOptOut: true
           }
         });
 
-        if (parameters.length === 0 && item.customerName) {
-          parameters.push({ type: "text", text: item.customerName });
+        if (isOptedOut) {
+          failedCount++;
+          await prisma.whatsAppCampaignQueue.update({
+            where: { id: item.id },
+            data: {
+              status: 'FAILED',
+              errorMsg: 'Excluded: Recipient opted out of marketing (DND)'
+            }
+          });
+          await prisma.whatsAppCampaign.update({
+            where: { id: campaignId },
+            data: { optOutCount: { increment: 1 } }
+          }).catch(() => {});
+          continue;
         }
 
-        const url = `https://graph.facebook.com/v20.0/${creds.phoneId}/messages`;
-        const res = await fetch(url, {
+        // 2. Build Dynamic Parameters & Components
+        const bodyParameters: any[] = [];
+        mappings.forEach((m: any) => {
+          if (m.mappedTo === 'contactPerson') {
+            bodyParameters.push({ type: "text", text: item.customerName || 'Customer' });
+          } else if (m.mappedTo === 'city') {
+            bodyParameters.push({ type: "text", text: item.customerCity || 'India' });
+          } else if (m.mappedTo.startsWith('static:')) {
+            bodyParameters.push({ type: "text", text: m.mappedTo.slice(7) });
+          } else {
+            bodyParameters.push({ type: "text", text: item.customerName || 'Customer' });
+          }
+        });
+
+        if (bodyParameters.length === 0 && item.customerName) {
+          bodyParameters.push({ type: "text", text: item.customerName });
+        }
+
+        const components: any[] = [];
+        if (bodyParameters.length > 0) {
+          components.push({ type: "body", parameters: bodyParameters });
+        }
+
+        // Media Header parameter support (Image/Video/Document)
+        if (localTemplate?.headerType && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(localTemplate.headerType.toUpperCase())) {
+          const mediaUrl = localTemplate.headerMediaUrl || localTemplate.headerContent;
+          if (mediaUrl && mediaUrl.startsWith('http')) {
+            const hType = localTemplate.headerType.toLowerCase();
+            components.push({
+              type: "header",
+              parameters: [
+                {
+                  type: hType,
+                  [hType]: { link: mediaUrl }
+                }
+              ]
+            });
+          }
+        }
+
+        // Limited-Time Offer (Coupon Code Copy Button)
+        if (campaign.couponCode) {
+          components.push({
+            type: "button",
+            sub_type: "copy_code",
+            index: 0,
+            parameters: [
+              {
+                type: "coupon_code",
+                coupon_code: campaign.couponCode
+              }
+            ]
+          });
+        }
+
+        const url = `https://graph.facebook.com/v21.0/${creds.phoneId}/messages`;
+        
+        // Pacing & Rate Limit handling with retry
+        let res = await fetch(url, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${creds.accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messaging_product: "whatsapp", to: phone, type: "template",
+            messaging_product: "whatsapp",
+            to: phone,
+            type: "template",
             template: {
               name: campaign.templateId,
               language: { code: "en_US" },
-              components: parameters.length > 0 ? [{ type: "body", parameters }] : []
+              components
             }
           })
         });
 
-        const json = await res.json();
+        let json = await res.json();
+
+        // Meta Error 130429 (Rate Limit Exceeded) -> Exponential Backoff Retry
+        if (json.error && (json.error.code === 130429 || json.error.code === 80007)) {
+          console.warn("[Meta Rate Limit Hit]: Waiting 2000ms for backoff retry...");
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${creds.accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messaging_product: "whatsapp",
+              to: phone,
+              type: "template",
+              template: {
+                name: campaign.templateId,
+                language: { code: "en_US" },
+                components
+              }
+            })
+          });
+          json = await res.json();
+        }
+
         if (json.error) {
-          throw new Error(json.error.message);
+          const errCode = json.error.code;
+          const errMsg = json.error.message;
+          await prisma.whatsAppCampaignQueue.update({
+            where: { id: item.id },
+            data: {
+              status: 'FAILED',
+              errorMsg: errMsg || 'Meta API error',
+              metaErrorCode: errCode || undefined
+            }
+          });
+          failedCount++;
+          continue;
         }
 
         const metaMsgId = json.messages?.[0]?.id;
@@ -3516,7 +3631,7 @@ export async function processCampaignQueueAction(campaignId: string) {
         // Resolve conversation & save message to inbox and chatbox
         try {
           let readableContent = localTemplate?.bodyText || `[Broadcast: ${campaign.templateId}]`;
-          parameters.forEach((param: any, pIdx: number) => {
+          bodyParameters.forEach((param: any, pIdx: number) => {
             readableContent = readableContent.replace(new RegExp(`\\{\\{${pIdx + 1}\\}\\}`, 'g'), param.text);
           });
 
@@ -3524,7 +3639,6 @@ export async function processCampaignQueueAction(campaignId: string) {
             ? `${localTemplate.headerContent}\n\n${readableContent}`
             : readableContent;
 
-          const last10 = phone.slice(-10);
           let conv = await prisma.whatsAppConversation.findFirst({
             where: {
               OR: [
@@ -3592,6 +3706,11 @@ export async function processCampaignQueueAction(campaignId: string) {
         } catch (inboxErr) {
           console.error("[Broadcast Inbox Sync] Error creating inbox message:", inboxErr);
         }
+
+        // Meta Throughput pacing (micro-delay between dispatches to maintain healthy RPS)
+        if (i % 25 === 0 && i > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 80));
+        }
       } catch (err: any) {
         failedCount++;
         await prisma.whatsAppCampaignQueue.update({
@@ -3602,7 +3721,7 @@ export async function processCampaignQueueAction(campaignId: string) {
     }
 
     const finalSent = await prisma.whatsAppCampaignQueue.count({
-      where: { campaignId, status: { in: ['SENT', 'DELIVERED', 'READ'] } }
+      where: { campaignId, status: { in: ['SENT', 'DELIVERED', 'READ', 'CLICKED', 'REPLIED'] } }
     });
     const finalFailed = await prisma.whatsAppCampaignQueue.count({
       where: { campaignId, status: 'FAILED' }
@@ -3624,6 +3743,149 @@ export async function processCampaignQueueAction(campaignId: string) {
   } catch (e: any) {
      console.error("[processCampaignQueueAction] Error:", e);
      return { success: false, error: e.message };
+  }
+}
+
+// ---------------------------------------------------------
+// GET META PHONE HEALTH, QUALITY RATING & MESSAGING LIMITS
+// ---------------------------------------------------------
+export async function getMetaPhoneHealthAndLimitsAction() {
+  try {
+    const creds = await getMetaApiCredentials();
+    const optedOutCount = await prisma.customer.count({
+      where: { marketingOptOut: true }
+    });
+
+    if (!creds || !creds.isConnected) {
+      return {
+        success: true,
+        isConnected: false,
+        qualityRating: "UNKNOWN",
+        status: "DISCONNECTED",
+        verifiedName: "WhatsApp Account",
+        dailyLimitTier: "10,000 / 24h",
+        throughput: 80,
+        optedOutCount
+      };
+    }
+
+    let qualityRating = "GREEN";
+    let status = "CONNECTED";
+    let verifiedName = "11FIT WhatsApp";
+    let dailyLimitTier = "10,000 / 24h";
+    let throughput = 80;
+
+    try {
+      const phoneRes = await fetch(
+        `https://graph.facebook.com/v21.0/${creds.phoneId}?fields=quality_rating,status,verified_name,code_verification_status,throughput,is_official_business_account`,
+        {
+          headers: { Authorization: `Bearer ${creds.accessToken}` }
+        }
+      );
+      if (phoneRes.ok) {
+        const pData = await phoneRes.json();
+        if (pData.quality_rating) qualityRating = pData.quality_rating.toUpperCase();
+        if (pData.status) status = pData.status;
+        if (pData.verified_name) verifiedName = pData.verified_name;
+        if (pData.throughput?.level) throughput = pData.throughput.level;
+      }
+    } catch (e) {
+      console.warn("Could not fetch phone health from Meta:", e);
+    }
+
+    return {
+      success: true,
+      isConnected: true,
+      qualityRating,
+      status,
+      verifiedName,
+      dailyLimitTier,
+      throughput,
+      optedOutCount
+    };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+// ---------------------------------------------------------
+// SYNC META TEMPLATE ANALYTICS DIRECTLY FROM GRAPH API
+// ---------------------------------------------------------
+export async function syncMetaTemplateAnalyticsAction(campaignId?: string) {
+  try {
+    const creds = await getMetaApiCredentials();
+    if (!creds || !creds.isConnected || !creds.wabaId) {
+      return { success: false, error: "Meta WABA credentials required for server sync" };
+    }
+
+    const end = Math.floor(Date.now() / 1000);
+    const start = end - 30 * 24 * 60 * 60; // past 30 days
+
+    const url = `https://graph.facebook.com/v21.0/${creds.wabaId}/template_analytics?start=${start}&end=${end}&granularity=DAILY`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${creds.accessToken}` }
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      return { success: false, error: errJson.error?.message || "Failed to fetch Meta template analytics" };
+    }
+
+    const json = await res.json();
+    const analyticsPoints = json.data?.[0]?.data_points || [];
+
+    if (campaignId) {
+      const campaign = await prisma.whatsAppCampaign.findUnique({ where: { id: campaignId } });
+      if (campaign) {
+        const matchingPoints = analyticsPoints.filter((p: any) => p.template_name === campaign.templateId);
+        if (matchingPoints.length > 0) {
+          const serverSent = matchingPoints.reduce((acc: number, p: any) => acc + (p.sent || 0), 0);
+          const serverDelivered = matchingPoints.reduce((acc: number, p: any) => acc + (p.delivered || 0), 0);
+          const serverRead = matchingPoints.reduce((acc: number, p: any) => acc + (p.read || 0), 0);
+          const serverClicked = matchingPoints.reduce((acc: number, p: any) => acc + (p.clicked || 0), 0);
+
+          await prisma.whatsAppCampaign.update({
+            where: { id: campaignId },
+            data: {
+              sentCount: Math.max(campaign.sentCount, serverSent),
+              deliveredCount: Math.max(campaign.deliveredCount, serverDelivered),
+              readCount: Math.max(campaign.readCount, serverRead),
+              clicksCount: Math.max(campaign.clicksCount, serverClicked)
+            }
+          });
+        }
+      }
+    }
+
+    revalidatePath('/whatsapp/broadcasts');
+    return { success: true, pointsCount: analyticsPoints.length, data: analyticsPoints };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+// ---------------------------------------------------------
+// OPT OUT CUSTOMER FROM MARKETING (DND ENFORCEMENT)
+// ---------------------------------------------------------
+export async function optOutCustomerFromMarketingAction(phone: string) {
+  try {
+    const last10 = phone.slice(-10);
+    await prisma.customer.updateMany({
+      where: {
+        OR: [
+          { mobile: { contains: last10 } },
+          { whatsappNumber: { contains: last10 } }
+        ]
+      },
+      data: {
+        marketingOptOut: true,
+        optedOutAt: new Date()
+      }
+    });
+    revalidatePath('/whatsapp/broadcasts');
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
   }
 }
 

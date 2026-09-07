@@ -298,6 +298,8 @@ model Customer {
   preferences          String? // JSON string
   territoryId          String?
   territory            Territory? @relation(fields: [territoryId], references: [id])
+  marketingOptOut      Boolean  @default(false)
+  optedOutAt           DateTime?
 
   totalPurchaseValue Float @default(0)
   totalOrders        Int   @default(0)
@@ -1498,6 +1500,11 @@ model WhatsAppCampaign {
   cost            Float    @default(0)
   variablesMap    String?  // JSON string representing variable dynamic mapping rules
   category        String?  // MARKETING, UTILITY, AUTHENTICATION
+  carouselCardsJson String? // JSON string representing multi-card carousel cards
+  offerExpiration DateTime? // Limited-Time Offer expiration date
+  couponCode      String?   // Promo / Coupon code for copy button
+  optOutCount     Int      @default(0) // Count of recipients who clicked Opt-Out or replied STOP
+  metaQualityStatus String? // GREEN, YELLOW, RED
   queues          WhatsAppCampaignQueue[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1518,6 +1525,8 @@ model WhatsAppCampaignQueue {
   repliedAt    DateTime?
   replyText    String?
   orderValue   Float?
+  metaErrorCode Int?            // Meta API error code (e.g. 131026, 130429, 131047)
+  retryCount   Int              @default(0)
   errorMsg     String?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt

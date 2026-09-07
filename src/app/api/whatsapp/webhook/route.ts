@@ -241,9 +241,33 @@ export async function POST(req: NextRequest) {
          console.log(`[WhatsApp Webhook] Buy button clicked for ${msg.interactive.button_reply.id}`);
       }
 
-      // WhatsApp Campaign Engagement Attribution (CTA Button Clicks & Inbound Replies)
-      const clickedButtonTitle = msg.button?.text || msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || null;
-      const isButtonClick = Boolean(clickedButtonTitle || (msg.interactive?.button_reply?.id && !msg.interactive.button_reply.id.startsWith("buy_")));
+      // Automated Marketing Opt-Out (DND) & Resubscribe Detection
+      const cleanUpperText = textContent.trim().toUpperCase();
+      const isOptOutCommand = ["STOP", "UNSUBSCRIBE", "OPT OUT", "OPTOUT", "DO NOT DISTURB", "DND"].includes(cleanUpperText) ||
+        (isButtonClick && clickedButtonTitle && ["STOP", "UNSUBSCRIBE", "OPT OUT", "STOP PROMOTIONS"].some(s => clickedButtonTitle.toUpperCase().includes(s)));
+      const isResubscribeCommand = ["START", "RESUBSCRIBE", "UNSTOP"].includes(cleanUpperText);
+
+      if (isOptOutCommand) {
+        await prisma.customer.updateMany({
+          where: {
+            OR: [
+              { mobile: { contains: last10 } },
+              { whatsappNumber: { contains: last10 } }
+            ]
+          },
+          data: { marketingOptOut: true, optedOutAt: new Date() }
+        }).catch(() => {});
+      } else if (isResubscribeCommand) {
+        await prisma.customer.updateMany({
+          where: {
+            OR: [
+              { mobile: { contains: last10 } },
+              { whatsappNumber: { contains: last10 } }
+            ]
+          },
+          data: { marketingOptOut: false, optedOutAt: null }
+        }).catch(() => {});
+      }
 
       try {
         const recentQueueItem = await prisma.whatsAppCampaignQueue.findFirst({
@@ -255,6 +279,13 @@ export async function POST(req: NextRequest) {
         });
 
         if (recentQueueItem) {
+          if (isOptOutCommand) {
+            await prisma.whatsAppCampaign.update({
+              where: { id: recentQueueItem.campaignId },
+              data: { optOutCount: { increment: 1 } }
+            }).catch(() => {});
+          }
+
           if (isButtonClick) {
             await prisma.whatsAppCampaignQueue.update({
               where: { id: recentQueueItem.id },

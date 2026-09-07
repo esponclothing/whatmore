@@ -54,7 +54,9 @@ import {
   getWhatsAppAudienceSegments,
   launchWhatsAppBroadcastAction,
   getBroadcastCampaignAnalyticsAction,
-  deleteWhatsAppBroadcastCampaignAction
+  deleteWhatsAppBroadcastCampaignAction,
+  getMetaPhoneHealthAndLimitsAction,
+  syncMetaTemplateAnalyticsAction
 } from "@/app/actions/whatsAppPlatformActions";
 import {
   parseDynamicPhone,
@@ -73,6 +75,24 @@ export default function WhatsAppBroadcastsComponent() {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [toastMsg, setToastMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  // Meta Health & Limits State
+  const [metaHealth, setMetaHealth] = useState<{
+    qualityRating: string;
+    dailyLimitTier: string;
+    throughput: number;
+    optedOutCount: number;
+    verifiedName: string;
+    isConnected: boolean;
+  }>({
+    qualityRating: "GREEN",
+    dailyLimitTier: "10,000 / 24h",
+    throughput: 80,
+    optedOutCount: 0,
+    verifiedName: "11FIT WhatsApp",
+    isConnected: true
+  });
+  const [syncingMetaServer, setSyncingMetaServer] = useState<boolean>(false);
 
   // Wizard Modal State
   const [showWizard, setShowWizard] = useState<boolean>(false);
@@ -98,6 +118,11 @@ export default function WhatsAppBroadcastsComponent() {
   const [variableMappings, setVariableMappings] = useState<Array<{ varIndex: number; mappedTo: string; staticValue: string }>>([]);
   const [headerMediaUrl, setHeaderMediaUrl] = useState<string>("");
 
+  // Limited-Time Offer (LTO) & Coupon Code State
+  const [hasLtoOffer, setHasLtoOffer] = useState<boolean>(false);
+  const [couponCode, setCouponCode] = useState<string>("");
+  const [offerExpiration, setOfferExpiration] = useState<string>("");
+
   // Schedule & Dispatch State
   const [isScheduled, setIsScheduled] = useState<boolean>(false);
   const [scheduledAt, setScheduledAt] = useState<string>("");
@@ -118,10 +143,11 @@ export default function WhatsAppBroadcastsComponent() {
   const fetchCampaignsAndTemplates = async () => {
     setLoading(true);
     try {
-      const [campRes, tempRes, segRes] = await Promise.all([
+      const [campRes, tempRes, segRes, healthRes] = await Promise.all([
         getWhatsAppCampaigns(),
         getWhatsAppTemplates(),
-        getWhatsAppAudienceSegments()
+        getWhatsAppAudienceSegments(),
+        getMetaPhoneHealthAndLimitsAction()
       ]);
 
       if (campRes.success && campRes.campaigns) setCampaigns(campRes.campaigns);
@@ -136,6 +162,16 @@ export default function WhatsAppBroadcastsComponent() {
         if (segRes.segments) setSegments(segRes.segments);
         if (segRes.tagSegments) setTagSegments(segRes.tagSegments);
         if (segRes.contacts) setContacts(segRes.contacts);
+      }
+      if (healthRes && healthRes.success) {
+        setMetaHealth({
+          qualityRating: healthRes.qualityRating || "GREEN",
+          dailyLimitTier: healthRes.dailyLimitTier || "10,000 / 24h",
+          throughput: healthRes.throughput || 80,
+          optedOutCount: healthRes.optedOutCount || 0,
+          verifiedName: healthRes.verifiedName || "11FIT WhatsApp",
+          isConnected: healthRes.isConnected ?? true
+        });
       }
     } catch (e) {
       console.error(e);
@@ -429,7 +465,9 @@ export default function WhatsAppBroadcastsComponent() {
       scheduledAt: isScheduled && scheduledAt ? scheduledAt : undefined,
       variablesMap: JSON.stringify(formattedMappings),
       headerMediaUrl: headerMediaUrl.trim() || undefined,
-      category: selectedTemplate.category || "MARKETING"
+      category: selectedTemplate.category || "MARKETING",
+      couponCode: hasLtoOffer && couponCode.trim() ? couponCode.trim().toUpperCase() : undefined,
+      offerExpiration: hasLtoOffer && offerExpiration ? offerExpiration : undefined
     });
 
     setLaunching(false);
@@ -666,6 +704,42 @@ export default function WhatsAppBroadcastsComponent() {
             <Plus size={16} />
             <span>Create Campaign</span>
           </button>
+        </div>
+      </div>
+
+      {/* Meta Account Health & Messaging Limit Bar */}
+      <div className="w-full bg-slate-900/5 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 px-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-extrabold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <CheckCircle2 size={15} className="text-emerald-500" />
+            Meta Health:
+          </span>
+          <span className={`px-2.5 py-1 rounded-full font-black text-[11px] flex items-center gap-1.5 border ${
+            metaHealth.qualityRating === "GREEN"
+              ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800"
+              : metaHealth.qualityRating === "YELLOW"
+              ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800"
+              : "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 border-red-300 dark:border-red-800"
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${
+              metaHealth.qualityRating === "GREEN" ? "bg-emerald-500 animate-pulse" : metaHealth.qualityRating === "YELLOW" ? "bg-amber-500" : "bg-red-500"
+            }`} />
+            {metaHealth.qualityRating === "GREEN" ? "High Quality Rating (Green)" : metaHealth.qualityRating === "YELLOW" ? "Medium Warning (Yellow)" : "Low Quality (Red)"}
+          </span>
+          <span className="px-2.5 py-1 rounded-full font-bold text-[11px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1">
+            <Send size={12} className="text-indigo-500" />
+            Daily Limit: {metaHealth.dailyLimitTier}
+          </span>
+          <span className="px-2.5 py-1 rounded-full font-bold text-[11px] bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 flex items-center gap-1">
+            <Radio size={12} className="text-sky-500" />
+            Throughput: {metaHealth.throughput} msgs/sec
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="px-2.5 py-1 rounded-full font-medium text-[11px] bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-slate-700 flex items-center gap-1.5" title="Opted-out numbers automatically excluded to preserve Meta Quality Rating">
+            <Filter size={11} className="text-gray-500" />
+            {metaHealth.optedOutCount} Unsubscribed (DND Excluded)
+          </span>
         </div>
       </div>
 
@@ -1631,6 +1705,57 @@ export default function WhatsAppBroadcastsComponent() {
                         </p>
                       </div>
                     )}
+
+                  {/* Meta Limited-Time Offer (LTO) & Coupon Code Engine */}
+                  <div className="p-4 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent dark:from-amber-950/30 dark:via-orange-950/10 rounded-2xl border border-amber-200 dark:border-amber-800/40 flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Tag size={16} className="text-amber-600 dark:text-amber-400" />
+                        <div>
+                          <div className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-wide">
+                            Limited-Time Offer (LTO) & Coupon Code
+                          </div>
+                          <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                            Add a 1-tap Copy Coupon Code button and expiration countdown badge
+                          </div>
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={hasLtoOffer}
+                        onChange={(e) => setHasLtoOffer(e.target.checked)}
+                        className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                      />
+                    </div>
+
+                    {hasLtoOffer && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-amber-200/60 dark:border-amber-800/40">
+                        <div>
+                          <label className="text-[11px] font-bold text-gray-700 dark:text-gray-300 block mb-1">
+                            Coupon / Promo Code (e.g. FLAT25)
+                          </label>
+                          <input
+                            type="text"
+                            value={couponCode}
+                            onChange={(e) => setCouponCode(e.target.value)}
+                            placeholder="e.g. FLASH30"
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700/60 rounded-xl text-xs font-mono font-bold uppercase outline-none focus:ring-2 focus:ring-amber-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-bold text-gray-700 dark:text-gray-300 block mb-1">
+                            Offer Expiration Date (Optional)
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={offerExpiration}
+                            onChange={(e) => setOfferExpiration(e.target.value)}
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700/60 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-500"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1927,10 +2052,36 @@ export default function WhatsAppBroadcastsComponent() {
 
               <div className="flex items-center gap-2">
                 <button
+                  onClick={async () => {
+                    if (!selectedCampaignForAnalytics?.id) return;
+                    setSyncingMetaServer(true);
+                    try {
+                      const res = await syncMetaTemplateAnalyticsAction(selectedCampaignForAnalytics.id);
+                      if (res.success) {
+                        showToast("✓ Meta Graph API Server Analytics synchronized!", "success");
+                        handleOpenAnalytics(selectedCampaignForAnalytics);
+                      } else {
+                        showToast(res.error || "Could not sync with Meta Graph API", "error");
+                      }
+                    } catch (e: any) {
+                      showToast(e.message, "error");
+                    } finally {
+                      setSyncingMetaServer(false);
+                    }
+                  }}
+                  disabled={syncingMetaServer || loadingAnalytics}
+                  className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-black transition flex items-center gap-1.5 active:scale-95"
+                  title="Sync official server-verified delivery and click metrics from Meta Graph API"
+                >
+                  <RefreshCw size={13} className={syncingMetaServer ? "animate-spin" : ""} />
+                  <span>{syncingMetaServer ? "Syncing Meta..." : "Sync Meta Graph API"}</span>
+                </button>
+
+                <button
                   onClick={() => handleOpenAnalytics(selectedCampaignForAnalytics)}
                   disabled={loadingAnalytics}
                   className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl transition"
-                  title="Refresh Analytics"
+                  title="Refresh Local Analytics"
                 >
                   <RefreshCw size={15} className={loadingAnalytics ? "animate-spin text-indigo-600" : ""} />
                 </button>
@@ -2070,6 +2221,17 @@ export default function WhatsAppBroadcastsComponent() {
                         </div>
                         <span className="text-[9px] text-amber-600 font-bold">
                           {analyticsData.stats.replyRate}% Reply Rate
+                        </span>
+                      </div>
+
+                      {/* Opt-Outs / DND Suppressed */}
+                      <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
+                        <div className="text-[10px] font-bold text-gray-500 uppercase">Opt-Outs 🛡️</div>
+                        <div className="text-lg font-black text-gray-700 dark:text-gray-300 mt-1">
+                          {analyticsData.stats.optOutCount || 0}
+                        </div>
+                        <span className="text-[9px] text-gray-400 font-bold">
+                          DND Suppressed
                         </span>
                       </div>
                     </div>
