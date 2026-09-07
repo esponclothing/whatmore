@@ -246,10 +246,40 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: false, error: "Conversation not found" }, { status: 404 });
       }
 
-      // Auto-heal 10-digit customer phone numbers to standard 91 format for Meta API
+      // Auto-heal customer phone numbers using verified Meta incoming message ID (wamid) or standard E.164
       if (conversation.customerId && conversation.customer) {
+        let realPhone: string | null = null;
+
+        // 1. Try to extract verified E.164 phone directly from incoming customer message metaMessageId (wamid)
+        const incomingWithWamid = conversation.messages?.find(
+          (m: any) => m.senderType === 'CUSTOMER' && m.metaMessageId && m.metaMessageId.startsWith('wamid.HBg')
+        );
+        if (incomingWithWamid?.metaMessageId) {
+          const match = incomingWithWamid.metaMessageId.match(/^wamid\.HBg[A-Za-z]([A-Za-z0-9+/=]{8,30})/);
+          if (match) {
+            try {
+              const buf = Buffer.from(match[1], 'base64');
+              const str = buf.toString('latin1');
+              const digitsMatch = str.match(/\d{10,15}/);
+              if (digitsMatch) realPhone = digitsMatch[0];
+            } catch {}
+          }
+        }
+
         const rawPhone = (conversation.customer.whatsappNumber || conversation.customer.mobile || '').replace(/\D/g, '');
-        if (rawPhone.length === 10) {
+
+        if (realPhone && realPhone !== rawPhone) {
+          console.log(`[Auto-Heal Phone] Updating customer ${conversation.customerId} from ${rawPhone} to verified Meta phone ${realPhone}`);
+          await prisma.customer.update({
+            where: { id: conversation.customerId },
+            data: {
+              whatsappNumber: realPhone,
+              mobile: realPhone
+            }
+          }).catch(() => {});
+          conversation.customer.whatsappNumber = realPhone;
+          conversation.customer.mobile = realPhone;
+        } else if (rawPhone.length === 10 && /^[6-9]/.test(rawPhone)) {
           const fullIndianPhone = `91${rawPhone}`;
           await prisma.customer.update({
             where: { id: conversation.customerId },
