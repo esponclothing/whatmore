@@ -2137,26 +2137,99 @@ export async function getBroadcastCampaignAnalyticsAction(campaignId: string) {
       where: { id: campaignId },
       include: {
         queues: {
-          take: 100,
+          take: 200,
           orderBy: { updatedAt: 'desc' }
         }
       }
     });
     if (!campaign) throw new Error("Campaign not found");
 
-    const [pendingCount, sentCount, deliveredCount, readCount, failedCount] = await Promise.all([
+    const [
+      pendingCount,
+      sentCount,
+      deliveredCount,
+      readCount,
+      clickedCount,
+      repliedCount,
+      failedCount
+    ] = await Promise.all([
       prisma.whatsAppCampaignQueue.count({ where: { campaignId, status: 'PENDING' } }),
-      prisma.whatsAppCampaignQueue.count({ where: { campaignId, status: 'SENT' } }),
-      prisma.whatsAppCampaignQueue.count({ where: { campaignId, status: 'DELIVERED' } }),
-      prisma.whatsAppCampaignQueue.count({ where: { campaignId, status: 'READ' } }),
+      prisma.whatsAppCampaignQueue.count({
+        where: { campaignId, status: { in: ['SENT', 'DELIVERED', 'READ', 'CLICKED', 'REPLIED'] } }
+      }),
+      prisma.whatsAppCampaignQueue.count({
+        where: { campaignId, status: { in: ['DELIVERED', 'READ', 'CLICKED', 'REPLIED'] } }
+      }),
+      prisma.whatsAppCampaignQueue.count({
+        where: { campaignId, status: { in: ['READ', 'CLICKED', 'REPLIED'] } }
+      }),
+      prisma.whatsAppCampaignQueue.count({
+        where: {
+          campaignId,
+          OR: [{ status: 'CLICKED' }, { clickedAt: { not: null } }, { buttonClicked: { not: null } }]
+        }
+      }),
+      prisma.whatsAppCampaignQueue.count({
+        where: {
+          campaignId,
+          OR: [{ status: 'REPLIED' }, { repliedAt: { not: null } }, { replyText: { not: null } }]
+        }
+      }),
       prisma.whatsAppCampaignQueue.count({ where: { campaignId, status: 'FAILED' } })
     ]);
 
-    const queueDispatched = sentCount + deliveredCount + readCount;
-    const totalSent = queueDispatched > 0 ? queueDispatched : (campaign.sentCount || 0);
-    const totalDelivered = (deliveredCount + readCount) > 0 ? (deliveredCount + readCount) : (campaign.deliveredCount || 0);
-    const totalRead = readCount > 0 ? readCount : (campaign.readCount || 0);
-    const totalFailed = failedCount > 0 ? failedCount : (campaign.failedCount || 0);
+    const totalSent = sentCount > 0 ? sentCount : (campaign.sentCount || 0);
+    const totalDelivered = (deliveredCount > 0) ? deliveredCount : (campaign.deliveredCount || 0);
+    const totalRead = (readCount > 0) ? readCount : (campaign.readCount || 0);
+    const totalClicks = (clickedCount > 0) ? clickedCount : (campaign.clicksCount || 0);
+    const totalReplies = (repliedCount > 0) ? repliedCount : (campaign.repliedCount || 0);
+    const totalFailed = (failedCount > 0) ? failedCount : (campaign.failedCount || 0);
+
+    // Sales Conversion Attribution from Orders
+    let totalOrders = campaign.ordersGenerated || 0;
+    let totalRevenue = campaign.revenueGenerated || 0;
+
+    try {
+      const recipientPhones = campaign.queues.map(q => q.toPhone.slice(-10)).filter(Boolean);
+      if (recipientPhones.length > 0) {
+        const matchingCustomers = await prisma.customer.findMany({
+          where: {
+            OR: [
+              { mobile: { in: recipientPhones } },
+              { whatsappNumber: { in: recipientPhones } }
+            ]
+          },
+          select: { id: true, mobile: true, whatsappNumber: true }
+        });
+
+        const customerIds = matchingCustomers.map(c => c.id);
+        if (customerIds.length > 0) {
+          const attributedOrders = await prisma.order.findMany({
+            where: {
+              customerId: { in: customerIds },
+              createdAt: { gte: campaign.createdAt }
+            },
+            select: { id: true, customerId: true, totalAmount: true, createdAt: true }
+          });
+
+          if (attributedOrders.length > 0) {
+            totalOrders = Math.max(totalOrders, attributedOrders.length);
+            const sumRevenue = attributedOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+            totalRevenue = Math.max(totalRevenue, sumRevenue);
+          }
+        }
+      }
+    } catch (_) {}
+
+    const campaignCost = campaign.cost > 0 ? campaign.cost : totalSent * 0.72;
+    const roas = campaignCost > 0 && totalRevenue > 0 ? (totalRevenue / campaignCost).toFixed(1) : "0.0";
+    const aov = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
+
+    const deliveryRate = totalSent > 0 ? Math.round((totalDelivered / totalSent) * 100) : 0;
+    const readRate = totalDelivered > 0 ? Math.round((totalRead / totalDelivered) * 100) : (totalSent > 0 ? Math.round((totalRead / totalSent) * 100) : 0);
+    const clickRate = totalDelivered > 0 ? Math.round((totalClicks / totalDelivered) * 100) : (totalSent > 0 ? Math.round((totalClicks / totalSent) * 100) : 0);
+    const replyRate = totalDelivered > 0 ? Math.round((totalReplies / totalDelivered) * 100) : (totalSent > 0 ? Math.round((totalReplies / totalSent) * 100) : 0);
+    const conversionRate = totalDelivered > 0 ? ((totalOrders / totalDelivered) * 100).toFixed(1) : "0.0";
 
     return {
       success: true,
@@ -2167,11 +2240,19 @@ export async function getBroadcastCampaignAnalyticsAction(campaignId: string) {
         sent: totalSent,
         delivered: totalDelivered,
         read: totalRead,
-        replied: campaign.repliedCount || 0,
+        clicks: totalClicks,
+        replied: totalReplies,
         failed: totalFailed,
-        cost: campaign.cost,
-        deliveryRate: totalSent > 0 ? Math.round((totalDelivered / totalSent) * 100) : 0,
-        readRate: totalDelivered > 0 ? Math.round((totalRead / totalDelivered) * 100) : (totalSent > 0 ? Math.round((totalRead / totalSent) * 100) : 0)
+        orders: totalOrders,
+        revenue: totalRevenue,
+        cost: campaignCost,
+        roas,
+        aov,
+        deliveryRate,
+        readRate,
+        clickRate,
+        replyRate,
+        conversionRate
       },
       recentRecipients: campaign.queues || []
     };

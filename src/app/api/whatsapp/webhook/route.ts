@@ -95,18 +95,44 @@ export async function POST(req: NextRequest) {
 
           if (targetStatus && last10) {
             // Update Campaign Queue Item status
-            await prisma.whatsAppCampaignQueue.updateMany({
+            const queueItems = await prisma.whatsAppCampaignQueue.findMany({
               where: {
                 toPhone: { endsWith: last10 },
                 status: { notIn: targetStatus === 'READ' ? ['FAILED'] : ['READ', 'FAILED'] }
               },
-              data: {
-                status: targetStatus,
-                deliveredAt: targetStatus === 'DELIVERED' ? new Date() : undefined,
-                readAt: targetStatus === 'READ' ? new Date() : undefined,
-                errorMsg: targetStatus === 'FAILED' ? (st.errors?.[0]?.message || 'Delivery failed') : undefined
-              }
+              select: { id: true, campaignId: true, status: true }
             });
+
+            if (queueItems.length > 0) {
+              await prisma.whatsAppCampaignQueue.updateMany({
+                where: { id: { in: queueItems.map((q) => q.id) } },
+                data: {
+                  status: targetStatus,
+                  deliveredAt: targetStatus === 'DELIVERED' ? new Date() : undefined,
+                  readAt: targetStatus === 'READ' ? new Date() : undefined,
+                  errorMsg: targetStatus === 'FAILED' ? (st.errors?.[0]?.message || 'Delivery failed') : undefined
+                }
+              });
+
+              for (const q of queueItems) {
+                if (targetStatus === 'DELIVERED') {
+                  await prisma.whatsAppCampaign.update({
+                    where: { id: q.campaignId },
+                    data: { deliveredCount: { increment: 1 } }
+                  }).catch(() => {});
+                } else if (targetStatus === 'READ' && q.status !== 'READ') {
+                  await prisma.whatsAppCampaign.update({
+                    where: { id: q.campaignId },
+                    data: { readCount: { increment: 1 } }
+                  }).catch(() => {});
+                } else if (targetStatus === 'FAILED') {
+                  await prisma.whatsAppCampaign.update({
+                    where: { id: q.campaignId },
+                    data: { failedCount: { increment: 1 } }
+                  }).catch(() => {});
+                }
+              }
+            }
 
             // Update matching WhatsAppMessage record
             await prisma.whatsAppMessage.updateMany({
@@ -207,6 +233,54 @@ export async function POST(req: NextRequest) {
       // Feature: Intercept `buy_` buttons
       if (msg.interactive?.button_reply?.id?.startsWith("buy_")) {
          console.log(`[WhatsApp Webhook] Buy button clicked for ${msg.interactive.button_reply.id}`);
+      }
+
+      // WhatsApp Campaign Engagement Attribution (CTA Button Clicks & Inbound Replies)
+      const clickedButtonTitle = msg.button?.text || msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || null;
+      const isButtonClick = Boolean(clickedButtonTitle || (msg.interactive?.button_reply?.id && !msg.interactive.button_reply.id.startsWith("buy_")));
+
+      try {
+        const recentQueueItem = await prisma.whatsAppCampaignQueue.findFirst({
+          where: {
+            toPhone: { endsWith: last10 },
+            createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+          },
+          orderBy: { createdAt: 'desc' }
+        });
+
+        if (recentQueueItem) {
+          if (isButtonClick) {
+            await prisma.whatsAppCampaignQueue.update({
+              where: { id: recentQueueItem.id },
+              data: {
+                status: 'CLICKED',
+                buttonClicked: clickedButtonTitle || msg.interactive?.button_reply?.id || 'CTA Button Clicked',
+                clickedAt: new Date()
+              }
+            });
+            await prisma.whatsAppCampaign.update({
+              where: { id: recentQueueItem.campaignId },
+              data: { clicksCount: { increment: 1 } }
+            }).catch(() => {});
+          } else if (msg.type === "text" || msg.text?.body) {
+            if (!recentQueueItem.repliedAt) {
+              await prisma.whatsAppCampaignQueue.update({
+                where: { id: recentQueueItem.id },
+                data: {
+                  repliedAt: new Date(),
+                  replyText: textContent.slice(0, 500),
+                  status: recentQueueItem.status === 'CLICKED' ? 'CLICKED' : 'REPLIED'
+                }
+              });
+              await prisma.whatsAppCampaign.update({
+                where: { id: recentQueueItem.campaignId },
+                data: { repliedCount: { increment: 1 } }
+              }).catch(() => {});
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[WhatsApp Webhook Campaign Attribution Error]:', e);
       }
 
       // Feature 5: Extract WhatsApp Profile Name from Meta payload

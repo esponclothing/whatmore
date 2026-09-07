@@ -1489,6 +1489,7 @@ model WhatsAppCampaign {
   sentCount       Int      @default(0)
   deliveredCount  Int      @default(0)
   readCount       Int      @default(0)
+  clicksCount     Int      @default(0)
   repliedCount    Int      @default(0)
   failedCount     Int      @default(0)
   leadsGenerated  Int      @default(0)
@@ -1509,7 +1510,14 @@ model WhatsAppCampaignQueue {
   toPhone      String
   customerName String?
   customerCity String?
-  status       String           @default("PENDING") // PENDING, SENT, FAILED
+  status       String           @default("PENDING") // PENDING, SENT, DELIVERED, READ, CLICKED, REPLIED, FAILED
+  deliveredAt  DateTime?
+  readAt       DateTime?
+  clickedAt    DateTime?
+  buttonClicked String?
+  repliedAt    DateTime?
+  replyText    String?
+  orderValue   Float?
   errorMsg     String?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
