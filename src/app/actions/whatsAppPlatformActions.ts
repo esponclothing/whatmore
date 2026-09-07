@@ -1258,7 +1258,14 @@ export async function getWhatsAppTemplates() {
   }
 }
 
-export async function sendWhatsAppTemplateAction(toPhone: string, templateName: string, languageCode = "en_US", components: any[] = []) {
+export async function sendWhatsAppTemplateAction(
+  toPhone: string, 
+  templateName: string, 
+  languageCode = "en_US", 
+  components: any[] = [],
+  conversationId?: string,
+  senderName?: string
+) {
   try {
     const creds = await getMetaApiCredentials();
     const cleanPhone = toPhone.replace(/\D/g, "");
@@ -1278,6 +1285,8 @@ export async function sendWhatsAppTemplateAction(toPhone: string, templateName: 
         }
       };
 
+      console.log(`[WhatsApp Template Dispatch] Sending template "${templateName}" (${languageCode}) to ${cleanPhone}...`);
+
       const res = await fetch(url, {
         method: 'POST',
         headers: {
@@ -1288,9 +1297,110 @@ export async function sendWhatsAppTemplateAction(toPhone: string, templateName: 
       });
       
       const data = await res.json();
-      if (data.error) throw new Error(data.error.message);
+      if (data.error) {
+        console.error(`[WhatsApp Template Error] Failed to send template "${templateName}" to ${cleanPhone}:`, data.error);
+        throw new Error(data.error.message || JSON.stringify(data.error));
+      }
       
-      return { success: true, messageId: data.messages?.[0]?.id };
+      const metaMessageId = data.messages?.[0]?.id;
+      console.log(`[WhatsApp Template Sent] Successfully sent template "${templateName}" to ${cleanPhone}. Meta WAMID: ${metaMessageId}`);
+
+      // 1. Resolve or find conversation
+      let targetConvId = conversationId;
+      let targetConv: any = null;
+
+      if (targetConvId) {
+        targetConv = await prisma.whatsAppConversation.findUnique({
+          where: { id: targetConvId },
+          include: { customer: true }
+        });
+      }
+
+      if (!targetConv) {
+        const last10 = cleanPhone.slice(-10);
+        targetConv = await prisma.whatsAppConversation.findFirst({
+          where: {
+            OR: [
+              { customer: { whatsappNumber: { contains: last10 } } },
+              { customer: { mobile: { contains: last10 } } }
+            ]
+          },
+          include: { customer: true }
+        });
+        if (targetConv) {
+          targetConvId = targetConv.id;
+        }
+      }
+
+      // 2. Fetch template details from DB to build rich content representation
+      const localTemplate = await prisma.whatsAppTemplate.findFirst({
+        where: { name: templateName }
+      });
+
+      let readableBody = localTemplate?.bodyText || `[Template: ${templateName}]`;
+      if (components && Array.isArray(components)) {
+        const bodyComp = components.find(c => c.type === "body");
+        if (bodyComp?.parameters && Array.isArray(bodyComp.parameters)) {
+          bodyComp.parameters.forEach((param: any, idx: number) => {
+            const placeholder = `{{${idx + 1}}}`;
+            if (param.text) {
+              readableBody = readableBody.replace(placeholder, param.text);
+            }
+          });
+        }
+      }
+
+      const displayContent = localTemplate?.headerContent 
+        ? `${localTemplate.headerContent}\n\n${readableBody}`
+        : readableBody;
+
+      // 3. Create WhatsAppMessage record in DB if conversation exists
+      if (targetConvId) {
+        await prisma.whatsAppMessage.create({
+          data: {
+            conversationId: targetConvId,
+            senderType: 'AGENT',
+            senderName: senderName || 'Sales Agent',
+            messageType: 'TEMPLATE',
+            content: displayContent,
+            metadata: JSON.stringify({
+              templateName,
+              languageCode,
+              components,
+              templateId: localTemplate?.id,
+              metaMessageId
+            }),
+            status: 'SENT',
+            metaMessageId: metaMessageId,
+            sentAt: new Date()
+          }
+        });
+
+        await prisma.whatsAppConversation.update({
+          where: { id: targetConvId },
+          data: {
+            lastMessageText: `[Template] ${templateName}`,
+            lastMessageAt: new Date()
+          }
+        });
+      }
+
+      // 4. Create CommunicationLog entry
+      try {
+        await prisma.communicationLog.create({
+          data: {
+            type: 'WHATSAPP',
+            recipient: cleanPhone,
+            message: displayContent,
+            status: 'SENT',
+            triggerEvent: 'TEMPLATE_MANUAL_SEND'
+          }
+        });
+      } catch (logErr) {
+        console.warn("Non-fatal: CommunicationLog creation failed", logErr);
+      }
+      
+      return { success: true, messageId: metaMessageId };
     }
     
     return { success: false, error: "Meta API credentials not connected." };
@@ -2734,13 +2844,16 @@ export async function deleteWhatsAppTemplateAction(templateName: string) {
 
 export async function sendProductCardAction(
   toPhone: string,
-  product: { title: string; price: string; image: string; url: string; description?: string }
+  product: { title: string; price: string; image: string; url: string; description?: string },
+  conversationId?: string,
+  senderName?: string
 ) {
   try {
     const creds = await getMetaApiCredentials();
     const cleanPhone = toPhone.replace(/\D/g, '');
     if (!creds?.isConnected) return { success: false, error: 'WhatsApp API not connected.' };
 
+    let imageMsgId: string | undefined;
     // Send product image first (if available)
     if (product.image) {
       const imagePayload = {
@@ -2753,11 +2866,13 @@ export async function sendProductCardAction(
           caption: `${product.title} — ₹${parseFloat(product.price).toLocaleString('en-IN')}`
         }
       };
-      await fetch(`https://graph.facebook.com/v21.0/${creds.phoneId}/messages`, {
+      const imgRes = await fetch(`https://graph.facebook.com/v21.0/${creds.phoneId}/messages`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${creds.accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(imagePayload)
       });
+      const imgData = await imgRes.json();
+      imageMsgId = imgData.messages?.[0]?.id;
     }
 
     // Send rich text message with product link
@@ -2778,9 +2893,54 @@ export async function sendProductCardAction(
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error.message);
+    const textMsgId = data.messages?.[0]?.id;
 
-    return { success: true, messageId: data.messages?.[0]?.id };
+    console.log(`[WhatsApp Product Sent] Sent product "${product.title}" to ${cleanPhone} (WAMID: ${textMsgId})`);
+
+    // Auto-resolve conversation if not provided
+    let targetConvId = conversationId;
+    if (!targetConvId) {
+      const last10 = cleanPhone.slice(-10);
+      const conv = await prisma.whatsAppConversation.findFirst({
+        where: {
+          OR: [
+            { customer: { whatsappNumber: { contains: last10 } } },
+            { customer: { mobile: { contains: last10 } } }
+          ]
+        }
+      });
+      if (conv) targetConvId = conv.id;
+    }
+
+    if (targetConvId) {
+      await prisma.whatsAppMessage.create({
+        data: {
+          conversationId: targetConvId,
+          senderType: 'AGENT',
+          senderName: senderName || 'Sales Agent',
+          messageType: 'PRODUCT_CARD',
+          content: messageText,
+          mediaUrl: product.image || undefined,
+          mediaType: product.image ? 'IMAGE' : undefined,
+          metadata: JSON.stringify({ product, metaMessageId: textMsgId, imageMsgId }),
+          status: 'SENT',
+          metaMessageId: textMsgId,
+          sentAt: new Date()
+        }
+      });
+
+      await prisma.whatsAppConversation.update({
+        where: { id: targetConvId },
+        data: {
+          lastMessageText: `🛍️ Product: ${product.title}`,
+          lastMessageAt: new Date()
+        }
+      });
+    }
+
+    return { success: true, messageId: textMsgId };
   } catch (e: any) {
+    console.error("Failed to send product card:", e);
     return { success: false, error: e.message };
   }
 }
@@ -2855,7 +3015,12 @@ export async function deleteWhatsAppMetaFlowAction(id: string) {
   }
 }
 
-export async function sendWhatsAppFlowMessageAction(toPhone: string, flowId: string) {
+export async function sendWhatsAppFlowMessageAction(
+  toPhone: string, 
+  flowId: string,
+  conversationId?: string,
+  senderName?: string
+) {
   try {
     const creds = await getMetaApiCredentials();
     const cleanPhone = toPhone.replace(/\D/g, "");
@@ -2911,8 +3076,53 @@ export async function sendWhatsAppFlowMessageAction(toPhone: string, flowId: str
     
     const data = await res.json();
     if (data.error) throw new Error(data.error.message);
-    return { success: true, messageId: data.messages?.[0]?.id };
+    const metaMessageId = data.messages?.[0]?.id;
+
+    console.log(`[WhatsApp Flow Sent] Sent flow "${flowConfig.name}" to ${cleanPhone} (WAMID: ${metaMessageId})`);
+
+    // Auto-resolve conversation if not provided
+    let targetConvId = conversationId;
+    if (!targetConvId) {
+      const last10 = cleanPhone.slice(-10);
+      const conv = await prisma.whatsAppConversation.findFirst({
+        where: {
+          OR: [
+            { customer: { whatsappNumber: { contains: last10 } } },
+            { customer: { mobile: { contains: last10 } } }
+          ]
+        }
+      });
+      if (conv) targetConvId = conv.id;
+    }
+
+    if (targetConvId) {
+      const flowContent = `📋 *${flowConfig.name}*\n${flowConfig.description || 'Please complete the interactive form.'}\n👉 Button: ${flowConfig.ctaText}`;
+      await prisma.whatsAppMessage.create({
+        data: {
+          conversationId: targetConvId,
+          senderType: 'AGENT',
+          senderName: senderName || 'Sales Agent',
+          messageType: 'FLOW',
+          content: flowContent,
+          metadata: JSON.stringify({ flowId: flowConfig.flowId, flowName: flowConfig.name, metaMessageId }),
+          status: 'SENT',
+          metaMessageId: metaMessageId,
+          sentAt: new Date()
+        }
+      });
+
+      await prisma.whatsAppConversation.update({
+        where: { id: targetConvId },
+        data: {
+          lastMessageText: `📋 Flow: ${flowConfig.name}`,
+          lastMessageAt: new Date()
+        }
+      });
+    }
+
+    return { success: true, messageId: metaMessageId };
   } catch (e: any) {
+    console.error("Failed to send flow message:", e);
     return { success: false, error: e.message };
   }
 }

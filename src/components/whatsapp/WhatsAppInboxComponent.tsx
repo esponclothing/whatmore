@@ -2162,9 +2162,30 @@ export default function WhatsAppInboxComponent() {
                         </div>
                       )}
 
+                      {/* Meta Template Badge */}
+                      {msg.messageType === "TEMPLATE" && (
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "10.5px", fontWeight: 700, color: "#0284c7", background: "#e0f2fe", padding: "2px 7px", borderRadius: "4px", marginBottom: "6px" }}>
+                          📋 Meta Approved Template
+                        </div>
+                      )}
+
+                      {/* Interactive Flow Badge */}
+                      {msg.messageType === "FLOW" && (
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "10.5px", fontWeight: 700, color: "#7c3aed", background: "#f3e8ff", padding: "2px 7px", borderRadius: "4px", marginBottom: "6px" }}>
+                          ⚡ Interactive Flow Form
+                        </div>
+                      )}
+
+                      {/* Product Card Badge */}
+                      {msg.messageType === "PRODUCT_CARD" && (
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "10.5px", fontWeight: 700, color: "#ea580c", background: "#ffedd5", padding: "2px 7px", borderRadius: "4px", marginBottom: "6px" }}>
+                          🛍️ Product Card
+                        </div>
+                      )}
+
                       {/* Standard Text & Unsupported Format Renderer */}
                       {msg.messageType !== "DOCUMENT" && msg.messageType !== "IMAGE" && msg.messageType !== "VIDEO" && msg.messageType !== "AUDIO" && msg.messageType !== "PAYMENT_LINK" && msg.messageType !== "BUTTONS" && msg.messageType !== "LIST" && (
-                        <p className="message-text-content" style={msg.isInternalNote ? { color: '#713f12' } : {}}>
+                        <p className="message-text-content" style={msg.isInternalNote ? { color: '#713f12' } : { whiteSpace: 'pre-wrap' }}>
                           {msg.messageType === "UNSUPPORTED" ? (
                             <span style={{ fontStyle: "italic", color: "#64748b", display: "inline-flex", alignItems: "center", gap: "4px" }}>
                               📎 [Unsupported message format (e.g. Sticker, Location, or Poll)]
@@ -2569,9 +2590,15 @@ export default function WhatsAppInboxComponent() {
           recipientName={activeConvDetail.contactName || activeConvDetail.customerPhone}
           onSendProduct={async (product) => {
             const phone = (activeConvDetail.customer?.whatsappNumber || activeConvDetail.customer?.mobile || "").replace(/\D/g,"");
-            const res = await sendProductCardAction(phone, product);
-            if (res.success) { await fetchConversationDetail(selectedConvId!, true); }
-            else { setToastMsg("Product send failed: " + (res.error||"")); setTimeout(() => setToastMsg(null), 3000); }
+            const res = await sendProductCardAction(phone, product, selectedConvId || undefined);
+            if (res.success) { 
+              setToastMsg("Product card sent successfully!");
+              setTimeout(() => setToastMsg(null), 3000);
+              await fetchConversationDetail(selectedConvId!, true); 
+            } else { 
+              setToastMsg("Product send failed: " + (res.error||"")); 
+              setTimeout(() => setToastMsg(null), 4000); 
+            }
           }}
         />
       )}
@@ -2583,9 +2610,15 @@ export default function WhatsAppInboxComponent() {
           onSendTemplate={async (templateName, language, components) => {
             const phone = (activeConvDetail?.customer?.whatsappNumber || activeConvDetail?.customer?.mobile || "").replace(/\D/g,"");
             if (!phone) return;
-            const res = await sendWhatsAppTemplateAction(phone, templateName, language, components);
-            if (res.success) { await fetchConversationDetail(selectedConvId!, true); }
-            else { setToastMsg("Template failed: " + (res.error||"")); setTimeout(() => setToastMsg(null), 3000); }
+            const res = await sendWhatsAppTemplateAction(phone, templateName, language, components, selectedConvId || undefined);
+            if (res.success) { 
+              setToastMsg("Template sent successfully!");
+              setTimeout(() => setToastMsg(null), 3000);
+              await fetchConversationDetail(selectedConvId!, true); 
+            } else { 
+              setToastMsg("Template failed: " + (res.error||"")); 
+              setTimeout(() => setToastMsg(null), 4000); 
+            }
           }}
         />
       )}
@@ -2597,9 +2630,15 @@ export default function WhatsAppInboxComponent() {
           onSendFlow={async (flowId) => {
             const phone = (activeConvDetail?.customer?.whatsappNumber || activeConvDetail?.customer?.mobile || "").replace(/\D/g,"");
             if (!phone) return;
-            const res = await sendWhatsAppFlowMessageAction(phone, flowId);
-            if (res.success) { await fetchConversationDetail(selectedConvId!, true); }
-            else { setToastMsg("Flow send failed: " + (res.error||"")); setTimeout(() => setToastMsg(null), 3000); }
+            const res = await sendWhatsAppFlowMessageAction(phone, flowId, selectedConvId || undefined);
+            if (res.success) { 
+              setToastMsg("Flow form sent successfully!");
+              setTimeout(() => setToastMsg(null), 3000);
+              await fetchConversationDetail(selectedConvId!, true); 
+            } else { 
+              setToastMsg("Flow send failed: " + (res.error||"")); 
+              setTimeout(() => setToastMsg(null), 4000); 
+            }
           }}
         />
       )}
