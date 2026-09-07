@@ -25,10 +25,8 @@ function urlBase64ToUint8Array(base64String: string) {
 const subNavItems = [
   { name: "Dashboard", path: "/whatsapp/dashboard", icon: LayoutDashboard },
   { name: "Inbox", path: "/whatsapp/inbox", icon: MessageSquare },
-  { name: "Chatbots", path: "/whatsapp/chatbots", icon: Bot },
+  { name: "WhatsApp", path: "/whatsapp/templates", icon: Bot },
   { name: "Integrations", path: "/whatsapp/integrations", icon: Zap },
-  { name: "Meta Flows", path: "/whatsapp/flows", icon: Zap },
-  { name: "Templates", path: "/whatsapp/templates", icon: FileCode },
   { name: "Products & Prices", path: "/whatsapp/commerce", icon: Box },
   { name: "Settings", path: "/whatsapp/api-settings", icon: Key },
   { name: "Logs", path: "/whatsapp/logs", icon: Activity },
@@ -57,6 +55,14 @@ export default function WhatsAppHeaderNav() {
   const isItemActive = (path: string) => {
     if (path === "/whatsapp/inbox" && (pathname === "/whatsapp" || pathname === "/whatsapp/inbox")) {
       return true;
+    }
+    if (path === "/whatsapp/templates") {
+      return (
+        pathname.startsWith("/whatsapp/templates") ||
+        pathname.startsWith("/whatsapp/flows") ||
+        pathname.startsWith("/whatsapp/chatbots") ||
+        pathname.startsWith("/whatsapp/chatbot-builder")
+      );
     }
     return pathname.startsWith(path);
   };
