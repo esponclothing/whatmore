@@ -7,43 +7,8 @@ export async function GET() {
     const users = await prisma.user.findMany();
     const employees = await prisma.employee.findMany();
     const convs = await prisma.whatsAppConversation.findMany({ select: { id: true, assignedEmployeeId: true } });
-    // Fix George directly to verified E.164 phone
-    await prisma.customer.updateMany({
-      where: {
-        OR: [
-          { id: "cf1bfe94-fb25-40da-882e-2f0a188406bb" },
-          { mobile: { contains: "18810104" } },
-          { whatsappNumber: { contains: "18810104" } }
-        ]
-      },
-      data: {
-        mobile: "8615118810104",
-        whatsappNumber: "8615118810104"
-      }
-    }).catch(() => {});
 
-    const george = await prisma.customer.findMany({
-      where: {
-        OR: [
-          { contactPerson: { contains: "George", mode: "insensitive" } },
-          { businessName: { contains: "George", mode: "insensitive" } },
-          { mobile: { contains: "18810104" } },
-          { whatsappNumber: { contains: "18810104" } }
-        ]
-      },
-      include: {
-        whatsAppConversations: {
-          include: {
-            messages: {
-              orderBy: { sentAt: "desc" },
-              take: 10
-            }
-          }
-        }
-      }
-    });
-
-    return NextResponse.json({ agents, users, employees, convs, george });
+    return NextResponse.json({ agents, users, employees, convs });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
