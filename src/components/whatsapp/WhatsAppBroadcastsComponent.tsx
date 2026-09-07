@@ -28,7 +28,12 @@ import {
   ExternalLink,
   MessageSquare,
   UploadCloud,
-  FileText
+  FileText,
+  Image as ImageIcon,
+  Video as VideoIcon,
+  CalendarDays,
+  Zap,
+  Clock3
 } from "lucide-react";
 import {
   getWhatsAppCampaigns,
@@ -175,6 +180,11 @@ export default function WhatsAppBroadcastsComponent() {
 
     if (audienceType === "TAGS" && selectedTags.length === 0) {
       showToast("Please select at least one contact tag.", "error");
+      return;
+    }
+
+    if (isScheduled && !scheduledAt) {
+      showToast("Please select a valid scheduled date & time.", "error");
       return;
     }
 
@@ -762,11 +772,33 @@ export default function WhatsAppBroadcastsComponent() {
 
                     <div className="w-full max-w-[280px] bg-[#EFEAE2] dark:bg-[#121b22] rounded-2xl p-3 shadow-md border border-gray-300 dark:border-slate-700">
                       <div className="bg-white dark:bg-[#1f2c34] rounded-xl p-3 shadow-sm text-xs text-gray-800 dark:text-gray-200 relative">
-                        {/* Header preview if any */}
+                        {/* Header preview */}
                         {selectedTemplate?.headerType && selectedTemplate.headerType !== "NONE" && (
-                          <div className="mb-2 p-2 bg-gray-100 dark:bg-slate-800 rounded-lg text-center text-[10px] text-gray-500 font-bold uppercase">
-                            🖼️ {selectedTemplate.headerType} Header
-                          </div>
+                          selectedTemplate.headerType.toUpperCase() === "TEXT" ? (
+                            <div className="font-bold text-xs text-gray-900 dark:text-white mb-1.5 pb-1 border-b border-gray-100 dark:border-slate-700 leading-snug">
+                              {selectedTemplate.headerContent || selectedTemplate.headerText || selectedTemplate.name}
+                            </div>
+                          ) : (
+                            <div className="mb-2.5 rounded-lg overflow-hidden border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800">
+                              {headerMediaUrl && selectedTemplate.headerType.toUpperCase() === "IMAGE" ? (
+                                <img
+                                  src={headerMediaUrl}
+                                  alt="Header"
+                                  className="w-full h-28 object-cover"
+                                  onError={(e) => ((e.target as HTMLElement).style.display = "none")}
+                                />
+                              ) : (
+                                <div className="p-3 text-center flex flex-col items-center justify-center gap-1 text-gray-500 dark:text-gray-400">
+                                  {selectedTemplate.headerType.toUpperCase() === "IMAGE" && <ImageIcon size={18} className="text-indigo-500" />}
+                                  {selectedTemplate.headerType.toUpperCase() === "VIDEO" && <VideoIcon size={18} className="text-indigo-500" />}
+                                  {selectedTemplate.headerType.toUpperCase() === "DOCUMENT" && <FileText size={18} className="text-indigo-500" />}
+                                  <span className="text-[10px] font-bold uppercase tracking-wider">
+                                    {selectedTemplate.headerType} Header {headerMediaUrl ? "Attached" : ""}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )
                         )}
 
                         <div className="whitespace-pre-wrap leading-relaxed">{getRenderedPreviewBody()}</div>
@@ -1043,21 +1075,48 @@ export default function WhatsAppBroadcastsComponent() {
                     </div>
                   )}
 
-                  {/* Optional Media Header URL */}
-                  {selectedTemplate?.headerType && selectedTemplate.headerType !== "NONE" && (
-                    <div className="p-4 bg-indigo-50/50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800/30">
-                      <label className="block text-xs font-bold text-indigo-950 dark:text-indigo-300 uppercase mb-1.5">
-                        Header Media URL ({selectedTemplate.headerType}):
-                      </label>
-                      <input
-                        type="url"
-                        value={headerMediaUrl}
-                        onChange={(e) => setHeaderMediaUrl(e.target.value)}
-                        placeholder="https://example.com/banner.jpg"
-                        className="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 rounded-xl text-xs outline-none"
-                      />
-                    </div>
-                  )}
+                  {/* Optional Media Header URL (Only for IMAGE, VIDEO, DOCUMENT templates) */}
+                  {selectedTemplate?.headerType &&
+                    ["IMAGE", "VIDEO", "DOCUMENT"].includes(selectedTemplate.headerType.toUpperCase()) && (
+                      <div className="p-4 bg-indigo-50/70 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800/40 flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-indigo-950 dark:text-indigo-200 uppercase flex items-center gap-2">
+                            {selectedTemplate.headerType.toUpperCase() === "IMAGE" && <ImageIcon size={15} className="text-indigo-600 dark:text-indigo-400" />}
+                            {selectedTemplate.headerType.toUpperCase() === "VIDEO" && <VideoIcon size={15} className="text-indigo-600 dark:text-indigo-400" />}
+                            {selectedTemplate.headerType.toUpperCase() === "DOCUMENT" && <FileText size={15} className="text-indigo-600 dark:text-indigo-400" />}
+                            Header Media Attachment ({selectedTemplate.headerType.toUpperCase()})
+                          </label>
+                          <span className="text-[10px] font-bold px-2.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded-md">
+                            {selectedTemplate.headerType.toUpperCase() === "IMAGE" ? "JPG / PNG Image" : selectedTemplate.headerType.toUpperCase() === "VIDEO" ? "MP4 Video" : "PDF Document"}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-3 items-center">
+                          <input
+                            type="url"
+                            value={headerMediaUrl}
+                            onChange={(e) => setHeaderMediaUrl(e.target.value)}
+                            placeholder={
+                              selectedTemplate.headerType.toUpperCase() === "IMAGE"
+                                ? "https://yourdomain.com/banners/summer-sale.jpg"
+                                : selectedTemplate.headerType.toUpperCase() === "VIDEO"
+                                ? "https://yourdomain.com/videos/promo.mp4"
+                                : "https://yourdomain.com/docs/catalog.pdf"
+                            }
+                            className="flex-1 w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700/60 rounded-xl text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          {headerMediaUrl && selectedTemplate.headerType.toUpperCase() === "IMAGE" && (
+                            <div className="w-12 h-12 rounded-lg overflow-hidden border border-indigo-200 dark:border-indigo-700 shrink-0 bg-white">
+                              <img src={headerMediaUrl} alt="Thumbnail" className="w-full h-full object-cover" />
+                            </div>
+                          )}
+                        </div>
+
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                          Direct HTTPS link for the {selectedTemplate.headerType.toLowerCase()} to be sent with each WhatsApp message.
+                        </p>
+                      </div>
+                    )}
                 </div>
               )}
 
@@ -1065,26 +1124,27 @@ export default function WhatsAppBroadcastsComponent() {
               {/* STEP 4: REVIEW & DISPATCH */}
               {/* ----------------------------------------------------------------- */}
               {currentStep === 4 && (
-                <div className="flex flex-col gap-5">
-                  <div className="p-5 bg-indigo-50/70 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800/30 flex flex-col gap-3">
+                <div className="flex flex-col gap-4">
+                  {/* Campaign Summary Recap */}
+                  <div className="p-4 bg-indigo-50/70 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800/30 flex flex-col gap-3">
                     <div className="text-xs font-bold text-indigo-950 dark:text-indigo-300 uppercase">
                       Campaign Summary Recap
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                       <div>
-                        <span className="text-gray-500 block">Name:</span>
-                        <span className="font-bold text-gray-900 dark:text-white">{campaignName}</span>
+                        <span className="text-gray-500 block text-[11px]">Campaign Name:</span>
+                        <span className="font-bold text-gray-900 dark:text-white truncate block">{campaignName}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500 block">Template:</span>
-                        <span className="font-bold font-mono text-indigo-600">{selectedTemplate?.name}</span>
+                        <span className="text-gray-500 block text-[11px]">Meta Template:</span>
+                        <span className="font-bold font-mono text-indigo-600 truncate block">{selectedTemplate?.name}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500 block">Audience Reach:</span>
+                        <span className="text-gray-500 block text-[11px]">Audience Reach:</span>
                         <span className="font-bold text-emerald-600">{getEstimatedAudienceCount()} Contacts</span>
                       </div>
                       <div>
-                        <span className="text-gray-500 block">Est. Cost:</span>
+                        <span className="text-gray-500 block text-[11px]">Est. Meta Cost:</span>
                         <span className="font-bold text-gray-900 dark:text-white">
                           ₹{(getEstimatedAudienceCount() * 0.72).toFixed(2)}
                         </span>
@@ -1092,36 +1152,185 @@ export default function WhatsAppBroadcastsComponent() {
                     </div>
                   </div>
 
-                  {/* Scheduling Toggle */}
-                  <div className="p-4 bg-gray-50 dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-xs font-bold text-gray-900 dark:text-white">
-                          Schedule Broadcast for Later
-                        </div>
-                        <div className="text-[11px] text-gray-500">
-                          Optionally queue messages to dispatch at a specific date and time.
-                        </div>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={isScheduled}
-                        onChange={(e) => setIsScheduled(e.target.checked)}
-                        className="w-4 h-4 text-indigo-600 rounded cursor-pointer accent-indigo-600"
-                      />
+                  {/* Dispatch Timing & Professional Calendar Section */}
+                  <div className="p-4 sm:p-5 bg-white dark:bg-slate-800/80 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-2xs flex flex-col gap-4">
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wide flex items-center gap-1.5">
+                        <Clock size={15} className="text-indigo-600 dark:text-indigo-400" />
+                        Dispatch Timing & Delivery Schedule
+                      </h4>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                        Choose whether to blast this campaign immediately or schedule for automated dispatch at a target time.
+                      </p>
                     </div>
 
+                    {/* Send Mode Switch Buttons */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsScheduled(false);
+                          setScheduledAt("");
+                        }}
+                        className={`p-3.5 rounded-xl border text-left flex items-center justify-between transition ${
+                          !isScheduled
+                            ? "bg-indigo-50/80 dark:bg-indigo-900/30 border-indigo-600 shadow-2xs text-indigo-950 dark:text-white"
+                            : "bg-gray-50 dark:bg-slate-800/60 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-300 hover:border-gray-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${!isScheduled ? "bg-indigo-600 text-white" : "bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-gray-300"}`}>
+                            ⚡
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold">Send Immediately</div>
+                            <div className="text-[10px] text-gray-500 dark:text-gray-400">Dispatch to recipient queue right now</div>
+                          </div>
+                        </div>
+                        {!isScheduled && <Check size={16} className="text-indigo-600 stroke-[3]" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsScheduled(true);
+                          if (!scheduledAt) {
+                            const tomorrow = new Date();
+                            tomorrow.setDate(tomorrow.getDate() + 1);
+                            tomorrow.setHours(10, 0, 0, 0);
+                            const localIso = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60000)
+                              .toISOString()
+                              .slice(0, 16);
+                            setScheduledAt(localIso);
+                          }
+                        }}
+                        className={`p-3.5 rounded-xl border text-left flex items-center justify-between transition ${
+                          isScheduled
+                            ? "bg-indigo-50/80 dark:bg-indigo-900/30 border-indigo-600 shadow-2xs text-indigo-950 dark:text-white"
+                            : "bg-gray-50 dark:bg-slate-800/60 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-300 hover:border-gray-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${isScheduled ? "bg-indigo-600 text-white" : "bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-gray-300"}`}>
+                            📅
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold">Schedule for Later</div>
+                            <div className="text-[10px] text-gray-500 dark:text-gray-400">Automated timed queue dispatch</div>
+                          </div>
+                        </div>
+                        {isScheduled && <Check size={16} className="text-indigo-600 stroke-[3]" />}
+                      </button>
+                    </div>
+
+                    {/* Schedule Picker & Presets */}
                     {isScheduled && (
-                      <div className="mt-2">
-                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">
-                          Select Date & Time (IST):
-                        </label>
-                        <input
-                          type="datetime-local"
-                          value={scheduledAt}
-                          onChange={(e) => setScheduledAt(e.target.value)}
-                          className="px-3.5 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-semibold outline-none"
-                        />
+                      <div className="p-4 bg-gray-50 dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-700 flex flex-col gap-3.5">
+                        {/* Quick Presets */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-gray-600 dark:text-gray-400 uppercase mb-1.5">
+                            Quick Schedule Presets:
+                          </label>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            {[
+                              {
+                                label: "Today 6:00 PM",
+                                getDate: () => {
+                                  const d = new Date();
+                                  d.setHours(18, 0, 0, 0);
+                                  if (d.getTime() < Date.now()) d.setHours(d.getHours() + 2);
+                                  return d;
+                                }
+                              },
+                              {
+                                label: "Tomorrow 10:00 AM",
+                                getDate: () => {
+                                  const d = new Date();
+                                  d.setDate(d.getDate() + 1);
+                                  d.setHours(10, 0, 0, 0);
+                                  return d;
+                                }
+                              },
+                              {
+                                label: "Tomorrow 3:00 PM",
+                                getDate: () => {
+                                  const d = new Date();
+                                  d.setDate(d.getDate() + 1);
+                                  d.setHours(15, 0, 0, 0);
+                                  return d;
+                                }
+                              },
+                              {
+                                label: "In 2 Days 11:00 AM",
+                                getDate: () => {
+                                  const d = new Date();
+                                  d.setDate(d.getDate() + 2);
+                                  d.setHours(11, 0, 0, 0);
+                                  return d;
+                                }
+                              }
+                            ].map((preset, pIdx) => (
+                              <button
+                                key={pIdx}
+                                type="button"
+                                onClick={() => {
+                                  const d = preset.getDate();
+                                  const localIso = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+                                    .toISOString()
+                                    .slice(0, 16);
+                                  setScheduledAt(localIso);
+                                }}
+                                className="px-2.5 py-2 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 border border-gray-200 dark:border-slate-700 hover:border-indigo-400 rounded-xl text-[11px] font-bold text-gray-700 dark:text-gray-300 transition text-center"
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Interactive Styled DateTime Picker */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                          <div>
+                            <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
+                              Custom Date & Time:
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={scheduledAt}
+                              min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
+                              onChange={(e) => setScheduledAt(e.target.value)}
+                              className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl text-xs font-bold text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs cursor-pointer"
+                            />
+                          </div>
+
+                          <div className="p-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
+                            <div>
+                              <span className="font-bold text-gray-700 dark:text-gray-300">Timezone:</span> India Standard Time (IST / UTC+5:30)
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Visual Confirmation Banner */}
+                        {scheduledAt && (
+                          <div className="p-3 bg-indigo-50/80 dark:bg-indigo-950/40 rounded-xl border border-indigo-200 dark:border-indigo-800/40 flex items-center gap-2.5">
+                            <CalendarDays size={18} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
+                            <div className="text-xs">
+                              <span className="text-indigo-950 dark:text-indigo-200">Broadcast will dispatch on: </span>
+                              <strong className="text-indigo-700 dark:text-indigo-400 font-bold block sm:inline">
+                                {new Date(scheduledAt).toLocaleString("en-IN", {
+                                  weekday: "short",
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  hour12: true
+                                })} (IST)
+                              </strong>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
