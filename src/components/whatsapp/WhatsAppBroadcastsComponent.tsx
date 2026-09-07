@@ -285,21 +285,21 @@ export default function WhatsAppBroadcastsComponent() {
     variableMappings.forEach((vm) => {
       const sampleVal =
         vm.mappedTo === "contactPerson"
-          ? "Rahul Sharma"
+          ? "{{Customer Name}}"
           : vm.mappedTo === "city"
-          ? "Mumbai"
-          : vm.staticValue || `[Variable {{${vm.varIndex}}}]`;
+          ? "{{City}}"
+          : vm.staticValue || `{{${vm.varIndex}}}`;
       text = text.replace(new RegExp(`\\{\\{${vm.varIndex}\\}\\}`, "g"), sampleVal);
     });
     return text;
   };
 
-  // Overall aggregate stats
+  // Overall aggregate stats calculated purely from real campaigns
   const totalDispatched = campaigns.reduce((acc, c) => acc + (c.sentCount || 0), 0);
   const totalDelivered = campaigns.reduce((acc, c) => acc + (c.deliveredCount || 0), 0);
   const totalRead = campaigns.reduce((acc, c) => acc + (c.readCount || 0), 0);
-  const avgDeliveryRate = totalDispatched > 0 ? Math.round((totalDelivered / totalDispatched) * 100) : 98;
-  const avgReadRate = totalDelivered > 0 ? Math.round((totalRead / totalDelivered) * 100) : 74;
+  const avgDeliveryRate = totalDispatched > 0 ? Math.round((totalDelivered / totalDispatched) * 100) : 0;
+  const avgReadRate = totalDelivered > 0 ? Math.round((totalRead / totalDelivered) * 100) : 0;
 
   return (
     <div className="w-full flex flex-col gap-6">

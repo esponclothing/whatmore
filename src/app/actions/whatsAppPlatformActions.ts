@@ -1599,7 +1599,6 @@ export async function getWhatsAppForms() {
 
 export async function getWhatsAppCampaigns() {
   try {
-    await ensureSeeded();
     const campaigns = await prisma.whatsAppCampaign.findMany({ orderBy: { createdAt: 'desc' } });
     const segments = await prisma.whatsAppSegment.findMany({ orderBy: { createdAt: 'desc' } });
     return { success: true, campaigns, segments };
