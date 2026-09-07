@@ -1489,6 +1489,10 @@ export async function sendWhatsAppTemplateAction(
 export async function saveWhatsAppTemplateAction(data: any) {
   try {
     const creds = await getMetaApiCredentials();
+    const brandDetails = await getWhatsAppBrandDetailsAction();
+    const brandDomain = brandDetails.brandDomain || 'esponsports.com';
+    const brandPhone = brandDetails.brandPhone || '+917404388242';
+    
     const templateName = data.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
     const templateType = data.templateType || 'STANDARD';
     const category = data.category || 'MARKETING';
@@ -1500,7 +1504,7 @@ export async function saveWhatsAppTemplateAction(data: any) {
     // Build Meta Graph API components payload
     const components: any[] = [];
 
-    if (templateType === 'CAROUSEL') {
+    if (templateType === 'CAROUSEL' || templateType === 'IMAGE_CAROUSEL') {
       // 1. Carousel Introductory Body
       if (data.bodyText) {
         components.push({
@@ -1535,7 +1539,7 @@ export async function saveWhatsAppTemplateAction(data: any) {
             type: 'BUTTONS',
             buttons: card.buttons.map((b: any) => {
               if (b.type === 'URL') {
-                return { type: 'URL', text: b.text, url: b.url || 'https://11fit.in' };
+                return { type: 'URL', text: b.text, url: b.url || `https://${brandDomain}` };
               }
               return { type: 'QUICK_REPLY', text: b.text };
             })
@@ -1551,7 +1555,7 @@ export async function saveWhatsAppTemplateAction(data: any) {
           cards: metaCards
         });
       }
-    } else if (templateType === 'CATALOG') {
+    } else if (templateType === 'CATALOG' || templateType === 'CATALOGUE') {
       // Catalog Template
       if (data.bodyText) {
         components.push({
@@ -1568,11 +1572,91 @@ export async function saveWhatsAppTemplateAction(data: any) {
       components.push({
         type: 'BUTTONS',
         buttons: [
-          { type: 'CATALOG', text: data.catalogButtonText || 'View Catalog' }
+          { type: 'CATALOG', text: data.catalogButtonText || 'View catalog' }
+        ]
+      });
+    } else if (templateType === 'FLOWS') {
+      // WhatsApp Flows Form Template
+      if (data.bodyText) {
+        components.push({
+          type: 'BODY',
+          text: data.bodyText
+        });
+      }
+      if (data.footerText) {
+        components.push({
+          type: 'FOOTER',
+          text: data.footerText
+        });
+      }
+      components.push({
+        type: 'BUTTONS',
+        buttons: [
+          { type: 'FLOW', text: data.flowButtonText || 'View Flow' }
+        ]
+      });
+    } else if (templateType === 'ORDER_DETAILS') {
+      // Meta Native Order Details Template
+      if (data.bodyText) {
+        components.push({
+          type: 'BODY',
+          text: data.bodyText
+        });
+      }
+      if (data.footerText) {
+        components.push({
+          type: 'FOOTER',
+          text: data.footerText
+        });
+      }
+      components.push({
+        type: 'BUTTONS',
+        buttons: [
+          { type: 'ORDER_DETAILS', text: 'Review and Pay' }
+        ]
+      });
+    } else if (templateType === 'ORDER_STATUS') {
+      // Order Status Dispatch Template
+      if (data.bodyText) {
+        components.push({
+          type: 'BODY',
+          text: data.bodyText
+        });
+      }
+      if (data.footerText) {
+        components.push({
+          type: 'FOOTER',
+          text: data.footerText
+        });
+      }
+      components.push({
+        type: 'BUTTONS',
+        buttons: [
+          { type: 'URL', text: 'Track shipment', url: `https://${brandDomain}/account/orders` }
+        ]
+      });
+    } else if (templateType === 'CALL_PERMISSIONS') {
+      // Calling Permissions Request Template
+      if (data.bodyText) {
+        components.push({
+          type: 'BODY',
+          text: data.bodyText
+        });
+      }
+      if (data.footerText) {
+        components.push({
+          type: 'FOOTER',
+          text: data.footerText
+        });
+      }
+      components.push({
+        type: 'BUTTONS',
+        buttons: [
+          { type: 'CALL_PERMISSION', text: 'Choose preference' }
         ]
       });
     } else {
-      // Standard / LTO Template
+      // Standard / LTO / Authentication / Default Template
       if (data.headerType && data.headerType !== 'NONE') {
         const headerObj: any = { type: 'HEADER', format: data.headerType };
         if (data.headerType === 'TEXT' && data.headerContent) {
@@ -1600,8 +1684,8 @@ export async function saveWhatsAppTemplateAction(data: any) {
         components.push({
           type: 'BUTTONS',
           buttons: buttonsList.map((b: any) => {
-            if (b.type === 'URL') return { type: 'URL', text: b.text, url: b.url || 'https://11fit.in' };
-            if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone_number || '+917404388242' };
+            if (b.type === 'URL') return { type: 'URL', text: b.text, url: b.url || `https://${brandDomain}` };
+            if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone_number || brandPhone };
             if (b.type === 'COPY_CODE') return { type: 'COPY_CODE', text: b.text, code: b.code || b.text };
             return { type: 'QUICK_REPLY', text: b.text };
           })

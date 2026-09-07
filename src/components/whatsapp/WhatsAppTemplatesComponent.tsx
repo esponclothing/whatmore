@@ -172,7 +172,10 @@ export default function WhatsAppTemplatesComponent() {
   // Full-Page Template Studio State
   // -------------------------------------------------------------
   const [category, setCategory] = useState<"MARKETING" | "UTILITY" | "AUTHENTICATION">("MARKETING");
-  const [templateType, setTemplateType] = useState<"STANDARD" | "CAROUSEL" | "LTO_COUPON" | "AUTHENTICATION">("STANDARD");
+  const [templateType, setTemplateType] = useState<
+    "STANDARD" | "CAROUSEL" | "CATALOGUE" | "FLOWS" | "ORDER_DETAILS" | "ORDER_STATUS" | "CALL_PERMISSIONS" | "LTO_COUPON" | "AUTHENTICATION"
+  >("STANDARD");
+  const [typeFilter, setTypeFilter] = useState<string>("ALL");
   const [utilityPreset, setUtilityPreset] = useState<string>("ORDER_CONFIRMATION");
   
   const [templateName, setTemplateName] = useState("");
@@ -190,6 +193,18 @@ export default function WhatsAppTemplatesComponent() {
   
   // Coupon State
   const [couponCode, setCouponCode] = useState("FLAT30");
+
+  // Meta Official Extension States
+  const [catalogueFormat, setCatalogueFormat] = useState<"CATALOGUE_MESSAGE" | "MULTI_PRODUCT">("CATALOGUE_MESSAGE");
+  const [flowButtonText, setFlowButtonText] = useState("View Flow");
+  const [authCodeDelivery, setAuthCodeDelivery] = useState<"COPY_CODE" | "ONE_TAP" | "ZERO_TAP">("COPY_CODE");
+  const [authSecurityRecommendation, setAuthSecurityRecommendation] = useState(true);
+  const [authExpiryTime, setAuthExpiryTime] = useState(false);
+  const [authExpiryMinutes, setAuthExpiryMinutes] = useState(10);
+  const [authPackageName, setAuthPackageName] = useState("com.esponsports.app");
+  const [authAppSignatureHash, setAuthAppSignatureHash] = useState("K4w8v9N2q1P");
+  const [enableValidityPeriod, setEnableValidityPeriod] = useState(false);
+  const [messageValidityPeriod, setMessageValidityPeriod] = useState(10);
 
   // Carousel Cards State (up to 10 product cards)
   const [carouselCards, setCarouselCards] = useState<CarouselCardItem[]>([
@@ -264,6 +279,43 @@ export default function WhatsAppTemplatesComponent() {
       } else {
         setButtons([]);
       }
+    }
+  };
+
+  // Template Type Switch Handler with Meta Presets
+  const handleTemplateTypeSelect = (type: typeof templateType) => {
+    setTemplateType(type);
+    if (type === "CAROUSEL") {
+      if (!bodyText) setBodyText(`Check out our top ${brandName} collections this season:`);
+    } else if (type === "CATALOGUE") {
+      setBodyText(`Hello {{1}}, explore our full ${brandName} catalogue directly on WhatsApp!`);
+      setFooterText(`${brandName} Store`);
+      setHeaderType("NONE");
+      setButtons([{ type: "CATALOG", text: "View catalog" }]);
+    } else if (type === "FLOWS") {
+      setBodyText(`Hello {{1}}, please fill out this quick form so our ${brandName} team can assist you:`);
+      setFooterText(`${brandName} Support`);
+      setButtons([{ type: "FLOW", text: flowButtonText || "View Flow" }]);
+    } else if (type === "ORDER_DETAILS") {
+      setBodyText(`Hello {{1}}, your order details are ready. Tap below to review and pay securely:`);
+      setFooterText(`${brandName} Pay`);
+      setButtons([{ type: "ORDER_DETAILS", text: "Review and Pay" }]);
+    } else if (type === "ORDER_STATUS") {
+      setBodyText(`Good news! Your order #{{1}} from ${brandName} has been dispatched! Track your shipment below:`);
+      setFooterText(`${brandName} Logistics`);
+      setButtons([{ type: "URL", text: "Track shipment", url: `https://${brandDomain}/account/orders` }]);
+    } else if (type === "CALL_PERMISSIONS") {
+      setBodyText(`Hello {{1}}`);
+      setFooterText(`${brandName} Support`);
+      setButtons([{ type: "CALL_PERMISSION", text: "Choose preference" }]);
+    } else if (type === "LTO_COUPON") {
+      setBodyText(`Special offer! Get FLAT 30% OFF on all ${brandName} gear. Use coupon code below at checkout:`);
+      setFooterText(`Limited time only | Valid this week`);
+      setButtons([{ type: "COPY_CODE", text: "Copy Code", code: couponCode || "FLAT30" }]);
+    } else if (type === "AUTHENTICATION") {
+      setBodyText(`{{1}} is your ${brandName} verification code. For your security, do not share this code.`);
+      setFooterText("Code expires in 10 minutes");
+      setButtons([{ type: "COPY_CODE", text: "Copy Code", code: "{{1}}" }]);
     }
   };
 
@@ -446,6 +498,14 @@ export default function WhatsAppTemplatesComponent() {
     setButtons([]);
     setNameError("");
     setCouponCode("FLAT30");
+    setCatalogueFormat("CATALOGUE_MESSAGE");
+    setFlowButtonText("View Flow");
+    setAuthCodeDelivery("COPY_CODE");
+    setAuthSecurityRecommendation(true);
+    setAuthExpiryTime(false);
+    setAuthExpiryMinutes(10);
+    setEnableValidityPeriod(false);
+    setMessageValidityPeriod(10);
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -463,7 +523,7 @@ export default function WhatsAppTemplatesComponent() {
     }
 
     if (templateType === "CAROUSEL" && carouselCards.length < 2) {
-      showToast("Meta Carousel requires at least 2 cards.", "error");
+      showToast("Meta Image Carousel requires at least 2 cards.", "error");
       return;
     }
 
@@ -473,12 +533,24 @@ export default function WhatsAppTemplatesComponent() {
       category,
       language,
       templateType,
-      headerType,
-      headerContent,
+      headerType: templateType === "CATALOGUE" ? "NONE" : headerType,
+      headerContent: templateType === "CATALOGUE" ? null : headerContent,
       bodyText,
       footerText,
       buttons: templateType === "LTO_COUPON" 
-        ? [{ type: "COPY_CODE", text: couponCode, code: couponCode }, ...buttons]
+        ? [{ type: "COPY_CODE", text: couponCode || "FLAT30", code: couponCode || "FLAT30" }]
+        : templateType === "CATALOGUE"
+        ? [{ type: "CATALOG", text: "View catalog" }]
+        : templateType === "FLOWS"
+        ? [{ type: "FLOW", text: flowButtonText || "View Flow" }]
+        : templateType === "ORDER_DETAILS"
+        ? [{ type: "ORDER_DETAILS", text: "Review and Pay" }]
+        : templateType === "ORDER_STATUS"
+        ? [{ type: "URL", text: "Track shipment", url: `https://${brandDomain}/account/orders` }]
+        : templateType === "CALL_PERMISSIONS"
+        ? [{ type: "CALL_PERMISSION", text: "Choose preference" }]
+        : templateType === "AUTHENTICATION"
+        ? [{ type: "COPY_CODE", text: "Copy code", code: "{{1}}" }]
         : buttons,
       carouselCards: templateType === "CAROUSEL" ? carouselCards : null
     };
@@ -550,6 +622,12 @@ export default function WhatsAppTemplatesComponent() {
           if (now - createdTime > 30 * 24 * 3600 * 1000) return false;
         }
       }
+      if (typeFilter !== "ALL") {
+        const tType = t.templateType || "STANDARD";
+        if (typeFilter === "CAROUSEL" && tType !== "CAROUSEL" && tType !== "IMAGE_CAROUSEL") return false;
+        if (typeFilter === "CATALOGUE" && tType !== "CATALOGUE" && tType !== "CATALOG") return false;
+        if (typeFilter !== "CAROUSEL" && typeFilter !== "CATALOGUE" && tType !== typeFilter) return false;
+      }
       return true;
     })
     .sort((a, b) => {
@@ -589,10 +667,45 @@ export default function WhatsAppTemplatesComponent() {
   };
 
   const formatBadge = (tType?: string) => {
-    if (tType === "CAROUSEL") {
+    if (tType === "CAROUSEL" || tType === "IMAGE_CAROUSEL") {
       return (
         <span className="px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950/70 text-purple-700 dark:text-purple-300 text-[10px] font-black uppercase flex items-center gap-1">
-          <Layers size={11} /> Carousel
+          <Layers size={11} /> Image Carousel
+        </span>
+      );
+    }
+    if (tType === "CATALOGUE" || tType === "CATALOG") {
+      return (
+        <span className="px-2 py-0.5 rounded-md bg-sky-100 dark:bg-sky-950/70 text-sky-700 dark:text-sky-300 text-[10px] font-black uppercase flex items-center gap-1">
+          <ShoppingBag size={11} /> Catalogue
+        </span>
+      );
+    }
+    if (tType === "FLOWS") {
+      return (
+        <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase flex items-center gap-1">
+          <CheckSquare size={11} /> Flows
+        </span>
+      );
+    }
+    if (tType === "ORDER_DETAILS") {
+      return (
+        <span className="px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 text-[10px] font-black uppercase flex items-center gap-1">
+          <CreditCard size={11} /> Order Details
+        </span>
+      );
+    }
+    if (tType === "ORDER_STATUS") {
+      return (
+        <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 text-[10px] font-black uppercase flex items-center gap-1">
+          <Truck size={11} /> Order Status
+        </span>
+      );
+    }
+    if (tType === "CALL_PERMISSIONS") {
+      return (
+        <span className="px-2 py-0.5 rounded-md bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 text-[10px] font-black uppercase flex items-center gap-1">
+          <Phone size={11} /> Call Permissions
         </span>
       );
     }
@@ -603,9 +716,16 @@ export default function WhatsAppTemplatesComponent() {
         </span>
       );
     }
+    if (tType === "AUTHENTICATION") {
+      return (
+        <span className="px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950/70 text-orange-700 dark:text-orange-300 text-[10px] font-black uppercase flex items-center gap-1">
+          <Copy size={11} /> Authentication
+        </span>
+      );
+    }
     return (
       <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 text-[10px] font-extrabold uppercase">
-        Standard
+        Default
       </span>
     );
   };
@@ -751,87 +871,157 @@ export default function WhatsAppTemplatesComponent() {
               </div>
             </div>
 
-            {/* STEP 2: AVAILABLE MESSAGE TYPES FOR SELECTED CATEGORY */}
+            {/* STEP 2: AVAILABLE MESSAGE TYPES FOR SELECTED CATEGORY (Official Meta WhatsApp Manager layout) */}
             <div className="bg-white dark:bg-slate-800/90 border border-gray-200 dark:border-slate-700 rounded-3xl p-6 shadow-2xs">
               <div className="flex items-center justify-between mb-3">
                 <label className="block text-xs font-black uppercase text-gray-500 tracking-wider">
-                  2. Message Type (Available in {category})
+                  2. Choose Template Type ({category})
                 </label>
                 <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
                   {category === "MARKETING"
-                    ? "3 formats allowed by Meta"
+                    ? "Official Meta Formats"
                     : category === "UTILITY"
-                    ? "Standard Transactional Notifications"
-                    : "1-Tap OTP Verification"}
+                    ? "Transactional & Customer Lifecycle"
+                    : "Secure One-Time Passcode"}
                 </span>
               </div>
 
               {/* A) When MARKETING is selected */}
               {category === "MARKETING" && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {/* Standard Marketing */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Default */}
                   <button
                     type="button"
-                    onClick={() => setTemplateType("STANDARD")}
-                    className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between h-28 cursor-pointer ${
+                    onClick={() => handleTemplateTypeSelect("STANDARD")}
+                    className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between min-h-[92px] cursor-pointer ${
                       templateType === "STANDARD"
-                        ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/50 text-indigo-950 dark:text-indigo-200 ring-2 ring-indigo-500/30"
+                        ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/50 text-indigo-950 dark:text-indigo-200 ring-2 ring-indigo-500/30 shadow-2xs"
                         : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-indigo-300"
                     }`}
                   >
-                    <FileCode size={20} className={templateType === "STANDARD" ? "text-indigo-600" : "text-gray-400"} />
-                    <div>
-                      <div className="font-black text-xs">Standard Marketing</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">
-                        Header, body, & CTA buttons
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <FileCode size={18} className={templateType === "STANDARD" ? "text-indigo-600" : "text-gray-400"} />
+                      <div className="font-black text-xs">Default</div>
+                    </div>
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 leading-tight">
+                      Send messages with media and customised buttons to engage your customers.
                     </div>
                   </button>
 
-                  {/* Carousel */}
+                  {/* Image Carousel (Named exactly as requested: "name it image carsule") */}
                   <button
                     type="button"
-                    onClick={() => {
-                      setTemplateType("CAROUSEL");
-                      if (!bodyText) setBodyText(`Check out our top ${brandName} collections this season:`);
-                    }}
-                    className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between h-28 relative overflow-hidden cursor-pointer ${
+                    onClick={() => handleTemplateTypeSelect("CAROUSEL")}
+                    className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between min-h-[92px] relative overflow-hidden cursor-pointer ${
                       templateType === "CAROUSEL"
-                        ? "border-purple-600 bg-purple-50/70 dark:bg-purple-950/50 text-purple-950 dark:text-purple-200 ring-2 ring-purple-500/30"
+                        ? "border-purple-600 bg-purple-50/70 dark:bg-purple-950/50 text-purple-950 dark:text-purple-200 ring-2 ring-purple-500/30 shadow-2xs"
                         : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-purple-300"
                     }`}
                   >
                     <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-purple-500 text-white text-[9px] font-black uppercase">
                       Swipeable
                     </span>
-                    <Layers size={20} className={templateType === "CAROUSEL" ? "text-purple-600" : "text-gray-400"} />
-                    <div>
-                      <div className="font-black text-xs">Product Carousel</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">
-                        Up to 10 swipeable product cards
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <Layers size={18} className={templateType === "CAROUSEL" ? "text-purple-600" : "text-gray-400"} />
+                      <div className="font-black text-xs">Image Carousel</div>
+                    </div>
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 leading-tight">
+                      Send up to 10 swipeable cards with images, body text, and interactive buttons.
                     </div>
                   </button>
 
-                  {/* LTO Coupon */}
+                  {/* Catalogue */}
                   <button
                     type="button"
-                    onClick={() => {
-                      setTemplateType("LTO_COUPON");
-                      if (!bodyText) setBodyText(`Special offer! Get FLAT 30% OFF on all ${brandName} gear. Use coupon code below at checkout:`);
-                    }}
-                    className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between h-28 cursor-pointer ${
-                      templateType === "LTO_COUPON"
-                        ? "border-emerald-600 bg-emerald-50/70 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-200 ring-2 ring-emerald-500/30"
+                    onClick={() => handleTemplateTypeSelect("CATALOGUE")}
+                    className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between min-h-[92px] cursor-pointer ${
+                      templateType === "CATALOGUE"
+                        ? "border-sky-600 bg-sky-50/70 dark:bg-sky-950/50 text-sky-950 dark:text-sky-200 ring-2 ring-sky-500/30 shadow-2xs"
+                        : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-sky-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <ShoppingBag size={18} className={templateType === "CATALOGUE" ? "text-sky-600" : "text-gray-400"} />
+                      <div className="font-black text-xs">Catalogue</div>
+                    </div>
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 leading-tight">
+                      Send messages that drive sales by connecting your product catalogue.
+                    </div>
+                  </button>
+
+                  {/* Flows */}
+                  <button
+                    type="button"
+                    onClick={() => handleTemplateTypeSelect("FLOWS")}
+                    className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between min-h-[92px] cursor-pointer ${
+                      templateType === "FLOWS"
+                        ? "border-emerald-600 bg-emerald-50/70 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-200 ring-2 ring-emerald-500/30 shadow-2xs"
                         : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-emerald-300"
                     }`}
                   >
-                    <Tag size={20} className={templateType === "LTO_COUPON" ? "text-emerald-600" : "text-gray-400"} />
-                    <div>
+                    <div className="flex items-center gap-2">
+                      <CheckSquare size={18} className={templateType === "FLOWS" ? "text-emerald-600" : "text-gray-400"} />
+                      <div className="font-black text-xs">Flows</div>
+                    </div>
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 leading-tight">
+                      Send a form to collect customer interests, appointment requests or run surveys.
+                    </div>
+                  </button>
+
+                  {/* Order details */}
+                  <button
+                    type="button"
+                    onClick={() => handleTemplateTypeSelect("ORDER_DETAILS")}
+                    className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between min-h-[92px] cursor-pointer ${
+                      templateType === "ORDER_DETAILS"
+                        ? "border-amber-600 bg-amber-50/70 dark:bg-amber-950/50 text-amber-950 dark:text-amber-200 ring-2 ring-amber-500/30 shadow-2xs"
+                        : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-amber-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <CreditCard size={18} className={templateType === "ORDER_DETAILS" ? "text-amber-600" : "text-gray-400"} />
+                      <div className="font-black text-xs">Order details</div>
+                    </div>
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 leading-tight">
+                      Send messages through which customers can pay you.
+                    </div>
+                  </button>
+
+                  {/* Calling permissions request */}
+                  <button
+                    type="button"
+                    onClick={() => handleTemplateTypeSelect("CALL_PERMISSIONS")}
+                    className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between min-h-[92px] cursor-pointer ${
+                      templateType === "CALL_PERMISSIONS"
+                        ? "border-rose-600 bg-rose-50/70 dark:bg-rose-950/50 text-rose-950 dark:text-rose-200 ring-2 ring-rose-500/30 shadow-2xs"
+                        : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-rose-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Phone size={18} className={templateType === "CALL_PERMISSIONS" ? "text-rose-600" : "text-gray-400"} />
+                      <div className="font-black text-xs">Calling permissions request</div>
+                    </div>
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 leading-tight">
+                      Ask customers if you can call them on WhatsApp.
+                    </div>
+                  </button>
+
+                  {/* LTO / Discount Coupon */}
+                  <button
+                    type="button"
+                    onClick={() => handleTemplateTypeSelect("LTO_COUPON")}
+                    className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between min-h-[92px] cursor-pointer sm:col-span-2 ${
+                      templateType === "LTO_COUPON"
+                        ? "border-emerald-600 bg-emerald-50/70 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-200 ring-2 ring-emerald-500/30 shadow-2xs"
+                        : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-emerald-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Tag size={18} className={templateType === "LTO_COUPON" ? "text-emerald-600" : "text-gray-400"} />
                       <div className="font-black text-xs">LTO / Discount Coupon</div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">
-                        1-Tap Copy Code banner
-                      </div>
+                    </div>
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 leading-tight">
+                      Special promotional offer with 1-tap Copy Coupon Code banner.
                     </div>
                   </button>
                 </div>
@@ -839,33 +1029,243 @@ export default function WhatsAppTemplatesComponent() {
 
               {/* B) When UTILITY is selected */}
               {category === "UTILITY" && (
-                <div className="flex flex-col gap-3">
-                  <div className="text-xs text-gray-600 dark:text-gray-300 font-medium">
-                    Select a transactional template preset or write a custom utility notification:
+                <div className="flex flex-col gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Default */}
+                    <button
+                      type="button"
+                      onClick={() => handleTemplateTypeSelect("STANDARD")}
+                      className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between min-h-[92px] cursor-pointer ${
+                        templateType === "STANDARD"
+                          ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/50 text-indigo-950 dark:text-indigo-200 ring-2 ring-indigo-500/30 shadow-2xs"
+                          : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-indigo-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <PackageCheck size={18} className={templateType === "STANDARD" ? "text-indigo-600" : "text-gray-400"} />
+                        <div className="font-black text-xs">Default</div>
+                      </div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 leading-tight">
+                        Send messages about an existing order or account.
+                      </div>
+                    </button>
+
+                    {/* Order status */}
+                    <button
+                      type="button"
+                      onClick={() => handleTemplateTypeSelect("ORDER_STATUS")}
+                      className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between min-h-[92px] cursor-pointer ${
+                        templateType === "ORDER_STATUS"
+                          ? "border-blue-600 bg-blue-50/70 dark:bg-blue-950/50 text-blue-950 dark:text-blue-200 ring-2 ring-blue-500/30 shadow-2xs"
+                          : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-blue-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Truck size={18} className={templateType === "ORDER_STATUS" ? "text-blue-600" : "text-gray-400"} />
+                        <div className="font-black text-xs">Order status</div>
+                      </div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 leading-tight">
+                        Send messages to tell customers about the progress of their orders.
+                      </div>
+                    </button>
+
+                    {/* Order details */}
+                    <button
+                      type="button"
+                      onClick={() => handleTemplateTypeSelect("ORDER_DETAILS")}
+                      className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between min-h-[92px] cursor-pointer ${
+                        templateType === "ORDER_DETAILS"
+                          ? "border-amber-600 bg-amber-50/70 dark:bg-amber-950/50 text-amber-950 dark:text-amber-200 ring-2 ring-amber-500/30 shadow-2xs"
+                          : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-amber-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <CreditCard size={18} className={templateType === "ORDER_DETAILS" ? "text-amber-600" : "text-gray-400"} />
+                        <div className="font-black text-xs">Order details</div>
+                      </div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 leading-tight">
+                        Send messages through which customers can pay you.
+                      </div>
+                    </button>
+
+                    {/* Flows */}
+                    <button
+                      type="button"
+                      onClick={() => handleTemplateTypeSelect("FLOWS")}
+                      className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between min-h-[92px] cursor-pointer ${
+                        templateType === "FLOWS"
+                          ? "border-emerald-600 bg-emerald-50/70 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-200 ring-2 ring-emerald-500/30 shadow-2xs"
+                          : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-emerald-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <CheckSquare size={18} className={templateType === "FLOWS" ? "text-emerald-600" : "text-gray-400"} />
+                        <div className="font-black text-xs">Flows</div>
+                      </div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 leading-tight">
+                        Send a form to collect feedback, send reminders or manage orders.
+                      </div>
+                    </button>
+
+                    {/* Calling permissions request */}
+                    <button
+                      type="button"
+                      onClick={() => handleTemplateTypeSelect("CALL_PERMISSIONS")}
+                      className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between min-h-[92px] cursor-pointer sm:col-span-2 ${
+                        templateType === "CALL_PERMISSIONS"
+                          ? "border-rose-600 bg-rose-50/70 dark:bg-rose-950/50 text-rose-950 dark:text-rose-200 ring-2 ring-rose-500/30 shadow-2xs"
+                          : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-rose-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Phone size={18} className={templateType === "CALL_PERMISSIONS" ? "text-rose-600" : "text-gray-400"} />
+                        <div className="font-black text-xs">Calling permissions request</div>
+                      </div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 leading-tight">
+                        Ask customers if you can call them on WhatsApp.
+                      </div>
+                    </button>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                    {utilityPresets.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => applyUtilityPreset(p.id, brandName, brandDomain)}
-                        className={`p-3 rounded-xl border text-left transition cursor-pointer flex flex-col gap-1 ${
-                          utilityPreset === p.id
-                            ? "border-indigo-600 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-900 dark:text-indigo-200 font-black shadow-2xs"
-                            : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 font-bold hover:border-indigo-300"
-                        }`}
-                      >
-                        <span className="text-xs">{p.label}</span>
-                      </button>
-                    ))}
-                  </div>
+
+                  {/* Pre-approved Library when Default is selected */}
+                  {templateType === "STANDARD" && (
+                    <div className="p-3.5 bg-gray-50 dark:bg-slate-750 rounded-2xl border border-gray-200 dark:border-slate-700 flex flex-col gap-2">
+                      <div className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                        ⚡ Apply Instant Pre-approved Notification Template:
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {utilityPresets.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => applyUtilityPreset(p.id, brandName, brandDomain)}
+                            className={`p-2.5 rounded-xl border text-left transition cursor-pointer text-xs ${
+                              utilityPreset === p.id
+                                ? "border-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-900 dark:text-indigo-200 font-black shadow-2xs"
+                                : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 font-medium hover:border-indigo-300"
+                            }`}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* C) When AUTHENTICATION is selected */}
               {category === "AUTHENTICATION" && (
-                <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-2xl text-xs text-amber-900 dark:text-amber-200 leading-relaxed">
-                  <strong>Meta Authentication Policy:</strong> Only one-time passwords (OTP) or verification codes are permitted. The code variable is automatically configured with a 1-tap copy code button for recipients.
+                <div className="flex flex-col gap-4">
+                  <div className="text-xs text-gray-600 dark:text-gray-300 font-bold">
+                    Code delivery setup:
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Copy code */}
+                    <button
+                      type="button"
+                      onClick={() => setAuthCodeDelivery("COPY_CODE")}
+                      className={`p-3.5 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                        authCodeDelivery === "COPY_CODE"
+                          ? "border-orange-500 bg-orange-50/70 dark:bg-orange-950/40 text-orange-950 dark:text-orange-200 ring-2 ring-orange-500/30 font-bold"
+                          : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-orange-300"
+                      }`}
+                    >
+                      <div className="font-black text-xs">Copy code</div>
+                      <div className="text-[10px] text-gray-500 mt-1 leading-tight">
+                        Basic authentication with quick setup. Customers copy and paste the code into your app.
+                      </div>
+                    </button>
+
+                    {/* One-tap auto-fill */}
+                    <button
+                      type="button"
+                      onClick={() => setAuthCodeDelivery("ONE_TAP")}
+                      className={`p-3.5 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                        authCodeDelivery === "ONE_TAP"
+                          ? "border-orange-500 bg-orange-50/70 dark:bg-orange-950/40 text-orange-950 dark:text-orange-200 ring-2 ring-orange-500/30 font-bold"
+                          : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-orange-300"
+                      }`}
+                    >
+                      <div className="font-black text-xs">One-tap auto-fill</div>
+                      <div className="text-[10px] text-gray-500 mt-1 leading-tight">
+                        Code sends to your app when customers tap the button. Fallback to copy code if not supported.
+                      </div>
+                    </button>
+
+                    {/* Zero-tap auto-fill */}
+                    <button
+                      type="button"
+                      onClick={() => setAuthCodeDelivery("ZERO_TAP")}
+                      className={`p-3.5 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between relative overflow-hidden ${
+                        authCodeDelivery === "ZERO_TAP"
+                          ? "border-orange-500 bg-orange-50/70 dark:bg-orange-950/40 text-orange-950 dark:text-orange-200 ring-2 ring-orange-500/30 font-bold"
+                          : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-orange-300"
+                      }`}
+                    >
+                      <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-orange-500 text-white text-[9px] font-black uppercase">
+                        Recommended
+                      </span>
+                      <div className="font-black text-xs">Zero-tap auto-fill</div>
+                      <div className="text-[10px] text-gray-500 mt-1 leading-tight">
+                        Easiest option for customers. Zero-tap automatically sends code without requiring any tap.
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* App Setup */}
+                  <div className="p-4 bg-orange-50/50 dark:bg-orange-950/30 rounded-2xl border border-orange-200/80 dark:border-orange-900/40 flex flex-col gap-3">
+                    <div className="text-xs font-black text-orange-900 dark:text-orange-200">
+                      App Setup & Signature
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-600 dark:text-gray-300 mb-1">
+                          Package Name
+                        </label>
+                        <input
+                          value={authPackageName}
+                          onChange={(e) => setAuthPackageName(e.target.value)}
+                          placeholder="com.example.myapplication"
+                          className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-mono font-bold outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-600 dark:text-gray-300 mb-1">
+                          App Signature Hash (11 chars)
+                        </label>
+                        <input
+                          value={authAppSignatureHash}
+                          onChange={(e) => setAuthAppSignatureHash(e.target.value)}
+                          maxLength={11}
+                          placeholder="e.g. K4w8v9N2q1P"
+                          className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-mono font-bold outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Content Options */}
+                    <div className="pt-2 border-t border-orange-200/60 dark:border-orange-900/40 flex flex-col gap-2">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700 dark:text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={authSecurityRecommendation}
+                          onChange={(e) => setAuthSecurityRecommendation(e.target.checked)}
+                          className="rounded text-orange-600 cursor-pointer"
+                        />
+                        <span>Add security recommendation ("For your security, do not share this code.")</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700 dark:text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={authExpiryTime}
+                          onChange={(e) => setAuthExpiryTime(e.target.checked)}
+                          className="rounded text-orange-600 cursor-pointer"
+                        />
+                        <span>Add expiry time for the code (e.g. "Code expires in 10 minutes.")</span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1459,8 +1859,111 @@ export default function WhatsAppTemplatesComponent() {
                       </div>
                     )}
 
+                    {/* Catalogue Action Preview */}
+                    {templateType === "CATALOGUE" && (
+                      <div className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700 flex flex-col gap-2">
+                        <div className="p-2.5 bg-sky-50 dark:bg-sky-950/40 rounded-xl border border-sky-200 dark:border-sky-800 text-[11px] text-sky-900 dark:text-sky-200 flex items-center gap-2">
+                          <ShoppingBag size={14} className="text-sky-600 flex-shrink-0" />
+                          <span className="font-bold">Catalog items connected from Meta Commerce</span>
+                        </div>
+                        <div className="bg-[#00a884] text-white rounded-xl py-2 px-3 text-center text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">
+                          <ShoppingBag size={13} />
+                          <span>View catalog</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Flows Action Preview */}
+                    {templateType === "FLOWS" && (
+                      <div className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700 flex flex-col gap-2">
+                        <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 text-[11px] text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
+                          <CheckSquare size={14} className="text-emerald-600 flex-shrink-0" />
+                          <span className="font-bold">Interactive Meta Flow Form</span>
+                        </div>
+                        <div className="bg-emerald-600 text-white rounded-xl py-2 px-3 text-center text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">
+                          <FileCode size={13} />
+                          <span>{flowButtonText || "View Flow"}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Order Details Preview */}
+                    {templateType === "ORDER_DETAILS" && (
+                      <div className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700 flex flex-col gap-2">
+                        <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800 flex flex-col gap-1 text-[11px]">
+                          <div className="flex justify-between font-bold text-amber-950 dark:text-amber-200">
+                            <span>Order #ESP-8834</span>
+                            <span className="text-emerald-600 dark:text-emerald-400">Total: ₹1,499</span>
+                          </div>
+                          <div className="text-[10px] text-gray-500">1x Pro Dry-Fit Performance Tee</div>
+                        </div>
+                        <div className="bg-[#00a884] text-white rounded-xl py-2 px-3 text-center text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">
+                          <CreditCard size={13} />
+                          <span>Review and Pay</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Order Status Preview */}
+                    {templateType === "ORDER_STATUS" && (
+                      <div className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700 flex flex-col gap-2">
+                        <div className="p-2.5 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-800 flex items-center justify-between text-[11px]">
+                          <div className="flex items-center gap-1.5 font-bold text-blue-900 dark:text-blue-200">
+                            <Truck size={14} className="text-blue-600" />
+                            <span>Shipped via Bluedart</span>
+                          </div>
+                          <span className="text-[10px] text-blue-600 font-black">Out for delivery</span>
+                        </div>
+                        <div className="bg-blue-600 text-white rounded-xl py-2 px-3 text-center text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">
+                          <ExternalLink size={13} />
+                          <span>Track shipment</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Calling Permissions Preview */}
+                    {templateType === "CALL_PERMISSIONS" && (
+                      <div className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700 flex flex-col gap-2">
+                        <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-200 dark:border-rose-800 text-[11px] text-rose-950 dark:text-rose-200">
+                          {brandName} would like to call you on WhatsApp regarding your order inquiry.
+                        </div>
+                        <div className="bg-rose-600 text-white rounded-xl py-2 px-3 text-center text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">
+                          <Phone size={13} />
+                          <span>Choose preference</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Authentication Preview */}
+                    {category === "AUTHENTICATION" && (
+                      <div className="mt-2 pt-2 border-t border-orange-100 dark:border-orange-950 flex flex-col gap-2">
+                        {authSecurityRecommendation && (
+                          <div className="text-[10px] text-gray-500 italic">
+                            For your security, do not share this code.
+                          </div>
+                        )}
+                        <div className="p-3 bg-orange-50 dark:bg-orange-950/50 rounded-xl border border-dashed border-orange-300 text-center flex flex-col gap-1.5">
+                          <div className="text-[10px] font-bold text-orange-800 dark:text-orange-300 uppercase">
+                            Verification Code:
+                          </div>
+                          <div className="py-1 px-4 bg-white dark:bg-slate-800 rounded-lg font-mono font-black text-lg text-orange-600 tracking-widest self-center shadow-2xs">
+                            583 920
+                          </div>
+                          {authExpiryTime && (
+                            <div className="text-[9px] text-orange-700 dark:text-orange-400">
+                              ⏱️ Code expires in {authExpiryMinutes} minutes
+                            </div>
+                          )}
+                        </div>
+                        <div className="bg-orange-600 text-white rounded-xl py-2 px-3 text-center text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">
+                          <Copy size={13} />
+                          <span>{authCodeDelivery === "ZERO_TAP" ? "Auto-filling in App..." : authCodeDelivery === "ONE_TAP" ? "One-Tap Verify" : "Copy code"}</span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Standard CTA Buttons inside bubble */}
-                    {templateType !== "CAROUSEL" && buttons.length > 0 && (
+                    {templateType !== "CAROUSEL" && templateType !== "CATALOGUE" && templateType !== "FLOWS" && templateType !== "ORDER_DETAILS" && templateType !== "ORDER_STATUS" && templateType !== "CALL_PERMISSIONS" && category !== "AUTHENTICATION" && buttons.length > 0 && (
                       <div className="flex flex-col gap-1.5 mt-2 pt-2 border-t border-gray-100 dark:border-slate-700">
                         {buttons.map((b, i) => (
                           <div
@@ -1669,6 +2172,24 @@ export default function WhatsAppTemplatesComponent() {
                 {c.label}
               </option>
             ))}
+          </select>
+
+          {/* Type / Format Filter */}
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none cursor-pointer text-purple-600 dark:text-purple-400"
+          >
+            <option value="ALL">All Message Types</option>
+            <option value="STANDARD">📄 Default</option>
+            <option value="CAROUSEL">🖼️ Image Carousel</option>
+            <option value="CATALOGUE">🛍️ Catalogue</option>
+            <option value="FLOWS">📋 Flows</option>
+            <option value="ORDER_DETAILS">💳 Order details</option>
+            <option value="ORDER_STATUS">🚚 Order status</option>
+            <option value="CALL_PERMISSIONS">📞 Call permissions</option>
+            <option value="LTO_COUPON">🏷️ LTO Coupon</option>
+            <option value="AUTHENTICATION">🔐 Authentication</option>
           </select>
 
           {/* Status Filter */}
