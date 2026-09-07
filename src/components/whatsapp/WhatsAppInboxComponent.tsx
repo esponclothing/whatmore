@@ -283,9 +283,10 @@ export default function WhatsAppInboxComponent() {
     if (!activeConvDetail) return;
     setPushingToCrm(true);
     setShowIntegrationsMenu(false);
+    const target = integrations.find(i => i.id === integrationId);
     const res = await pushLeadToIntegrationAction(activeConvDetail.id, integrationId);
     if (res.success) {
-      setToastMsg("Lead pushed to CRM successfully!");
+      setToastMsg(`Lead pushed to ${target?.name || 'CRM'} successfully!`);
     } else {
       setToastMsg("Failed to push lead: " + res.error);
     }
@@ -446,7 +447,16 @@ export default function WhatsAppInboxComponent() {
   const fetchIntegrations = async () => {
     const res = await getWhatsAppIntegrationsAction();
     if (res.success && res.integrations) {
-      setIntegrations(res.integrations.filter((i: any) => i.isActive));
+      // Exclude Meta CAPI / Pixel integrations so only CRM / ERP webhook integrations appear
+      const crmOnly = res.integrations.filter((i: any) => {
+        if (!i.isActive) return false;
+        const typeUpper = (i.type || '').toUpperCase();
+        const nameLower = (i.name || '').toLowerCase();
+        if (typeUpper === 'META_CAPI' || typeUpper === 'PIXEL' || typeUpper.includes('CAPI')) return false;
+        if (nameLower.includes('pixel') && !nameLower.includes('crm') && !nameLower.includes('erp')) return false;
+        return true;
+      });
+      setIntegrations(crmOnly);
     }
   };
 
@@ -1797,6 +1807,7 @@ export default function WhatsAppInboxComponent() {
                       }
                     }}
                     disabled={pushingToCrm}
+                    title={integrations.length === 1 ? `Push lead to ${integrations[0].name}` : "Push Lead to CRM"}
                     style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", fontWeight: 600 }}
                   >
                     <Activity size={14} />
@@ -1804,19 +1815,25 @@ export default function WhatsAppInboxComponent() {
                   </button>
                   
                   {showIntegrationsMenu && integrations.length > 1 && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: '4px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', zIndex: 50, minWidth: '180px', overflow: 'hidden' }}>
-                      {integrations.map(int => (
-                        <div 
-                          key={int.id}
-                          onClick={() => handlePushToCrm(int.id)}
-                          style={{ padding: '8px 12px', fontSize: '12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', color: '#334155' }}
-                          onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'white'}
-                        >
-                          {int.name}
-                        </div>
-                      ))}
-                    </div>
+                    <>
+                      <div 
+                        style={{ position: 'fixed', inset: 0, zIndex: 49 }} 
+                        onClick={() => setShowIntegrationsMenu(false)} 
+                      />
+                      <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: '4px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', zIndex: 50, minWidth: '180px', overflow: 'hidden' }}>
+                        {integrations.map(int => (
+                          <div 
+                            key={int.id}
+                            onClick={() => handlePushToCrm(int.id)}
+                            style={{ padding: '8px 12px', fontSize: '12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', color: '#334155' }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                          >
+                            {int.name}
+                          </div>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </div>
 

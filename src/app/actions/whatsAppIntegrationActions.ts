@@ -73,6 +73,9 @@ export async function pushLeadToIntegrationAction(conversationId: string, integr
   try {
     const integration = await prisma.whatsAppIntegration.findUnique({ where: { id: integrationId } });
     if (!integration) throw new Error("Integration not found");
+    if (integration.type === 'META_CAPI' || integration.type === 'PIXEL' || integration.type?.toUpperCase().includes('CAPI')) {
+      throw new Error("Cannot push lead directly to a Meta Pixel / CAPI integration via CRM webhook");
+    }
 
     const conv = await prisma.whatsAppConversation.findUnique({
       where: { id: conversationId },
