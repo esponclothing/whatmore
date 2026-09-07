@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   FileCode, Plus, Search, RefreshCw, CheckCircle2, Clock, AlertCircle,
   X, Send, Trash2, Eye, Info, Calendar, Zap, TrendingUp, Filter, Sparkles,
   ArrowUpDown, CheckCheck, Radio, Check, ArrowLeft, Layers, ShoppingBag,
   Tag, ChevronLeft, ChevronRight, Image as ImageIcon, Link as LinkIcon,
-  Phone, Copy, Smartphone, HelpCircle
+  Phone, Copy, Smartphone, Upload, Clipboard, CheckSquare, PackageCheck,
+  Truck, CreditCard, BellRing, FileText, Video, FileCheck
 } from "lucide-react";
 import {
   getWhatsAppTemplates,
@@ -17,12 +18,12 @@ import {
 
 // Meta API Constraints
 const META_LIMITS = {
-  NAME_MAX: 512,        // name: lowercase, underscores only
-  HEADER_MAX: 60,       // header text
-  BODY_MAX: 1024,       // body text
-  FOOTER_MAX: 60,       // footer text
-  BUTTON_TEXT_MAX: 25,  // each button label
-  BUTTON_URL_MAX: 2000, // URL button url
+  NAME_MAX: 512,
+  HEADER_MAX: 60,
+  BODY_MAX: 1024,
+  FOOTER_MAX: 60,
+  BUTTON_TEXT_MAX: 25,
+  BUTTON_URL_MAX: 2000,
   MAX_QUICK_REPLIES: 3,
   MAX_CTA_BUTTONS: 2,
   TOTAL_BUTTONS_MAX: 3,
@@ -45,9 +46,47 @@ const LANGUAGES = [
 ];
 
 const CATEGORIES = [
-  { value: "MARKETING", label: "📢 Marketing", desc: "Promotions, offers, product announcements" },
-  { value: "UTILITY", label: "⚙️ Utility", desc: "Order updates, shipping, account alerts" },
-  { value: "AUTHENTICATION", label: "🔐 Authentication", desc: "OTPs and verification codes" },
+  { value: "MARKETING", label: "📢 Marketing", desc: "Promotions, product showcases, seasonal offers, and re-engagement" },
+  { value: "UTILITY", label: "⚙️ Utility", desc: "Order confirmation, shipping status, payment receipts, and critical account alerts" },
+  { value: "AUTHENTICATION", label: "🔐 Authentication", desc: "One-time passwords (OTP) and login account verification codes" },
+];
+
+const UTILITY_PRESETS = [
+  {
+    id: "ORDER_CONFIRMATION",
+    label: "📦 Order Confirmation",
+    header: "Order Confirmed!",
+    body: "Hi {{1}}, thank you for shopping with 11FIT! Your order #{{2}} of ₹{{3}} has been confirmed and is being packed with care.",
+    footer: "11FIT Sports | Need help? Reply to this chat"
+  },
+  {
+    id: "SHIPPING_UPDATE",
+    label: "🚚 Shipping & Tracking",
+    header: "Your Order is on the Way!",
+    body: "Hi {{1}}, great news! Your order #{{2}} has been dispatched via {{3}}. Track your delivery live here: {{4}}",
+    footer: "11FIT Sports Logistics"
+  },
+  {
+    id: "PAYMENT_RECEIPT",
+    label: "💳 Payment Receipt",
+    header: "Payment Received",
+    body: "Hi {{1}}, we have received your payment of ₹{{2}} for invoice #{{3}}. Thank you for your business!",
+    footer: "11FIT Accounts"
+  },
+  {
+    id: "ACCOUNT_ALERT",
+    label: "🔔 Account Alert",
+    header: "Security / Account Notice",
+    body: "Hi {{1}}, this is an important update regarding your 11FIT account: {{2}}. If this was not you, please reply immediately.",
+    footer: "11FIT Security Desk"
+  },
+  {
+    id: "CUSTOM_UTILITY",
+    label: "📝 Custom Utility",
+    header: "",
+    body: "",
+    footer: ""
+  }
 ];
 
 interface CarouselCardItem {
@@ -68,7 +107,7 @@ export default function WhatsAppTemplatesComponent() {
   const [timeRangeFilter, setTimeRangeFilter] = useState<"ALL" | "TODAY" | "7D" | "30D">("ALL");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "most_used" | "highest_read" | "alphabetical">("newest");
   
-  // PAGE VIEW MODE: 'LIST' or 'CREATE'
+  // Page View Mode: 'LIST' or 'CREATE'
   const [viewMode, setViewMode] = useState<"LIST" | "CREATE">("LIST");
 
   const [toastMsg, setToastMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -92,14 +131,17 @@ export default function WhatsAppTemplatesComponent() {
   // -------------------------------------------------------------
   // Full-Page Template Studio State
   // -------------------------------------------------------------
-  const [templateType, setTemplateType] = useState<"STANDARD" | "CAROUSEL" | "CATALOG" | "LTO_COUPON">("STANDARD");
+  const [category, setCategory] = useState<"MARKETING" | "UTILITY" | "AUTHENTICATION">("MARKETING");
+  const [templateType, setTemplateType] = useState<"STANDARD" | "CAROUSEL" | "LTO_COUPON" | "AUTHENTICATION">("STANDARD");
+  const [utilityPreset, setUtilityPreset] = useState<string>("ORDER_CONFIRMATION");
+  
   const [templateName, setTemplateName] = useState("");
-  const [category, setCategory] = useState("MARKETING");
   const [language, setLanguage] = useState("en_US");
   
-  // Standard Header
-  const [headerType, setHeaderType] = useState("NONE");
+  // Header configuration
+  const [headerType, setHeaderType] = useState<"NONE" | "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT">("NONE");
   const [headerContent, setHeaderContent] = useState("");
+  const [headerMediaPreview, setHeaderMediaPreview] = useState<string | null>(null);
   
   // Body & Footer
   const [bodyText, setBodyText] = useState("");
@@ -108,10 +150,6 @@ export default function WhatsAppTemplatesComponent() {
   
   // Coupon State
   const [couponCode, setCouponCode] = useState("FLAT30");
-  
-  // Catalog State
-  const [catalogId, setCatalogId] = useState("");
-  const [catalogButtonText, setCatalogButtonText] = useState("View Catalog");
 
   // Carousel Cards State (up to 10 product cards)
   const [carouselCards, setCarouselCards] = useState<CarouselCardItem[]>([
@@ -147,6 +185,9 @@ export default function WhatsAppTemplatesComponent() {
   const [testPhone, setTestPhone] = useState("");
   const [testingTemplate, setTestingTemplate] = useState<string | null>(null);
 
+  const headerFileInputRef = useRef<HTMLInputElement>(null);
+  const cardFileInputRef = useRef<HTMLInputElement>(null);
+
   const showToast = (text: string, type: "success" | "error" = "success") => {
     setToastMsg({ text, type });
     setTimeout(() => setToastMsg(null), 4000);
@@ -162,6 +203,97 @@ export default function WhatsAppTemplatesComponent() {
   useEffect(() => {
     fetchTemplates();
   }, []);
+
+  // Category Switch Handler
+  const handleCategorySelect = (selectedCat: "MARKETING" | "UTILITY" | "AUTHENTICATION") => {
+    setCategory(selectedCat);
+    if (selectedCat === "UTILITY") {
+      setTemplateType("STANDARD");
+      applyUtilityPreset("ORDER_CONFIRMATION");
+    } else if (selectedCat === "AUTHENTICATION") {
+      setTemplateType("AUTHENTICATION");
+      setHeaderType("NONE");
+      setHeaderContent("");
+      setHeaderMediaPreview(null);
+      setBodyText("{{1}} is your 11FIT verification code. For your security, do not share this code.");
+      setFooterText("Code expires in 10 minutes");
+      setButtons([{ type: "COPY_CODE", text: "Copy Code", code: "{{1}}" }]);
+    } else {
+      // Marketing
+      setTemplateType("STANDARD");
+      setBodyText("");
+      setFooterText("Reply STOP to unsubscribe");
+    }
+  };
+
+  // Utility Preset Handler
+  const applyUtilityPreset = (presetId: string) => {
+    setUtilityPreset(presetId);
+    const preset = UTILITY_PRESETS.find((p) => p.id === presetId);
+    if (preset) {
+      if (preset.header) {
+        setHeaderType("TEXT");
+        setHeaderContent(preset.header);
+      } else {
+        setHeaderType("NONE");
+        setHeaderContent("");
+      }
+      setBodyText(preset.body);
+      setFooterText(preset.footer);
+      if (presetId === "ORDER_CONFIRMATION" || presetId === "SHIPPING_UPDATE") {
+        setButtons([{ type: "URL", text: "Track Order", url: "https://11fit.in/account/orders" }]);
+      } else {
+        setButtons([]);
+      }
+    }
+  };
+
+  // Image Upload and Paste Handlers
+  const handleFileProcess = (file: File, target: "HEADER" | "CAROUSEL_CARD", cardIdx?: number) => {
+    if (!file.type.startsWith("image/") && !file.type.startsWith("video/") && !file.type.startsWith("application/pdf")) {
+      showToast("Please upload a valid image, video, or PDF file.", "error");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (target === "HEADER") {
+        if (file.type.startsWith("video/")) {
+          setHeaderType("VIDEO");
+        } else if (file.type.startsWith("application/pdf")) {
+          setHeaderType("DOCUMENT");
+        } else {
+          setHeaderType("IMAGE");
+        }
+        setHeaderContent(dataUrl);
+        setHeaderMediaPreview(dataUrl);
+        showToast("Header media uploaded successfully!");
+      } else if (target === "CAROUSEL_CARD") {
+        const idx = cardIdx !== undefined ? cardIdx : activeCarouselCardIndex;
+        setCarouselCards((prev) =>
+          prev.map((c, i) => (i === idx ? { ...c, mediaUrl: dataUrl } : c))
+        );
+        showToast(`Card #${idx + 1} image uploaded successfully!`);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePasteEvent = (e: React.ClipboardEvent, target: "HEADER" | "CAROUSEL_CARD", cardIdx?: number) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          handleFileProcess(file, target, cardIdx);
+          e.preventDefault();
+          break;
+        }
+      }
+    }
+  };
 
   const validateName = (name: string) => {
     if (!name) return "Template name is required.";
@@ -187,7 +319,7 @@ export default function WhatsAppTemplatesComponent() {
       mediaUrl: "https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=500&auto=format&fit=crop&q=80",
       headerType: "IMAGE",
       title: `Product Item ${newIdx}`,
-      bodyText: "₹999 • Limited Edition Collection",
+      bodyText: "₹999 • Premium Collection",
       buttons: [
         { type: "URL", text: "Buy Now", url: "https://11fit.in" },
         { type: "QUICK_REPLY", text: "Inquire" }
@@ -261,12 +393,13 @@ export default function WhatsAppTemplatesComponent() {
   };
 
   const resetForm = () => {
+    setCategory("MARKETING");
     setTemplateType("STANDARD");
     setTemplateName("");
-    setCategory("MARKETING");
     setLanguage("en_US");
     setHeaderType("NONE");
     setHeaderContent("");
+    setHeaderMediaPreview(null);
     setBodyText("");
     setFooterText("");
     setButtons([]);
@@ -306,9 +439,7 @@ export default function WhatsAppTemplatesComponent() {
       buttons: templateType === "LTO_COUPON" 
         ? [{ type: "COPY_CODE", text: couponCode, code: couponCode }, ...buttons]
         : buttons,
-      carouselCards: templateType === "CAROUSEL" ? carouselCards : null,
-      catalogId: templateType === "CATALOG" ? catalogId : null,
-      catalogButtonText
+      carouselCards: templateType === "CAROUSEL" ? carouselCards : null
     };
 
     const res = await saveWhatsAppTemplateAction(payload);
@@ -424,13 +555,6 @@ export default function WhatsAppTemplatesComponent() {
         </span>
       );
     }
-    if (tType === "CATALOG") {
-      return (
-        <span className="px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 text-[10px] font-black uppercase flex items-center gap-1">
-          <ShoppingBag size={11} /> Catalog
-        </span>
-      );
-    }
     if (tType === "LTO_COUPON") {
       return (
         <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase flex items-center gap-1">
@@ -445,13 +569,13 @@ export default function WhatsAppTemplatesComponent() {
     );
   };
 
-  // Helper for sample variable replacement
   const getRenderedPreviewText = (rawText: string) => {
     if (!rawText) return "";
     return rawText
-      .replace(/\{\{1\}\}/g, "John")
+      .replace(/\{\{1\}\}/g, "Alex")
       .replace(/\{\{2\}\}/g, "ORD-8921")
-      .replace(/\{\{3\}\}/g, "https://11fit.in")
+      .replace(/\{\{3\}\}/g, "₹1,499")
+      .replace(/\{\{4\}\}/g, "https://11fit.in/track")
       .replace(/\{\{(\d+)\}\}/g, "[Var $1]");
   };
 
@@ -461,6 +585,28 @@ export default function WhatsAppTemplatesComponent() {
   if (viewMode === "CREATE") {
     return (
       <div className="w-full flex flex-col gap-6 animate-in fade-in duration-200">
+        {/* Hidden File Inputs */}
+        <input
+          type="file"
+          ref={headerFileInputRef}
+          accept="image/*,video/*,application/pdf"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleFileProcess(file, "HEADER");
+          }}
+          className="hidden"
+        />
+        <input
+          type="file"
+          ref={cardFileInputRef}
+          accept="image/*"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleFileProcess(file, "CAROUSEL_CARD");
+          }}
+          className="hidden"
+        />
+
         {/* Toast */}
         {toastMsg && (
           <div
@@ -506,7 +652,7 @@ export default function WhatsAppTemplatesComponent() {
                 WhatsApp Template Creation Studio
               </h2>
               <p className="text-gray-500 text-xs mt-0.5">
-                Design Standard, Multi-Product Carousel, Catalog, and Limited-Time Offer templates for Meta WhatsApp.
+                Design Meta-compliant Marketing, Utility, and Authentication templates with drag-and-drop media & live smartphone preview.
               </p>
             </div>
           </div>
@@ -534,143 +680,174 @@ export default function WhatsAppTemplatesComponent() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Left Column: Editor Controls (7 Cols) */}
           <div className="lg:col-span-7 flex flex-col gap-6">
-            {/* 1. Template Format Selector */}
+            
+            {/* STEP 1: CATEGORY SELECTION (MARKETING vs UTILITY vs AUTHENTICATION) */}
             <div className="bg-white dark:bg-slate-800/90 border border-gray-200 dark:border-slate-700 rounded-3xl p-6 shadow-2xs">
               <label className="block text-xs font-black uppercase text-gray-500 tracking-wider mb-3">
-                1. Select Template Format
+                1. Select Category <span className="text-red-500">*</span>
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {/* Standard */}
-                <button
-                  type="button"
-                  onClick={() => setTemplateType("STANDARD")}
-                  className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between h-28 cursor-pointer ${
-                    templateType === "STANDARD"
-                      ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/50 text-indigo-950 dark:text-indigo-200 ring-2 ring-indigo-500/30"
-                      : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-indigo-300"
-                  }`}
-                >
-                  <FileCode size={22} className={templateType === "STANDARD" ? "text-indigo-600" : "text-gray-400"} />
-                  <div>
-                    <div className="font-black text-xs">Standard</div>
-                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">
-                      Header, body, & CTA buttons
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {CATEGORIES.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => handleCategorySelect(c.value as any)}
+                    className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between h-28 cursor-pointer ${
+                      category === c.value
+                        ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/50 text-indigo-950 dark:text-indigo-200 ring-2 ring-indigo-500/30"
+                        : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-indigo-300"
+                    }`}
+                  >
+                    <div className="font-black text-sm">{c.label}</div>
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 leading-tight">
+                      {c.desc}
                     </div>
-                  </div>
-                </button>
-
-                {/* Carousel */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTemplateType("CAROUSEL");
-                    if (!bodyText) setBodyText("Check out our top trending sports collections:");
-                  }}
-                  className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between h-28 relative overflow-hidden cursor-pointer ${
-                    templateType === "CAROUSEL"
-                      ? "border-purple-600 bg-purple-50/70 dark:bg-purple-950/50 text-purple-950 dark:text-purple-200 ring-2 ring-purple-500/30"
-                      : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-purple-300"
-                  }`}
-                >
-                  <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-purple-500 text-white text-[9px] font-black uppercase">
-                    Swipeable
-                  </span>
-                  <Layers size={22} className={templateType === "CAROUSEL" ? "text-purple-600" : "text-gray-400"} />
-                  <div>
-                    <div className="font-black text-xs">Product Carousel</div>
-                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">
-                      Up to 10 swipeable product cards
-                    </div>
-                  </div>
-                </button>
-
-                {/* Catalog / MPM */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTemplateType("CATALOG");
-                    if (!bodyText) setBodyText("Explore our official catalog directly on WhatsApp:");
-                  }}
-                  className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between h-28 cursor-pointer ${
-                    templateType === "CATALOG"
-                      ? "border-amber-600 bg-amber-50/70 dark:bg-amber-950/50 text-amber-950 dark:text-amber-200 ring-2 ring-amber-500/30"
-                      : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-amber-300"
-                  }`}
-                >
-                  <ShoppingBag size={22} className={templateType === "CATALOG" ? "text-amber-600" : "text-gray-400"} />
-                  <div>
-                    <div className="font-black text-xs">Product Catalog</div>
-                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">
-                      Meta & Shopify Catalog browser
-                    </div>
-                  </div>
-                </button>
-
-                {/* LTO Coupon */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTemplateType("LTO_COUPON");
-                    if (!bodyText) setBodyText("Special offer! Get FLAT 30% OFF on all sports gear. Use coupon code below at checkout:");
-                  }}
-                  className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between h-28 cursor-pointer ${
-                    templateType === "LTO_COUPON"
-                      ? "border-emerald-600 bg-emerald-50/70 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-200 ring-2 ring-emerald-500/30"
-                      : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-emerald-300"
-                  }`}
-                >
-                  <Tag size={22} className={templateType === "LTO_COUPON" ? "text-emerald-600" : "text-gray-400"} />
-                  <div>
-                    <div className="font-black text-xs">LTO / Coupon</div>
-                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">
-                      1-Tap Copy Discount Code
-                    </div>
-                  </div>
-                </button>
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* 2. Basic Configuration */}
-            <div className="bg-white dark:bg-slate-800/90 border border-gray-200 dark:border-slate-700 rounded-3xl p-6 shadow-2xs flex flex-col gap-4">
-              <label className="block text-xs font-black uppercase text-gray-500 tracking-wider">
-                2. Template Details
-              </label>
-
-              {/* Template Name */}
-              <div>
-                <label className="block text-xs font-black text-gray-700 dark:text-gray-300 uppercase mb-1.5">
-                  Template Name <span className="text-red-500">*</span>
-                  <span className="font-medium text-gray-400 lowercase ml-2">(lowercase + underscores only)</span>
+            {/* STEP 2: AVAILABLE MESSAGE TYPES FOR SELECTED CATEGORY */}
+            <div className="bg-white dark:bg-slate-800/90 border border-gray-200 dark:border-slate-700 rounded-3xl p-6 shadow-2xs">
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-xs font-black uppercase text-gray-500 tracking-wider">
+                  2. Message Type (Available in {category})
                 </label>
-                <input
-                  value={templateName}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  required
-                  placeholder="e.g. festive_carousel_sale_2026"
-                  className={`w-full px-4 py-2.5 bg-white dark:bg-slate-800 border ${
-                    nameError ? "border-red-500" : "border-gray-200 dark:border-slate-700"
-                  } rounded-xl text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-indigo-500`}
-                />
-                {nameError && <p className="text-red-500 text-[11px] mt-1">{nameError}</p>}
+                <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                  {category === "MARKETING"
+                    ? "3 formats allowed by Meta"
+                    : category === "UTILITY"
+                    ? "Standard Transactional Notifications"
+                    : "1-Tap OTP Verification"}
+                </span>
               </div>
 
-              {/* Category + Language */}
+              {/* A) When MARKETING is selected */}
+              {category === "MARKETING" && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Standard Marketing */}
+                  <button
+                    type="button"
+                    onClick={() => setTemplateType("STANDARD")}
+                    className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between h-28 cursor-pointer ${
+                      templateType === "STANDARD"
+                        ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/50 text-indigo-950 dark:text-indigo-200 ring-2 ring-indigo-500/30"
+                        : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-indigo-300"
+                    }`}
+                  >
+                    <FileCode size={20} className={templateType === "STANDARD" ? "text-indigo-600" : "text-gray-400"} />
+                    <div>
+                      <div className="font-black text-xs">Standard Marketing</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">
+                        Header, body, & CTA buttons
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Carousel */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTemplateType("CAROUSEL");
+                      if (!bodyText) setBodyText("Check out our top sports collections this festive season:");
+                    }}
+                    className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between h-28 relative overflow-hidden cursor-pointer ${
+                      templateType === "CAROUSEL"
+                        ? "border-purple-600 bg-purple-50/70 dark:bg-purple-950/50 text-purple-950 dark:text-purple-200 ring-2 ring-purple-500/30"
+                        : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-purple-300"
+                    }`}
+                  >
+                    <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-purple-500 text-white text-[9px] font-black uppercase">
+                      Swipeable
+                    </span>
+                    <Layers size={20} className={templateType === "CAROUSEL" ? "text-purple-600" : "text-gray-400"} />
+                    <div>
+                      <div className="font-black text-xs">Product Carousel</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">
+                        Up to 10 swipeable product cards
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* LTO Coupon */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTemplateType("LTO_COUPON");
+                      if (!bodyText) setBodyText("Special offer! Get FLAT 30% OFF on all sports gear. Use coupon code below at checkout:");
+                    }}
+                    className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between h-28 cursor-pointer ${
+                      templateType === "LTO_COUPON"
+                        ? "border-emerald-600 bg-emerald-50/70 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-200 ring-2 ring-emerald-500/30"
+                        : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:border-emerald-300"
+                    }`}
+                  >
+                    <Tag size={20} className={templateType === "LTO_COUPON" ? "text-emerald-600" : "text-gray-400"} />
+                    <div>
+                      <div className="font-black text-xs">LTO / Discount Coupon</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">
+                        1-Tap Copy Code banner
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              )}
+
+              {/* B) When UTILITY is selected */}
+              {category === "UTILITY" && (
+                <div className="flex flex-col gap-3">
+                  <div className="text-xs text-gray-600 dark:text-gray-300 font-medium">
+                    Select a transactional template preset or write a custom utility notification:
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {UTILITY_PRESETS.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => applyUtilityPreset(p.id)}
+                        className={`p-3 rounded-xl border text-left transition cursor-pointer flex flex-col gap-1 ${
+                          utilityPreset === p.id
+                            ? "border-indigo-600 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-900 dark:text-indigo-200 font-black shadow-2xs"
+                            : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 font-bold hover:border-indigo-300"
+                        }`}
+                      >
+                        <span className="text-xs">{p.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* C) When AUTHENTICATION is selected */}
+              {category === "AUTHENTICATION" && (
+                <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-2xl text-xs text-amber-900 dark:text-amber-200 leading-relaxed">
+                  <strong>Meta Authentication Policy:</strong> Only one-time passwords (OTP) or verification codes are permitted. The code variable is automatically configured with a 1-tap copy code button for recipients.
+                </div>
+              )}
+            </div>
+
+            {/* STEP 3: TEMPLATE NAME & LANGUAGE */}
+            <div className="bg-white dark:bg-slate-800/90 border border-gray-200 dark:border-slate-700 rounded-3xl p-6 shadow-2xs flex flex-col gap-4">
+              <label className="block text-xs font-black uppercase text-gray-500 tracking-wider">
+                3. Template Identity
+              </label>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-black text-gray-700 dark:text-gray-300 uppercase mb-1.5">
-                    Category <span className="text-red-500">*</span>
+                    Template Name <span className="text-red-500">*</span>
+                    <span className="font-normal text-gray-400 lowercase ml-1">(lowercase + underscores)</span>
                   </label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none cursor-pointer"
-                  >
-                    {CATEGORIES.map((c) => (
-                      <option key={c.value} value={c.value}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </select>
+                  <input
+                    value={templateName}
+                    onChange={(e) => handleNameChange(e.target.value)}
+                    required
+                    placeholder="e.g. order_dispatch_update"
+                    className={`w-full px-4 py-2.5 bg-white dark:bg-slate-800 border ${
+                      nameError ? "border-red-500" : "border-gray-200 dark:border-slate-700"
+                    } rounded-xl text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-indigo-500`}
+                  />
+                  {nameError && <p className="text-red-500 text-[11px] mt-1">{nameError}</p>}
                 </div>
 
                 <div>
@@ -692,153 +869,191 @@ export default function WhatsAppTemplatesComponent() {
               </div>
             </div>
 
-            {/* 3. Message Body & Header */}
+            {/* STEP 4: PROMINENT HEADER SECTION (AVAILABLE ACROSS ALL TEMPLATE TYPES!) */}
             <div className="bg-white dark:bg-slate-800/90 border border-gray-200 dark:border-slate-700 rounded-3xl p-6 shadow-2xs flex flex-col gap-4">
-              <label className="block text-xs font-black uppercase text-gray-500 tracking-wider">
-                3. Message Content
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-200 tracking-wider">
+                  4. Header (Optional)
+                </label>
+                <span className="text-[11px] text-gray-400">
+                  Select header type: Text or Direct Image/Media Upload
+                </span>
+              </div>
 
-              {/* Standard Header (if standard) */}
-              {templateType === "STANDARD" && (
+              {/* Header Type Selector Buttons */}
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { type: "NONE", label: "None" },
+                  { type: "TEXT", label: "📝 Text" },
+                  { type: "IMAGE", label: "🖼️ Image (Upload / Paste)" },
+                  { type: "VIDEO", label: "🎥 Video" },
+                  { type: "DOCUMENT", label: "📄 Document / PDF" }
+                ].map((ht) => (
+                  <button
+                    key={ht.type}
+                    type="button"
+                    onClick={() => {
+                      setHeaderType(ht.type as any);
+                      if (ht.type === "NONE") {
+                        setHeaderContent("");
+                        setHeaderMediaPreview(null);
+                      }
+                    }}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-black transition border cursor-pointer ${
+                      headerType === ht.type
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                        : "bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-slate-700 hover:border-indigo-300"
+                    }`}
+                  >
+                    {ht.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* If Header is TEXT */}
+              {headerType === "TEXT" && (
                 <div>
-                  <label className="block text-xs font-black text-gray-700 dark:text-gray-300 uppercase mb-1.5">
-                    Header Format (Optional)
+                  <label className="block text-[11px] font-bold text-gray-600 dark:text-gray-300 uppercase mb-1">
+                    Header Text (Max 60 chars)
                   </label>
-                  <div className="flex gap-2 mb-2 flex-wrap">
-                    {["NONE", "TEXT", "IMAGE", "VIDEO", "DOCUMENT"].map((ht) => (
-                      <button
-                        key={ht}
-                        type="button"
-                        onClick={() => setHeaderType(ht)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-black transition border cursor-pointer ${
-                          headerType === ht
-                            ? "bg-indigo-600 text-white border-indigo-600"
-                            : "bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-slate-700 hover:border-indigo-400"
-                        }`}
-                      >
-                        {ht}
-                      </button>
-                    ))}
-                  </div>
-
-                  {headerType === "TEXT" && (
-                    <div>
-                      <input
-                        value={headerContent}
-                        onChange={(e) => setHeaderContent(e.target.value)}
-                        placeholder="Header text (max 60 chars)"
-                        maxLength={60}
-                        className="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                  )}
+                  <input
+                    value={headerContent}
+                    onChange={(e) => setHeaderContent(e.target.value)}
+                    placeholder="e.g. Exclusive Weekend Sale!"
+                    maxLength={60}
+                    className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
                 </div>
               )}
 
-              {/* Body Text */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-black text-gray-700 dark:text-gray-300 uppercase">
-                    {templateType === "CAROUSEL" ? "Carousel Intro Message" : "Message Body Text"}{" "}
-                    <span className="text-red-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={insertVariable}
-                    className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-bold transition hover:bg-indigo-100 flex items-center gap-1 cursor-pointer"
-                  >
-                    <Sparkles size={12} />
-                    <span>Insert Variable {"{{n}}"}</span>
-                  </button>
+              {/* If Header is IMAGE / VIDEO / DOCUMENT - DIRECT DRAG & DROP / CLICK UPLOAD / PASTE DIRECTLY */}
+              {(headerType === "IMAGE" || headerType === "VIDEO" || headerType === "DOCUMENT") && (
+                <div
+                  onPaste={(e) => handlePasteEvent(e, "HEADER")}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) handleFileProcess(file, "HEADER");
+                  }}
+                  className="p-5 border-2 border-dashed border-indigo-300 dark:border-indigo-800/80 bg-indigo-50/40 dark:bg-indigo-950/20 rounded-2xl flex flex-col items-center justify-center gap-3 text-center transition hover:border-indigo-500 cursor-pointer relative"
+                  onClick={() => headerFileInputRef.current?.click()}
+                >
+                  {headerMediaPreview ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <img
+                        src={headerMediaPreview}
+                        alt="Header preview"
+                        className="max-h-40 rounded-xl object-contain shadow-md border border-gray-200 dark:border-slate-700"
+                      />
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                          <CheckCircle2 size={14} /> Media Ready
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setHeaderContent("");
+                            setHeaderMediaPreview(null);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-300 text-xs font-bold hover:bg-red-200 cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                        <Upload size={24} />
+                      </div>
+                      <div>
+                        <div className="text-xs font-black text-gray-800 dark:text-white">
+                          Click to Upload, Drag & Drop, or Paste Directly (Ctrl+V)
+                        </div>
+                        <div className="text-[11px] text-gray-500 mt-0.5">
+                          Supports PNG, JPG, WEBP, MP4, and PDF
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="px-3.5 py-1.5 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-sm"
+                      >
+                        Choose File
+                      </button>
+                    </>
+                  )}
                 </div>
-                <textarea
-                  value={bodyText}
-                  onChange={(e) => setBodyText(e.target.value)}
-                  rows={4}
-                  maxLength={META_LIMITS.BODY_MAX}
-                  placeholder={
-                    templateType === "CAROUSEL"
-                      ? "Check out our top sports collections this festive season:"
-                      : "Hi {{1}}, your order {{2}} has been confirmed! Track it here: {{3}}"
-                  }
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl text-xs font-sans outline-none focus:ring-2 focus:ring-indigo-500 leading-relaxed"
-                />
-                <p className="text-[10px] text-gray-400 text-right mt-1">
-                  {bodyText.length}/{META_LIMITS.BODY_MAX}
-                </p>
-              </div>
+              )}
+            </div>
 
-              {/* Footer */}
-              <div>
-                <label className="block text-xs font-black text-gray-700 dark:text-gray-300 uppercase mb-1.5">
-                  Footer (Optional, max 60 chars)
+            {/* STEP 5: MESSAGE BODY CONTENT */}
+            <div className="bg-white dark:bg-slate-800/90 border border-gray-200 dark:border-slate-700 rounded-3xl p-6 shadow-2xs flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black uppercase text-gray-700 dark:text-gray-300">
+                  5. {templateType === "CAROUSEL" ? "Carousel Introductory Message" : "Message Body Text"}{" "}
+                  <span className="text-red-500">*</span>
                 </label>
-                <input
-                  value={footerText}
-                  onChange={(e) => setFooterText(e.target.value)}
-                  placeholder="e.g. 11FIT Sports | Reply STOP to opt out"
-                  maxLength={60}
-                  className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+                <button
+                  type="button"
+                  onClick={insertVariable}
+                  className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-bold transition hover:bg-indigo-100 flex items-center gap-1 cursor-pointer"
+                >
+                  <Sparkles size={12} />
+                  <span>Insert Variable {"{{n}}"}</span>
+                </button>
               </div>
 
-              {/* LTO Coupon Code input */}
+              <textarea
+                value={bodyText}
+                onChange={(e) => setBodyText(e.target.value)}
+                rows={4}
+                maxLength={META_LIMITS.BODY_MAX}
+                placeholder={
+                  category === "UTILITY"
+                    ? "Hi {{1}}, your order {{2}} has been confirmed! Total amount: {{3}}"
+                    : "Hi {{1}}, get FLAT 30% OFF on all premium fitness gear today only! Use code: {{2}}"
+                }
+                className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl text-xs font-sans outline-none focus:ring-2 focus:ring-indigo-500 leading-relaxed"
+              />
+              <p className="text-[10px] text-gray-400 text-right">
+                {bodyText.length}/{META_LIMITS.BODY_MAX}
+              </p>
+
+              {/* Coupon Code Input for LTO */}
               {templateType === "LTO_COUPON" && (
                 <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-800 flex flex-col gap-2">
                   <label className="text-xs font-black text-emerald-900 dark:text-emerald-200 uppercase flex items-center gap-1.5">
                     <Tag size={13} />
                     Offer Discount / Coupon Code
                   </label>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
                     <input
                       value={couponCode}
                       onChange={(e) => setCouponCode(e.target.value.toUpperCase().replace(/\s+/g, ""))}
                       placeholder="e.g. FLAT30"
                       className="px-4 py-2 bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-700 rounded-xl text-xs font-mono font-black text-emerald-700 dark:text-emerald-300 outline-none w-48 uppercase"
                     />
-                    <span className="text-[11px] text-emerald-700 dark:text-emerald-300 self-center">
+                    <span className="text-[11px] text-emerald-700 dark:text-emerald-300">
                       Recipients get a 1-tap "Copy Code" button in WhatsApp!
                     </span>
                   </div>
                 </div>
               )}
-
-              {/* Catalog ID input */}
-              {templateType === "CATALOG" && (
-                <div className="p-4 bg-amber-50 dark:bg-amber-950/40 rounded-2xl border border-amber-200 dark:border-amber-800 flex flex-col gap-2">
-                  <label className="text-xs font-black text-amber-900 dark:text-amber-200 uppercase flex items-center gap-1.5">
-                    <ShoppingBag size={13} />
-                    Meta Commerce / Shopify Catalog Details
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <input
-                      value={catalogButtonText}
-                      onChange={(e) => setCatalogButtonText(e.target.value)}
-                      placeholder="Catalog Button (e.g. View Catalog)"
-                      className="px-3.5 py-2 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-xl text-xs font-bold"
-                    />
-                    <input
-                      value={catalogId}
-                      onChange={(e) => setCatalogId(e.target.value)}
-                      placeholder="Catalog ID (Optional)"
-                      className="px-3.5 py-2 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-xl text-xs font-mono"
-                    />
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* 4. CAROUSEL CARDS STUDIO (Only when Carousel selected) */}
+            {/* STEP 6: CAROUSEL CARDS STUDIO (Only when Carousel is selected) */}
             {templateType === "CAROUSEL" && (
               <div className="bg-white dark:bg-slate-800/90 border border-gray-200 dark:border-slate-700 rounded-3xl p-6 shadow-2xs flex flex-col gap-5">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div>
                     <label className="block text-xs font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1.5">
                       <Layers size={14} />
-                      4. Carousel Product Cards ({carouselCards.length}/10)
+                      6. Carousel Product Cards ({carouselCards.length}/10)
                     </label>
                     <p className="text-[11px] text-gray-500 mt-0.5">
-                      Configure each swipeable card with product image, description, and direct CTA buttons.
+                      Upload or paste product images directly for each card with custom titles and buttons.
                     </p>
                   </div>
 
@@ -894,17 +1109,48 @@ export default function WhatsAppTemplatesComponent() {
                       </span>
                     </div>
 
-                    {/* Image / Media URL */}
+                    {/* DIRECT DRAG & DROP / CLICK UPLOAD / PASTE FOR CAROUSEL CARD IMAGE */}
                     <div>
                       <label className="block text-[11px] font-bold text-gray-600 dark:text-gray-300 uppercase mb-1">
-                        Card Image URL
+                        Card Product Image (Upload or Paste Directly)
                       </label>
-                      <input
-                        value={carouselCards[activeCarouselCardIndex].mediaUrl}
-                        onChange={(e) => updateActiveCard("mediaUrl", e.target.value)}
-                        placeholder="https://yourstore.com/product.jpg"
-                        className="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-mono outline-none"
-                      />
+                      <div
+                        onPaste={(e) => handlePasteEvent(e, "CAROUSEL_CARD", activeCarouselCardIndex)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const file = e.dataTransfer.files?.[0];
+                          if (file) handleFileProcess(file, "CAROUSEL_CARD", activeCarouselCardIndex);
+                        }}
+                        onClick={() => cardFileInputRef.current?.click()}
+                        className="p-4 border-2 border-dashed border-purple-300 dark:border-purple-800 rounded-2xl bg-white dark:bg-slate-800 flex items-center gap-4 cursor-pointer hover:border-purple-500 transition"
+                      >
+                        {carouselCards[activeCarouselCardIndex].mediaUrl ? (
+                          <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-700">
+                            <img
+                              src={carouselCards[activeCarouselCardIndex].mediaUrl}
+                              alt="Card media"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-16 h-16 rounded-xl bg-purple-100 dark:bg-purple-900/50 text-purple-600 flex items-center justify-center flex-shrink-0">
+                            <ImageIcon size={24} />
+                          </div>
+                        )}
+
+                        <div className="flex-1 text-left">
+                          <div className="text-xs font-black text-gray-800 dark:text-white">
+                            Click to Upload or Paste Image (Ctrl+V)
+                          </div>
+                          <div className="text-[11px] text-gray-500 mt-0.5">
+                            Auto-fit to 1:1 square for WhatsApp carousels
+                          </div>
+                          <span className="inline-block mt-2 px-2.5 py-1 bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 rounded-lg text-[10px] font-bold border border-purple-200 dark:border-purple-800">
+                            Change Image
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Product Title / Header */}
@@ -993,12 +1239,31 @@ export default function WhatsAppTemplatesComponent() {
               </div>
             )}
 
-            {/* 5. Buttons (For Standard Template) */}
-            {templateType === "STANDARD" && (
+            {/* STEP 7: PROMINENT FOOTER SECTION (AVAILABLE ACROSS ALL TEMPLATE TYPES!) */}
+            <div className="bg-white dark:bg-slate-800/90 border border-gray-200 dark:border-slate-700 rounded-3xl p-6 shadow-2xs flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300">
+                  7. Footer (Optional)
+                </label>
+                <span className="text-[10px] text-gray-400">
+                  {footerText.length}/{META_LIMITS.FOOTER_MAX} chars
+                </span>
+              </div>
+              <input
+                value={footerText}
+                onChange={(e) => setFooterText(e.target.value)}
+                placeholder="e.g. 11FIT Sports | Reply STOP to opt out"
+                maxLength={META_LIMITS.FOOTER_MAX}
+                className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+              />
+            </div>
+
+            {/* STEP 8: INTERACTIVE BUTTONS (FOR STANDARD & UTILITY TEMPLATES) */}
+            {templateType !== "CAROUSEL" && (
               <div className="bg-white dark:bg-slate-800/90 border border-gray-200 dark:border-slate-700 rounded-3xl p-6 shadow-2xs flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-black uppercase text-gray-500 tracking-wider">
-                    4. Interactive Buttons (Max 3)
+                    8. Interactive Buttons (Max 3)
                   </label>
                   <div className="flex gap-1.5">
                     <button
@@ -1028,7 +1293,7 @@ export default function WhatsAppTemplatesComponent() {
                 {buttons.map((btn, idx) => (
                   <div key={idx} className="flex gap-2 items-center">
                     <span className="px-2 py-1 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-bold">
-                      {btn.type === "QUICK_REPLY" ? "↩️ QR" : btn.type === "URL" ? "🔗 URL" : "📞 Call"}
+                      {btn.type === "QUICK_REPLY" ? "↩️ QR" : btn.type === "URL" ? "🔗 URL" : btn.type === "COPY_CODE" ? "🏷️ Code" : "📞 Call"}
                     </span>
                     <input
                       value={btn.text}
@@ -1077,7 +1342,7 @@ export default function WhatsAppTemplatesComponent() {
                   </span>
                 </div>
                 <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-400 text-[10px] font-black uppercase">
-                  Meta iOS / Android View
+                  {category} • Meta View
                 </span>
               </div>
 
@@ -1102,28 +1367,56 @@ export default function WhatsAppTemplatesComponent() {
 
                 {/* WhatsApp Chat Area */}
                 <div className="p-3 flex flex-col gap-3 min-h-[380px] max-h-[500px] overflow-y-auto">
-                  {/* Introductory Chat Bubble */}
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl rounded-tr-xs p-3 shadow-sm text-xs text-gray-900 dark:text-gray-100 max-w-[92%] flex flex-col gap-1.5 self-start">
-                    {headerContent && templateType === "STANDARD" && (
-                      <div className="font-black text-xs pb-1 border-b border-gray-100 dark:border-slate-700">
+                  {/* Chat Message Bubble */}
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl rounded-tr-xs p-3 shadow-sm text-xs text-gray-900 dark:text-gray-100 max-w-[95%] flex flex-col gap-2 self-start">
+                    
+                    {/* Header Display */}
+                    {headerType === "TEXT" && headerContent && (
+                      <div className="font-black text-xs pb-1.5 border-b border-gray-100 dark:border-slate-700 text-gray-900 dark:text-white">
                         {headerContent}
                       </div>
                     )}
 
+                    {headerType === "IMAGE" && headerMediaPreview && (
+                      <div className="rounded-xl overflow-hidden max-h-40 bg-gray-100 dark:bg-slate-700">
+                        <img
+                          src={headerMediaPreview}
+                          alt="Header media preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+
+                    {headerType === "VIDEO" && (
+                      <div className="h-32 rounded-xl bg-gray-900 text-white flex items-center justify-center gap-2 text-xs font-bold">
+                        <Video size={20} />
+                        <span>Video Header</span>
+                      </div>
+                    )}
+
+                    {headerType === "DOCUMENT" && (
+                      <div className="p-2.5 rounded-xl bg-gray-100 dark:bg-slate-700 flex items-center gap-2 text-xs font-bold">
+                        <FileCheck size={18} className="text-indigo-600" />
+                        <span>Attached Document / PDF</span>
+                      </div>
+                    )}
+
+                    {/* Message Body */}
                     <div className="whitespace-pre-wrap leading-relaxed text-xs">
                       {getRenderedPreviewText(bodyText) || (
-                        <span className="text-gray-400 italic">Start typing body text...</span>
+                        <span className="text-gray-400 italic">Enter message body...</span>
                       )}
                     </div>
 
+                    {/* Footer */}
                     {footerText && (
                       <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 italic">
                         {footerText}
                       </div>
                     )}
 
-                    {/* Standard CTA Buttons inside bubble if not carousel */}
-                    {templateType === "STANDARD" && buttons.length > 0 && (
+                    {/* Standard CTA Buttons inside bubble */}
+                    {templateType !== "CAROUSEL" && buttons.length > 0 && (
                       <div className="flex flex-col gap-1.5 mt-2 pt-2 border-t border-gray-100 dark:border-slate-700">
                         {buttons.map((b, i) => (
                           <div
@@ -1150,21 +1443,13 @@ export default function WhatsAppTemplatesComponent() {
                       </div>
                     )}
 
-                    {/* Catalog MPM Button */}
-                    {templateType === "CATALOG" && (
-                      <div className="mt-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl py-2 px-3 text-center text-xs font-black shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer">
-                        <ShoppingBag size={14} />
-                        <span>{catalogButtonText || "View Catalog"}</span>
-                      </div>
-                    )}
-
                     <div className="flex items-center justify-end gap-1 text-[9px] text-gray-400 mt-1">
                       <span>{liveCurrentTime}</span>
                       <CheckCheck size={12} className="text-sky-500 stroke-[2.5]" />
                     </div>
                   </div>
 
-                  {/* CAROUSEL SWIPEABLE PREVIEW (Rendered side-by-side cards) */}
+                  {/* CAROUSEL SWIPEABLE PREVIEW */}
                   {templateType === "CAROUSEL" && (
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center justify-between text-[10px] font-bold text-purple-700 dark:text-purple-300">
@@ -1231,11 +1516,11 @@ export default function WhatsAppTemplatesComponent() {
 
               {/* Meta Approval SLA Box */}
               <div className="p-3.5 bg-indigo-50 dark:bg-indigo-950/40 rounded-2xl border border-indigo-100 dark:border-indigo-900/60 text-[11px] text-indigo-900 dark:text-indigo-200 leading-relaxed">
-                <strong>Meta Approval Guidelines:</strong>
+                <strong>Meta Approval Rules:</strong>
                 <ul className="list-disc pl-4 mt-1 space-y-0.5 text-[10px]">
-                  <li>Carousel templates must have 2 to 10 product cards.</li>
-                  <li>No promotional claims with excessive capitalization.</li>
-                  <li>Review is automated by Meta AI and takes 2-15 minutes.</li>
+                  <li>Utility messages must NOT contain marketing or promotional content.</li>
+                  <li>Carousel cards must have between 2 and 10 cards.</li>
+                  <li>Images are verified automatically by Meta AI within 2-15 minutes.</li>
                 </ul>
               </div>
             </div>
@@ -1283,7 +1568,7 @@ export default function WhatsAppTemplatesComponent() {
             Meta Message Templates & Live Preview
           </h2>
           <p className="text-gray-500 text-xs mt-0.5">
-            Meta Cloud API verified templates. Supports Standard, Product Carousel (Swipeable), Catalog, & Coupon templates.
+            Meta Cloud API verified templates. Supports Standard, Product Carousel (Swipeable), and Coupon templates.
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
