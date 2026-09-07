@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Send,
   Plus,
@@ -27,9 +27,6 @@ import {
   Radio,
   ExternalLink,
   MessageSquare,
-  Flame,
-  Zap,
-  Snowflake,
   UploadCloud,
   FileText
 } from "lucide-react";
@@ -47,6 +44,7 @@ export default function WhatsAppBroadcastsComponent() {
   const [templates, setTemplates] = useState<any[]>([]);
   const [segments, setSegments] = useState<any[]>([]);
   const [tagSegments, setTagSegments] = useState<any[]>([]);
+  const [contacts, setContacts] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
@@ -63,9 +61,10 @@ export default function WhatsAppBroadcastsComponent() {
   const [templateCategoryFilter, setTemplateCategoryFilter] = useState<string>("ALL");
 
   // Audience State
-  const [audienceType, setAudienceType] = useState<"ALL" | "HOT" | "WARM" | "COLD" | "LEADS" | "TAGS" | "CUSTOM">("ALL");
+  const [audienceType, setAudienceType] = useState<"ALL" | "TAGS" | "CUSTOM">("ALL");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [customPhonesInput, setCustomPhonesInput] = useState<string>("");
+  const [previewSearchQuery, setPreviewSearchQuery] = useState<string>("");
 
   // Variable Mappings & Media State
   const [variableMappings, setVariableMappings] = useState<Array<{ varIndex: number; mappedTo: string; staticValue: string }>>([]);
@@ -106,6 +105,7 @@ export default function WhatsAppBroadcastsComponent() {
       if (segRes.success) {
         if (segRes.segments) setSegments(segRes.segments);
         if (segRes.tagSegments) setTagSegments(segRes.tagSegments);
+        if (segRes.contacts) setContacts(segRes.contacts);
       }
     } catch (e) {
       console.error(e);
@@ -143,6 +143,7 @@ export default function WhatsAppBroadcastsComponent() {
     setAudienceType("ALL");
     setSelectedTags([]);
     setCustomPhonesInput("");
+    setPreviewSearchQuery("");
     setIsScheduled(false);
     setScheduledAt("");
     setHeaderMediaUrl("");
@@ -235,27 +236,60 @@ export default function WhatsAppBroadcastsComponent() {
     }
   };
 
-  // Estimated audience counter helper
-  const getEstimatedAudienceCount = () => {
+  // Filtered contacts based on audience selection
+  const filteredAudienceContacts = useMemo(() => {
     if (audienceType === "ALL") {
-      return segments.find((s) => s.key === "ALL")?.count || 0;
+      return contacts;
     }
-    if (audienceType === "HOT") return segments.find((s) => s.key === "HOT")?.count || 0;
-    if (audienceType === "WARM") return segments.find((s) => s.key === "WARM")?.count || 0;
-    if (audienceType === "COLD") return segments.find((s) => s.key === "COLD")?.count || 0;
-    if (audienceType === "LEADS") return segments.find((s) => s.key === "LEADS")?.count || 0;
     if (audienceType === "TAGS") {
-      return tagSegments
-        .filter((t) => selectedTags.includes(t.tagName))
-        .reduce((sum, t) => sum + t.count, 0);
+      if (selectedTags.length === 0) return [];
+      return contacts.filter((c) => {
+        if (!c.tags) return false;
+        const cTags = c.tags.split(",").map((t: string) => t.trim().toLowerCase());
+        return selectedTags.some((st) => cTags.includes(st.toLowerCase()));
+      });
     }
     if (audienceType === "CUSTOM") {
-      return customPhonesInput
+      const rawPhones = customPhonesInput
         .split(/[\n,]+/)
-        .map((p) => p.trim())
-        .filter(Boolean).length;
+        .map((p) => p.replace(/\D/g, ""))
+        .filter((p) => p.length >= 10);
+      return rawPhones.map((p, idx) => {
+        const match = contacts.find((c) => (c.mobile || "").replace(/\D/g, "").endsWith(p.slice(-10)));
+        return {
+          id: match?.id || `custom-${idx}`,
+          contactPerson: match?.contactPerson || "Custom Recipient",
+          businessName: match?.businessName || "",
+          mobile: p,
+          city: match?.city || "-",
+          tags: match?.tags || "Manual Entry"
+        };
+      });
     }
-    return 0;
+    return [];
+  }, [audienceType, selectedTags, customPhonesInput, contacts]);
+
+  // Preview search filtering
+  const searchedPreviewContacts = useMemo(() => {
+    if (!previewSearchQuery.trim()) return filteredAudienceContacts;
+    const q = previewSearchQuery.toLowerCase().trim();
+    return filteredAudienceContacts.filter(
+      (c) =>
+        (c.contactPerson && c.contactPerson.toLowerCase().includes(q)) ||
+        (c.businessName && c.businessName.toLowerCase().includes(q)) ||
+        (c.mobile && c.mobile.includes(q)) ||
+        (c.city && c.city.toLowerCase().includes(q)) ||
+        (c.tags && c.tags.toLowerCase().includes(q))
+    );
+  }, [filteredAudienceContacts, previewSearchQuery]);
+
+  const visiblePreviewContacts = useMemo(() => {
+    return searchedPreviewContacts.slice(0, 50);
+  }, [searchedPreviewContacts]);
+
+  // Estimated audience counter helper
+  const getEstimatedAudienceCount = () => {
+    return filteredAudienceContacts.length;
   };
 
   // Filtered campaigns
@@ -754,18 +788,15 @@ export default function WhatsAppBroadcastsComponent() {
               {/* STEP 2: SELECT AUDIENCE */}
               {/* ----------------------------------------------------------------- */}
               {currentStep === 2 && (
-                <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-2">
                       Choose Broadcast Audience Segment
                     </label>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       {[
                         { type: "ALL", label: "All Contacts", icon: <Users size={16} /> },
-                        { type: "HOT", label: "Hot Leads 🔥", icon: <Flame size={16} /> },
-                        { type: "WARM", label: "Warm Leads ⚡", icon: <Zap size={16} /> },
-                        { type: "COLD", label: "Cold Leads ❄️", icon: <Snowflake size={16} /> },
                         { type: "TAGS", label: "Filter by Tags 🏷️", icon: <Tag size={16} /> },
                         { type: "CUSTOM", label: "Paste Numbers / CSV", icon: <UploadCloud size={16} /> }
                       ].map((item) => (
@@ -811,8 +842,8 @@ export default function WhatsAppBroadcastsComponent() {
                                 }}
                                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition border ${
                                   isSelected
-                                    ? "bg-indigo-600 text-white border-indigo-600"
-                                    : "bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-slate-700"
+                                    ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                                    : "bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-slate-700 hover:border-indigo-300"
                                 }`}
                               >
                                 <span>{t.label}</span>
@@ -833,28 +864,120 @@ export default function WhatsAppBroadcastsComponent() {
                         Paste Mobile Numbers (Comma or Newline Separated):
                       </label>
                       <textarea
-                        rows={4}
+                        rows={3}
                         value={customPhonesInput}
                         onChange={(e) => setCustomPhonesInput(e.target.value)}
                         placeholder="919876543210&#10;918888877777&#10;919999900000"
-                        className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-mono outline-none"
+                        className="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-mono outline-none"
                       />
                     </div>
                   )}
 
                   {/* Audience Reach Calculation Banner */}
-                  <div className="p-4 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl border border-emerald-200 dark:border-emerald-800/30 flex items-center justify-between">
+                  <div className="p-3.5 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl border border-emerald-200 dark:border-emerald-800/30 flex items-center justify-between">
                     <div>
-                      <div className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase">
+                      <div className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wide">
                         Estimated Audience Reach
                       </div>
                       <div className="text-xl font-extrabold text-emerald-700 dark:text-emerald-400 mt-0.5">
-                        {getEstimatedAudienceCount().toLocaleString()} Contacts
+                        {filteredAudienceContacts.length.toLocaleString()} Contacts
                       </div>
                     </div>
-                    <span className="text-xs text-emerald-700 dark:text-emerald-400 font-bold px-3 py-1 bg-white dark:bg-slate-800 rounded-lg shadow-2xs">
+                    <span className="text-xs text-emerald-700 dark:text-emerald-400 font-bold px-3 py-1 bg-white dark:bg-slate-800 rounded-lg shadow-2xs border border-emerald-100 dark:border-emerald-900/40">
                       100% Opt-in Direct Delivery
                     </span>
+                  </div>
+
+                  {/* Filtered Customer List Preview */}
+                  <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-2xs">
+                    <div className="px-3.5 py-2.5 bg-gray-50/90 dark:bg-slate-800/90 border-b border-gray-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Users size={14} className="text-indigo-600 dark:text-indigo-400" />
+                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wide">
+                          Target Customers Preview
+                        </span>
+                        <span className="text-[11px] font-bold px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded-full font-mono">
+                          {filteredAudienceContacts.length} contacts
+                        </span>
+                      </div>
+                      {filteredAudienceContacts.length > 5 && (
+                        <div className="relative w-44 sm:w-52">
+                          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                          <input
+                            type="text"
+                            value={previewSearchQuery}
+                            onChange={(e) => setPreviewSearchQuery(e.target.value)}
+                            placeholder="Filter in preview..."
+                            className="w-full pl-7 pr-2.5 py-1 text-xs bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {filteredAudienceContacts.length === 0 ? (
+                      <div className="p-6 text-center text-gray-400 text-xs">
+                        {audienceType === "TAGS" && selectedTags.length === 0
+                          ? "Select at least one tag above to view matching contacts."
+                          : "No contacts match the selected audience filter."}
+                      </div>
+                    ) : (
+                      <div className="max-h-52 overflow-y-auto divide-y divide-gray-100 dark:divide-slate-800 text-xs">
+                        <table className="w-full text-left border-collapse">
+                          <thead className="bg-gray-50/80 dark:bg-slate-800/80 text-[10px] font-bold text-gray-500 uppercase sticky top-0 backdrop-blur-sm z-10 border-b border-gray-100 dark:border-slate-800">
+                            <tr>
+                              <th className="py-2 px-3">Customer Name</th>
+                              <th className="py-2 px-3">Mobile / WhatsApp</th>
+                              <th className="py-2 px-3">City</th>
+                              <th className="py-2 px-3">Tags</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 dark:divide-slate-800/60">
+                            {visiblePreviewContacts.map((contact, idx) => (
+                              <tr key={contact.id || idx} className="hover:bg-gray-50/60 dark:hover:bg-slate-800/40 transition">
+                                <td className="py-2 px-3 font-semibold text-gray-900 dark:text-gray-100">
+                                  {contact.contactPerson || contact.businessName || "Customer"}
+                                  {contact.businessName && contact.contactPerson && contact.businessName !== contact.contactPerson && (
+                                    <span className="block text-[10px] font-normal text-gray-400 font-sans">
+                                      {contact.businessName}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2 px-3 font-mono text-gray-600 dark:text-gray-300">
+                                  {contact.mobile || contact.whatsappNumber || "-"}
+                                </td>
+                                <td className="py-2 px-3 text-gray-500 dark:text-gray-400">
+                                  {contact.city || "-"}
+                                </td>
+                                <td className="py-2 px-3">
+                                  <div className="flex flex-wrap gap-1 max-w-[200px]">
+                                    {contact.tags ? (
+                                      contact.tags
+                                        .split(",")
+                                        .slice(0, 2)
+                                        .map((t: string, ti: number) => (
+                                          <span
+                                            key={ti}
+                                            className="px-1.5 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 rounded text-[10px] font-medium"
+                                          >
+                                            {t.trim()}
+                                          </span>
+                                        ))
+                                    ) : (
+                                      <span className="text-gray-400 text-[10px]">-</span>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {searchedPreviewContacts.length > 50 && (
+                          <div className="p-2 text-center text-[11px] text-gray-500 bg-gray-50/50 dark:bg-slate-800/30 border-t border-gray-100 dark:border-slate-800 font-medium">
+                            Showing first 50 of {searchedPreviewContacts.length} contacts
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

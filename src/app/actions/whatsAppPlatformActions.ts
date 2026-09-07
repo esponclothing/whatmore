@@ -2078,17 +2078,27 @@ export async function launchWhatsAppBroadcastAction(data: {
 // ---------------------------------------------------------
 export async function getWhatsAppAudienceSegments() {
   try {
-    const [all, hot, warm, cold, leads, allCustomersWithTags] = await Promise.all([
+    const [all, allCustomers] = await Promise.all([
       prisma.customer.count({ where: { mobile: { not: '' } } }),
-      prisma.customer.count({ where: { temperature: 'HOT', mobile: { not: '' } } }),
-      prisma.customer.count({ where: { temperature: 'WARM', mobile: { not: '' } } }),
-      prisma.customer.count({ where: { temperature: 'COLD', mobile: { not: '' } } }),
-      prisma.customer.count({ where: { status: 'New Lead', mobile: { not: '' } } }),
-      prisma.customer.findMany({ select: { tags: true }, where: { mobile: { not: '' } } })
+      prisma.customer.findMany({
+        where: { mobile: { not: '' } },
+        select: {
+          id: true,
+          businessName: true,
+          contactPerson: true,
+          mobile: true,
+          whatsappNumber: true,
+          city: true,
+          tags: true,
+          status: true,
+          customerType: true
+        },
+        orderBy: { updatedAt: 'desc' }
+      })
     ]);
 
     const tagCounts: Record<string, number> = {};
-    allCustomersWithTags.forEach(c => {
+    allCustomers.forEach(c => {
       if (c.tags) {
         c.tags.split(',').map(t => t.trim()).filter(Boolean).forEach(t => {
           tagCounts[t] = (tagCounts[t] || 0) + 1;
@@ -2108,16 +2118,13 @@ export async function getWhatsAppAudienceSegments() {
     return {
       success: true,
       segments: [
-        { key: 'ALL', label: 'All Contacts', count: all },
-        { key: 'HOT', label: 'Hot Leads 🔥', count: hot },
-        { key: 'WARM', label: 'Warm Leads ⚡', count: warm },
-        { key: 'COLD', label: 'Cold Leads ❄️', count: cold },
-        { key: 'LEADS', label: 'New Enquiries ✨', count: leads }
+        { key: 'ALL', label: 'All Contacts', count: all }
       ],
-      tagSegments
+      tagSegments,
+      contacts: allCustomers
     };
   } catch (e: any) {
-    return { success: false, error: e.message, segments: [], tagSegments: [] };
+    return { success: false, error: e.message, segments: [], tagSegments: [], contacts: [] };
   }
 }
 
