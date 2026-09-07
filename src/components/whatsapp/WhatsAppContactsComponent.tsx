@@ -36,6 +36,7 @@ export default function WhatsAppContactsComponent() {
   const router = useRouter();
   const [contacts, setContacts] = useState<any[]>([]);
   const [stats, setStats] = useState({ total: 0, done: 0, notDone: 0 });
+  const [isCrmConnected, setIsCrmConnected] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
 
   // Search and Filter states
@@ -48,12 +49,14 @@ export default function WhatsAppContactsComponent() {
   const [togglingCrmId, setTogglingCrmId] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [openingChatId, setOpeningChatId] = useState<string | null>(null);
 
   // Add Contact Modal
   const [showAddModal, setShowAddModal] = useState(false);
   const [newName, setNewName] = useState("");
   const [newMobile, setNewMobile] = useState("");
-  const [newTagsStr, setNewTagsStr] = useState("");
+  const [selectedNewContactTags, setSelectedNewContactTags] = useState<string[]>([]);
+  const [newCustomTagText, setNewCustomTagText] = useState("");
   const [newPushToCrm, setNewPushToCrm] = useState(true);
   const [savingContact, setSavingContact] = useState(false);
 
@@ -68,6 +71,19 @@ export default function WhatsAppContactsComponent() {
     setTimeout(() => setToastMsg(null), 4000);
   };
 
+  // Load system-wide tags on mount
+  useEffect(() => {
+    fetch("/api/whatsapp/tags")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && d.tags) {
+          const names = d.tags.map((t: any) => t.name);
+          setAllAvailableTags((prev) => Array.from(new Set([...prev, ...names])));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const fetchContacts = async () => {
     setLoading(true);
     const res = await getWhatsAppContactsListAction({
@@ -79,13 +95,16 @@ export default function WhatsAppContactsComponent() {
     if (res.success) {
       setContacts(res.contacts || []);
       if (res.stats) setStats(res.stats);
+      if (res.isCrmConnected !== undefined) {
+        setIsCrmConnected(Boolean(res.isCrmConnected));
+      }
 
       // Collect all unique tags for filter dropdown
       const tagsSet = new Set<string>();
       (res.contacts || []).forEach((c: any) => {
         (c.tags || []).forEach((t: string) => tagsSet.add(t));
       });
-      setAllAvailableTags(Array.from(tagsSet));
+      setAllAvailableTags((prev) => Array.from(new Set([...prev, ...Array.from(tagsSet)])));
     } else {
       showToast(res.error || "Failed to load contacts", "error");
     }
@@ -121,8 +140,6 @@ export default function WhatsAppContactsComponent() {
     }
   };
 
-  const [openingChatId, setOpeningChatId] = useState<string | null>(null);
-
   const handleOpenChat = async (contact: any) => {
     setOpeningChatId(contact.id);
     try {
@@ -154,6 +171,15 @@ export default function WhatsAppContactsComponent() {
     showToast("Phone number copied to clipboard!");
   };
 
+  const openAddModal = () => {
+    setNewName("");
+    setNewMobile("");
+    setSelectedNewContactTags([]);
+    setNewCustomTagText("");
+    setNewPushToCrm(true);
+    setShowAddModal(true);
+  };
+
   const handleCreateContact = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim() || !newMobile.trim()) {
@@ -162,16 +188,11 @@ export default function WhatsAppContactsComponent() {
     }
 
     setSavingContact(true);
-    const tags = newTagsStr
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-
     const res = await createWhatsAppContactAction({
       name: newName.trim(),
       mobile: newMobile.trim(),
-      tags,
-      pushToCrm: newPushToCrm
+      tags: selectedNewContactTags,
+      pushToCrm: isCrmConnected ? newPushToCrm : false
     });
     setSavingContact(false);
 
@@ -180,7 +201,8 @@ export default function WhatsAppContactsComponent() {
       setShowAddModal(false);
       setNewName("");
       setNewMobile("");
-      setNewTagsStr("");
+      setSelectedNewContactTags([]);
+      setNewCustomTagText("");
       setNewPushToCrm(true);
       fetchContacts();
     } else {
@@ -199,6 +221,9 @@ export default function WhatsAppContactsComponent() {
     const clean = customTagInput.trim();
     if (!editTagsList.includes(clean)) {
       setEditTagsList([...editTagsList, clean]);
+    }
+    if (!allAvailableTags.includes(clean)) {
+      setAllAvailableTags([...allAvailableTags, clean]);
     }
     setCustomTagInput("");
   };
@@ -281,7 +306,7 @@ export default function WhatsAppContactsComponent() {
             WhatsApp Contacts Directory
           </h2>
           <p className="text-gray-500 text-sm">
-            Manage customer names, mobile numbers, creation timestamps, custom tags, and CRM push status.
+            Manage customer names, mobile numbers, creation timestamps, custom tags{isCrmConnected ? ", and CRM push status" : ""}.
           </p>
         </div>
 
@@ -294,7 +319,7 @@ export default function WhatsAppContactsComponent() {
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Sync
           </button>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={openAddModal}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-sm"
           >
             <Plus size={16} /> Add Contact
@@ -303,7 +328,7 @@ export default function WhatsAppContactsComponent() {
       </div>
 
       {/* Metric Cards Banner */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className={`grid grid-cols-1 ${isCrmConnected ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-4`}>
         <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-5 flex items-center justify-between shadow-sm">
           <div>
             <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Contacts</div>
@@ -314,29 +339,47 @@ export default function WhatsAppContactsComponent() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-5 flex items-center justify-between shadow-sm">
-          <div>
-            <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-              Pushed to CRM (Done)
+        {isCrmConnected ? (
+          <>
+            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-5 flex items-center justify-between shadow-sm">
+              <div>
+                <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                  Pushed to CRM (Done)
+                </div>
+                <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">{stats.done}</div>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                <CheckCircle2 size={24} />
+              </div>
             </div>
-            <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">{stats.done}</div>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-            <CheckCircle2 size={24} />
-          </div>
-        </div>
 
-        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-5 flex items-center justify-between shadow-sm">
-          <div>
-            <div className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
-              Not Pushed (Pending)
+            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-5 flex items-center justify-between shadow-sm">
+              <div>
+                <div className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                  Not Pushed (Pending)
+                </div>
+                <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">{stats.notDone}</div>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                <Clock size={24} />
+              </div>
             </div>
-            <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">{stats.notDone}</div>
+          </>
+        ) : (
+          <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-5 flex items-center justify-between shadow-sm">
+            <div>
+              <div className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">
+                Total Tags Applied
+              </div>
+              <div className="text-2xl font-extrabold text-purple-600 dark:text-purple-400 mt-1">
+                {allAvailableTags.length}
+              </div>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+              <Tag size={24} />
+            </div>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-            <Clock size={24} />
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Filter and Search Bar */}
@@ -353,19 +396,21 @@ export default function WhatsAppContactsComponent() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* CRM Status Filter */}
-          <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700">
-            <span className="text-xs font-bold text-gray-500">CRM:</span>
-            <select
-              value={crmFilter}
-              onChange={(e) => setCrmFilter(e.target.value as any)}
-              className="bg-transparent text-xs font-semibold text-gray-700 dark:text-gray-200 outline-none cursor-pointer"
-            >
-              <option value="ALL">All Status</option>
-              <option value="DONE">✅ Done (Pushed)</option>
-              <option value="NOT_DONE">⏳ Not Done (Pending)</option>
-            </select>
-          </div>
+          {/* CRM Status Filter - only if CRM connected */}
+          {isCrmConnected && (
+            <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700">
+              <span className="text-xs font-bold text-gray-500">CRM:</span>
+              <select
+                value={crmFilter}
+                onChange={(e) => setCrmFilter(e.target.value as any)}
+                className="bg-transparent text-xs font-semibold text-gray-700 dark:text-gray-200 outline-none cursor-pointer"
+              >
+                <option value="ALL">All Status</option>
+                <option value="DONE">✅ Done (Pushed)</option>
+                <option value="NOT_DONE">⏳ Not Done (Pending)</option>
+              </select>
+            </div>
+          )}
 
           {/* Tag Filter */}
           {allAvailableTags.length > 0 && (
@@ -402,7 +447,7 @@ export default function WhatsAppContactsComponent() {
                 <th className="py-3.5 px-5">Mobile Number</th>
                 <th className="py-3.5 px-5">Created Time & Date</th>
                 <th className="py-3.5 px-5">Tags Applied</th>
-                <th className="py-3.5 px-5">Pushed to CRM</th>
+                {isCrmConnected && <th className="py-3.5 px-5">Pushed to CRM</th>}
                 <th className="py-3.5 px-5 text-right">Actions</th>
               </tr>
             </thead>
@@ -410,19 +455,19 @@ export default function WhatsAppContactsComponent() {
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-gray-400">
+                  <td colSpan={isCrmConnected ? 6 : 5} className="py-12 text-center text-gray-400">
                     <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-indigo-500" />
                     Loading contacts list...
                   </td>
                 </tr>
               ) : contacts.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-16 text-center text-gray-400">
+                  <td colSpan={isCrmConnected ? 6 : 5} className="py-16 text-center text-gray-400">
                     <Users size={40} className="mx-auto mb-3 opacity-30" />
                     <div className="font-bold text-gray-700 dark:text-gray-300">No contacts found</div>
                     <div className="text-xs mt-1">Try adjusting your search or create a new contact.</div>
                     <button
-                      onClick={() => setShowAddModal(true)}
+                      onClick={openAddModal}
                       className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm"
                     >
                       + Add First Contact
@@ -480,18 +525,30 @@ export default function WhatsAppContactsComponent() {
                       </div>
                     </td>
 
-                    {/* 4. Tags Applied */}
+                    {/* 4. Tags Applied - only show 1 tag and a "+N more" badge if more exist */}
                     <td className="py-3.5 px-5">
-                      <div className="flex items-center gap-1.5 flex-wrap max-w-xs">
+                      <div className="flex items-center gap-1.5 flex-nowrap">
                         {c.tags && c.tags.length > 0 ? (
-                          c.tags.map((t: string, idx: number) => (
+                          <>
+                            {/* First Tag */}
                             <span
-                              key={idx}
-                              className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-md text-[11px] font-bold"
+                              className="inline-flex items-center px-2 py-0.5 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-md text-[11px] font-bold truncate max-w-[150px]"
+                              title={c.tags[0]}
                             >
-                              🏷️ {t}
+                              🏷️ {c.tags[0]}
                             </span>
-                          ))
+
+                            {/* +N More button */}
+                            {c.tags.length > 1 && (
+                              <button
+                                onClick={() => openTagModal(c)}
+                                className="px-1.5 py-0.5 bg-gray-100 hover:bg-indigo-100 dark:bg-slate-700 dark:hover:bg-indigo-900/60 text-gray-600 hover:text-indigo-700 dark:text-gray-300 dark:hover:text-indigo-300 border border-gray-200 dark:border-slate-600 rounded-md text-[11px] font-extrabold transition shadow-2xs"
+                                title={`Click to view all ${c.tags.length} tags: ${c.tags.join(', ')}`}
+                              >
+                                +{c.tags.length - 1} more
+                              </button>
+                            )}
+                          </>
                         ) : (
                           <span className="text-xs text-gray-400 italic">No tags</span>
                         )}
@@ -506,41 +563,43 @@ export default function WhatsAppContactsComponent() {
                       </div>
                     </td>
 
-                    {/* 5. Pushed to CRM Status (DONE / NOT DONE) */}
-                    <td className="py-3.5 px-5">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleToggleCrm(c)}
-                          disabled={togglingCrmId === c.id}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold transition shadow-sm border ${
-                            c.pushedToCrm
-                              ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100"
-                              : "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 hover:bg-amber-100"
-                          }`}
-                          title="Click to toggle CRM push status"
-                        >
-                          {togglingCrmId === c.id ? (
-                            <RefreshCw size={12} className="animate-spin" />
-                          ) : c.pushedToCrm ? (
-                            <CheckCircle2 size={13} className="text-emerald-600" />
-                          ) : (
-                            <Clock size={13} className="text-amber-600" />
-                          )}
-                          <span>{c.pushedToCrm ? "DONE" : "NOT DONE"}</span>
-                        </button>
-
-                        {!c.pushedToCrm && (
+                    {/* 5. Pushed to CRM Status (DONE / NOT DONE) - only rendered if CRM connected */}
+                    {isCrmConnected && (
+                      <td className="py-3.5 px-5">
+                        <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleToggleCrm(c)}
                             disabled={togglingCrmId === c.id}
-                            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-sm"
-                            title="Push contact directly to connected CRM webhook"
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold transition shadow-sm border ${
+                              c.pushedToCrm
+                                ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100"
+                                : "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 hover:bg-amber-100"
+                            }`}
+                            title="Click to toggle CRM push status"
                           >
-                            Push to CRM
+                            {togglingCrmId === c.id ? (
+                              <RefreshCw size={12} className="animate-spin" />
+                            ) : c.pushedToCrm ? (
+                              <CheckCircle2 size={13} className="text-emerald-600" />
+                            ) : (
+                              <Clock size={13} className="text-amber-600" />
+                            )}
+                            <span>{c.pushedToCrm ? "DONE" : "NOT DONE"}</span>
                           </button>
-                        )}
-                      </div>
-                    </td>
+
+                          {!c.pushedToCrm && (
+                            <button
+                              onClick={() => handleToggleCrm(c)}
+                              disabled={togglingCrmId === c.id}
+                              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-sm"
+                              title="Push contact directly to connected CRM webhook"
+                            >
+                              Push to CRM
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
 
                     {/* 6. Actions */}
                     <td className="py-3.5 px-5 text-right">
@@ -622,35 +681,112 @@ export default function WhatsAppContactsComponent() {
                 />
               </div>
 
+              {/* Selectable Tags Section */}
               <div>
-                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5 uppercase">
-                  Tags (Comma Separated)
-                </label>
-                <input
-                  type="text"
-                  value={newTagsStr}
-                  onChange={(e) => setNewTagsStr(e.target.value)}
-                  placeholder="e.g. Wholesale, Hot Lead, VIP"
-                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">
+                    Select Tags
+                  </label>
+                  <span className="text-[11px] text-indigo-600 font-semibold">
+                    {selectedNewContactTags.length} selected
+                  </span>
+                </div>
+
+                {/* Selectable Tag Chips */}
+                <div className="flex flex-wrap gap-2 p-3 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl min-h-[50px] max-h-[140px] overflow-y-auto">
+                  {allAvailableTags.length === 0 && selectedNewContactTags.length === 0 ? (
+                    <span className="text-xs text-gray-400 italic">No tags created yet. Add one below.</span>
+                  ) : (
+                    Array.from(new Set([...allAvailableTags, ...selectedNewContactTags])).map((t) => {
+                      const isSelected = selectedNewContactTags.includes(t);
+                      return (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedNewContactTags(selectedNewContactTags.filter((tag) => tag !== t));
+                            } else {
+                              setSelectedNewContactTags([...selectedNewContactTags, t]);
+                            }
+                          }}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-2xs border ${
+                            isSelected
+                              ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                              : "bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-slate-700 hover:border-indigo-400 hover:text-indigo-600"
+                          }`}
+                        >
+                          <span>🏷️ {t}</span>
+                          {isSelected && <Check size={12} className="stroke-[3]" />}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Optional + Create New Tag inline */}
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    value={newCustomTagText}
+                    onChange={(e) => setNewCustomTagText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (newCustomTagText.trim()) {
+                          const clean = newCustomTagText.trim();
+                          if (!selectedNewContactTags.includes(clean)) {
+                            setSelectedNewContactTags([...selectedNewContactTags, clean]);
+                          }
+                          if (!allAvailableTags.includes(clean)) {
+                            setAllAvailableTags([...allAvailableTags, clean]);
+                          }
+                          setNewCustomTagText("");
+                        }
+                      }
+                    }}
+                    placeholder="Create a new tag..."
+                    className="flex-1 px-3 py-1.5 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (newCustomTagText.trim()) {
+                        const clean = newCustomTagText.trim();
+                        if (!selectedNewContactTags.includes(clean)) {
+                          setSelectedNewContactTags([...selectedNewContactTags, clean]);
+                        }
+                        if (!allAvailableTags.includes(clean)) {
+                          setAllAvailableTags([...allAvailableTags, clean]);
+                        }
+                        setNewCustomTagText("");
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-gray-100 dark:bg-slate-700 hover:bg-indigo-50 hover:text-indigo-600 text-gray-700 dark:text-gray-200 text-xs font-bold rounded-lg border border-gray-200 dark:border-slate-600 transition"
+                  >
+                    + Add Tag
+                  </button>
+                </div>
               </div>
 
-              <div className="p-3 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl border border-indigo-100 dark:border-indigo-500/20 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-indigo-950 dark:text-indigo-300">
-                    Push to CRM Immediately
+              {isCrmConnected && (
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl border border-indigo-100 dark:border-indigo-500/20 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-indigo-950 dark:text-indigo-300">
+                      Push to CRM Immediately
+                    </div>
+                    <div className="text-[11px] text-indigo-700 dark:text-indigo-400">
+                      Set CRM Status to DONE and sync to webhook.
+                    </div>
                   </div>
-                  <div className="text-[11px] text-indigo-700 dark:text-indigo-400">
-                    Set CRM Status to DONE and sync to webhook.
-                  </div>
+                  <input
+                    type="checkbox"
+                    checked={newPushToCrm}
+                    onChange={(e) => setNewPushToCrm(e.target.checked)}
+                    className="w-4 h-4 text-indigo-600 rounded cursor-pointer accent-indigo-600"
+                  />
                 </div>
-                <input
-                  type="checkbox"
-                  checked={newPushToCrm}
-                  onChange={(e) => setNewPushToCrm(e.target.checked)}
-                  className="w-4 h-4 text-indigo-600 rounded cursor-pointer accent-indigo-600"
-                />
-              </div>
+              )}
 
               <div className="pt-2 flex justify-end gap-2">
                 <button

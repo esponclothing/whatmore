@@ -3607,9 +3607,26 @@ export async function getWhatsAppContactsListAction(params?: {
     const doneCount = customers.filter(c => isContactPushed(c)).length;
     const notDoneCount = Math.max(0, totalCount - doneCount);
 
+    // Check if CRM integration is actively configured and connected
+    let isCrmConnected = false;
+    try {
+      const activeCrmIntegration = await prisma.whatsAppIntegration.findFirst({
+        where: {
+          isActive: true,
+          NOT: {
+            type: { in: ['META_CAPI', 'PIXEL'] }
+          }
+        }
+      });
+      if (activeCrmIntegration && activeCrmIntegration.url && activeCrmIntegration.url.trim().length > 0) {
+        isCrmConnected = true;
+      }
+    } catch (e) {}
+
     return {
       success: true,
       contacts: mappedContacts,
+      isCrmConnected,
       stats: {
         total: totalCount,
         done: doneCount,
@@ -3618,7 +3635,7 @@ export async function getWhatsAppContactsListAction(params?: {
     };
   } catch (error: any) {
     console.error("Error fetching WhatsApp contacts list:", error);
-    return { success: false, error: error.message, contacts: [], stats: { total: 0, done: 0, notDone: 0 } };
+    return { success: false, error: error.message, contacts: [], isCrmConnected: false, stats: { total: 0, done: 0, notDone: 0 } };
   }
 }
 
