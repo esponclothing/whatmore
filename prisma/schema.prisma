@@ -1411,6 +1411,9 @@ model WhatsAppTemplate {
   footerText       String?
   buttons          String?  // JSON array of buttons (CTA, QUICK_REPLY)
   variables        String?  // JSON array of dynamic CRM fields
+  templateType     String   @default("STANDARD") // STANDARD, CAROUSEL, CATALOG, LTO_COUPON
+  carouselCards    String?  // JSON array of up to 10 carousel cards
+  catalogId        String?  // Meta / Shopify Catalog ID
   rejectionReason  String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

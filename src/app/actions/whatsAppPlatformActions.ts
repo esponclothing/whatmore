@@ -1488,21 +1488,193 @@ export async function sendWhatsAppTemplateAction(
 
 export async function saveWhatsAppTemplateAction(data: any) {
   try {
-    const template = await prisma.whatsAppTemplate.create({
-      data: {
-        name: data.name.toLowerCase().replace(/\s+/g, '_'),
-        category: data.category || 'MARKETING',
+    const creds = await getMetaApiCredentials();
+    const templateName = data.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const templateType = data.templateType || 'STANDARD';
+    const category = data.category || 'MARKETING';
+    const language = data.language || 'en_US';
+
+    let metaSubmitted = false;
+    let metaTemplateId = null;
+
+    // Build Meta Graph API components payload
+    const components: any[] = [];
+
+    if (templateType === 'CAROUSEL') {
+      // 1. Carousel Introductory Body
+      if (data.bodyText) {
+        components.push({
+          type: 'BODY',
+          text: data.bodyText
+        });
+      }
+
+      // 2. Carousel Cards Array (Meta allows up to 10 cards)
+      const rawCards = Array.isArray(data.carouselCards) 
+        ? data.carouselCards 
+        : (typeof data.carouselCards === 'string' ? JSON.parse(data.carouselCards || '[]') : []);
+
+      const metaCards = rawCards.map((card: any) => {
+        const cardComponents: any[] = [];
+        
+        // Card Image/Video Header
+        cardComponents.push({
+          type: 'HEADER',
+          format: card.headerType || 'IMAGE'
+        });
+
+        // Card Body
+        cardComponents.push({
+          type: 'BODY',
+          text: card.bodyText || card.title || 'Product Card'
+        });
+
+        // Card Buttons
+        if (card.buttons && card.buttons.length > 0) {
+          cardComponents.push({
+            type: 'BUTTONS',
+            buttons: card.buttons.map((b: any) => {
+              if (b.type === 'URL') {
+                return { type: 'URL', text: b.text, url: b.url || 'https://11fit.in' };
+              }
+              return { type: 'QUICK_REPLY', text: b.text };
+            })
+          });
+        }
+
+        return { components: cardComponents };
+      });
+
+      if (metaCards.length > 0) {
+        components.push({
+          type: 'CAROUSEL',
+          cards: metaCards
+        });
+      }
+    } else if (templateType === 'CATALOG') {
+      // Catalog Template
+      if (data.bodyText) {
+        components.push({
+          type: 'BODY',
+          text: data.bodyText
+        });
+      }
+      if (data.footerText) {
+        components.push({
+          type: 'FOOTER',
+          text: data.footerText
+        });
+      }
+      components.push({
+        type: 'BUTTONS',
+        buttons: [
+          { type: 'CATALOG', text: data.catalogButtonText || 'View Catalog' }
+        ]
+      });
+    } else {
+      // Standard / LTO Template
+      if (data.headerType && data.headerType !== 'NONE') {
+        const headerObj: any = { type: 'HEADER', format: data.headerType };
+        if (data.headerType === 'TEXT' && data.headerContent) {
+          headerObj.text = data.headerContent;
+        }
+        components.push(headerObj);
+      }
+
+      if (data.bodyText) {
+        components.push({
+          type: 'BODY',
+          text: data.bodyText
+        });
+      }
+
+      if (data.footerText) {
+        components.push({
+          type: 'FOOTER',
+          text: data.footerText
+        });
+      }
+
+      const buttonsList = Array.isArray(data.buttons) ? data.buttons : [];
+      if (buttonsList.length > 0) {
+        components.push({
+          type: 'BUTTONS',
+          buttons: buttonsList.map((b: any) => {
+            if (b.type === 'URL') return { type: 'URL', text: b.text, url: b.url || 'https://11fit.in' };
+            if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone_number || '+917404388242' };
+            if (b.type === 'COPY_CODE') return { type: 'COPY_CODE', text: b.text, code: b.code || b.text };
+            return { type: 'QUICK_REPLY', text: b.text };
+          })
+        });
+      }
+    }
+
+    // Submit to Meta Graph API if active credentials exist
+    if (creds.isConnected && creds.wabaId) {
+      try {
+        const metaRes = await fetch(`https://graph.facebook.com/v21.0/${creds.wabaId}/message_templates`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${creds.accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: templateName,
+            category,
+            language,
+            components
+          })
+        });
+        const metaJson = await metaRes.json();
+        if (metaJson.id) {
+          metaSubmitted = true;
+          metaTemplateId = metaJson.id;
+        } else if (metaJson.error) {
+          console.warn("[saveWhatsAppTemplateAction] Meta submission response:", metaJson.error.message);
+        }
+      } catch (metaErr) {
+        console.warn("[saveWhatsAppTemplateAction] Meta API POST error:", metaErr);
+      }
+    }
+
+    // Persist to local database
+    const template = await prisma.whatsAppTemplate.upsert({
+      where: { id: metaTemplateId || `local_${templateName}` },
+      update: {
+        name: templateName,
+        category,
+        language,
         headerType: data.headerType || 'NONE',
-        headerContent: data.headerContent,
-        bodyText: data.bodyText,
-        footerText: data.footerText,
+        headerContent: data.headerContent || null,
+        bodyText: data.bodyText || '',
+        footerText: data.footerText || null,
         buttons: JSON.stringify(data.buttons || []),
         variables: JSON.stringify(data.variables || []),
-        status: 'APPROVED'
+        templateType,
+        carouselCards: data.carouselCards ? (typeof data.carouselCards === 'string' ? data.carouselCards : JSON.stringify(data.carouselCards)) : null,
+        catalogId: data.catalogId || null,
+        status: metaSubmitted ? 'PENDING' : 'APPROVED'
+      },
+      create: {
+        id: metaTemplateId || `local_${templateName}_${Date.now()}`,
+        name: templateName,
+        category,
+        language,
+        headerType: data.headerType || 'NONE',
+        headerContent: data.headerContent || null,
+        bodyText: data.bodyText || '',
+        footerText: data.footerText || null,
+        buttons: JSON.stringify(data.buttons || []),
+        variables: JSON.stringify(data.variables || []),
+        templateType,
+        carouselCards: data.carouselCards ? (typeof data.carouselCards === 'string' ? data.carouselCards : JSON.stringify(data.carouselCards)) : null,
+        catalogId: data.catalogId || null,
+        status: metaSubmitted ? 'PENDING' : 'APPROVED'
       }
     });
+
     revalidatePath('/whatsapp/templates');
-    return { success: true, template };
+    return { success: true, template, submitted: metaSubmitted };
   } catch (e: any) {
     return { success: false, error: e.message };
   }
