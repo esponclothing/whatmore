@@ -22,10 +22,20 @@ import {
 } from "@/app/actions/whatsAppPlatformActions";
 import { getPaymentGatewaySettings, savePaymentGatewaySettings } from "@/app/actions/paymentGatewayActions";
 import { getWhatsAppIntegrationsAction, createWhatsAppIntegrationAction, updateWhatsAppIntegrationAction, deleteWhatsAppIntegrationAction } from "@/app/actions/whatsAppIntegrationActions";
+import WhatsAppAIAutomationComponent from "@/components/whatsapp/WhatsAppAIAutomationComponent";
 
 
 export default function IntegrationsHubPage() {
   const [activeTab, setActiveTab] = useState("whatsapp");
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", tab);
+      window.history.replaceState({}, "", url.toString());
+    }
+  };
 
   // Meta CAPI Lead Value State
   const [metaCapiLeadValue, setMetaCapiLeadValue] = useState<number>(10000);
@@ -122,6 +132,11 @@ export default function IntegrationsHubPage() {
         const parsed = JSON.parse(decodeURIComponent(u.split("=")[1]));
         setCurrentUserRole(parsed.role || "");
         setCurrentUserEmail(parsed.email || "");
+      }
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam && ["whatsapp", "ai-automation", "shopify", "payment", "webhooks", "facebook"].includes(tabParam)) {
+        setActiveTab(tabParam);
       }
     } catch {}
     loadAllSettings();
@@ -534,19 +549,22 @@ const reloadTeams = async () => {
 
       {/* Tabs list bar */}
       <nav className="-mb-px flex space-x-8 overflow-x-auto border-b border-gray-200 dark:border-slate-700">
-        <button onClick={() => setActiveTab("whatsapp")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "whatsapp" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
+        <button onClick={() => handleTabChange("whatsapp")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "whatsapp" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
           WhatsApp API
         </button>
-        <button onClick={() => setActiveTab("shopify")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "shopify" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
+        <button onClick={() => handleTabChange("ai-automation")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "ai-automation" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
+          <Bot size={16} /> AI Automation
+        </button>
+        <button onClick={() => handleTabChange("shopify")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "shopify" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
           Shopify
         </button>
-        <button onClick={() => setActiveTab("payment")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "payment" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
+        <button onClick={() => handleTabChange("payment")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "payment" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
           Payment Gateways
         </button>
-        <button onClick={() => setActiveTab("webhooks")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "webhooks" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
+        <button onClick={() => handleTabChange("webhooks")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "webhooks" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
           Webhooks
         </button>
-        <button onClick={() => setActiveTab("facebook")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "facebook" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
+        <button onClick={() => handleTabChange("facebook")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "facebook" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
           <Target size={16} /> Facebook & Meta Ads
         </button>
       </nav>
@@ -659,6 +677,14 @@ const reloadTeams = async () => {
 
                   </div>
       )}
+
+      {/* 2. AI Automation Tab */}
+      {activeTab === "ai-automation" && (
+        <div className="w-full max-w-7xl">
+          <WhatsAppAIAutomationComponent embedded={true} />
+        </div>
+      )}
+
       {activeTab === "shopify" && (
         <div className="flex flex-col gap-8 w-full max-w-7xl">
           {/* Shopify Integration Card */}
