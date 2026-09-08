@@ -1655,8 +1655,46 @@ export async function saveWhatsAppTemplateAction(data: any) {
           { type: 'CALL_PERMISSION', text: 'Choose preference' }
         ]
       });
+    } else if (category === 'AUTHENTICATION') {
+      // Meta Authentication OTP Template
+      const bodyComp: any = {
+        type: 'BODY',
+        add_security_recommendation: data.authSecurityRecommendation !== false
+      };
+      if (data.authExpiryTime && data.authExpiryMinutes) {
+        bodyComp.code_expiration_minutes = Number(data.authExpiryMinutes);
+      }
+      components.push(bodyComp);
+
+      if (data.authCodeDelivery === 'ZERO_TAP' || data.authCodeDelivery === 'ONE_TAP') {
+        const firstApp = data.authApps?.[0] || {};
+        components.push({
+          type: 'BUTTONS',
+          buttons: [
+            {
+              type: 'OTP',
+              otp_type: data.authCodeDelivery,
+              text: data.authCodeDelivery === 'ZERO_TAP' ? 'Auto-fill' : 'One-tap',
+              autofill_text: 'Auto-fill',
+              package_name: firstApp.packageName || data.authPackageName || 'com.esponsports.app',
+              signature_hash: firstApp.appSignatureHash || data.authAppSignatureHash || 'K4w8v9N2q1P'
+            }
+          ]
+        });
+      } else {
+        components.push({
+          type: 'BUTTONS',
+          buttons: [
+            {
+              type: 'OTP',
+              otp_type: 'COPY_CODE',
+              text: 'Copy code'
+            }
+          ]
+        });
+      }
     } else {
-      // Standard / LTO / Authentication / Default Template
+      // Standard / LTO / Default Template
       if (data.headerType && data.headerType !== 'NONE') {
         const headerObj: any = { type: 'HEADER', format: data.headerType };
         if (data.headerType === 'TEXT' && data.headerContent) {
@@ -1696,18 +1734,23 @@ export async function saveWhatsAppTemplateAction(data: any) {
     // Submit to Meta Graph API if active credentials exist
     if (creds.isConnected && creds.wabaId) {
       try {
+        const metaBody: any = {
+          name: templateName,
+          category,
+          language,
+          components
+        };
+        if (data.enableValidityPeriod && data.messageValidityPeriod) {
+          metaBody.message_send_ttl_seconds = Number(data.messageValidityPeriod) * 60;
+        }
+
         const metaRes = await fetch(`https://graph.facebook.com/v21.0/${creds.wabaId}/message_templates`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${creds.accessToken}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            name: templateName,
-            category,
-            language,
-            components
-          })
+          body: JSON.stringify(metaBody)
         });
         const metaJson = await metaRes.json();
         if (metaJson.id) {

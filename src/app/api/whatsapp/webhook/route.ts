@@ -236,6 +236,14 @@ export async function POST(req: NextRequest) {
         textContent = summary.trim();
       }
 
+      // Detect Button Clicks
+      const isButtonClick = Boolean(
+        msg.type === "button" ||
+        msg.button ||
+        (msg.type === "interactive" && msg.interactive?.type === "button_reply")
+      );
+      const clickedButtonTitle = msg.button?.text || msg.interactive?.button_reply?.title || null;
+
       // Feature: Intercept `buy_` buttons
       if (msg.interactive?.button_reply?.id?.startsWith("buy_")) {
          console.log(`[WhatsApp Webhook] Buy button clicked for ${msg.interactive.button_reply.id}`);
