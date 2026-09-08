@@ -1502,6 +1502,52 @@ export async function sendWhatsAppTemplateAction(
   }
 }
 
+export async function getMetaUploadHandle(accessToken: string, appIdOrWabaId: string, imageUrlOrBase64?: string): Promise<string | null> {
+  try {
+    let imageBuffer: Buffer;
+    let mimeType = 'image/jpeg';
+
+    if (imageUrlOrBase64 && imageUrlOrBase64.startsWith('data:')) {
+      const parts = imageUrlOrBase64.split(',');
+      imageBuffer = Buffer.from(parts[1], 'base64');
+      const mimeMatch = parts[0].match(/data:(.*?);/);
+      if (mimeMatch) mimeType = mimeMatch[1];
+    } else if (imageUrlOrBase64 && imageUrlOrBase64.startsWith('http')) {
+      try {
+        const res = await fetch(imageUrlOrBase64);
+        const arrayBuf = await res.arrayBuffer();
+        imageBuffer = Buffer.from(arrayBuf);
+        const cType = res.headers.get('content-type');
+        if (cType) mimeType = cType;
+      } catch {
+        imageBuffer = Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64');
+      }
+    } else {
+      imageBuffer = Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64');
+    }
+
+    const uploadSessionUrl = `https://graph.facebook.com/v21.0/app/uploads?file_length=${imageBuffer.length}&file_type=${encodeURIComponent(mimeType)}&access_token=${accessToken}`;
+    const sessionRes = await fetch(uploadSessionUrl, { method: 'POST' });
+    const sessionJson = await sessionRes.json();
+    if (!sessionJson.id) return null;
+
+    const binaryRes = await fetch(`https://graph.facebook.com/v21.0/${sessionJson.id}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `OAuth ${accessToken}`,
+        'file_offset': '0',
+        'Content-Type': mimeType
+      },
+      body: imageBuffer
+    });
+    const binaryJson = await binaryRes.json();
+    return binaryJson.h || null;
+  } catch (e) {
+    console.warn("[getMetaUploadHandle] Upload warning:", e);
+    return null;
+  }
+}
+
 export async function saveWhatsAppTemplateAction(data: any) {
   try {
     const creds = await getMetaApiCredentials();
@@ -1524,10 +1570,17 @@ export async function saveWhatsAppTemplateAction(data: any) {
     if (templateType === 'CAROUSEL' || templateType === 'IMAGE_CAROUSEL') {
       // 1. Carousel Introductory Body
       if (data.bodyText) {
-        components.push({
+        const bodyObj: any = {
           type: 'BODY',
           text: data.bodyText
-        });
+        };
+        const bodyMatches = (data.bodyText || '').match(/\{\{(\d+)\}\}/g);
+        if (bodyMatches && bodyMatches.length > 0) {
+          bodyObj.example = {
+            body_text: [bodyMatches.map((_: any, i: number) => `Sample ${i + 1}`)]
+          };
+        }
+        components.push(bodyObj);
       }
 
       // 2. Carousel Cards Array (Meta allows up to 10 cards)
@@ -1535,20 +1588,35 @@ export async function saveWhatsAppTemplateAction(data: any) {
         ? data.carouselCards 
         : (typeof data.carouselCards === 'string' ? JSON.parse(data.carouselCards || '[]') : []);
 
-      const metaCards = rawCards.map((card: any) => {
+      const metaCards: any[] = [];
+      for (const card of rawCards) {
         const cardComponents: any[] = [];
         
-        // Card Image/Video Header
-        cardComponents.push({
+        // Card Image/Video Header with Sample Handle
+        const cardHeader: any = {
           type: 'HEADER',
           format: card.headerType || 'IMAGE'
-        });
+        };
+        if (creds.isConnected && creds.accessToken) {
+          const handle = await getMetaUploadHandle(creds.accessToken, creds.wabaId, card.mediaUrl || card.image);
+          if (handle) {
+            cardHeader.example = { header_handle: [handle] };
+          }
+        }
+        cardComponents.push(cardHeader);
 
         // Card Body
-        cardComponents.push({
+        const cardBody: any = {
           type: 'BODY',
           text: card.bodyText || card.title || 'Product Card'
-        });
+        };
+        const cardBodyMatches = (card.bodyText || '').match(/\{\{(\d+)\}\}/g);
+        if (cardBodyMatches && cardBodyMatches.length > 0) {
+          cardBody.example = {
+            body_text: [cardBodyMatches.map((_: any, i: number) => `Sample ${i + 1}`)]
+          };
+        }
+        cardComponents.push(cardBody);
 
         // Card Buttons
         if (card.buttons && card.buttons.length > 0) {
@@ -1576,8 +1644,8 @@ export async function saveWhatsAppTemplateAction(data: any) {
           });
         }
 
-        return { components: cardComponents };
-      });
+        metaCards.push({ components: cardComponents });
+      }
 
       if (metaCards.length > 0) {
         components.push({
@@ -1732,17 +1800,35 @@ export async function saveWhatsAppTemplateAction(data: any) {
       // Standard / LTO / Default Template
       if (data.headerType && data.headerType !== 'NONE') {
         const headerObj: any = { type: 'HEADER', format: data.headerType };
-        if (data.headerType === 'TEXT' && data.headerContent) {
-          headerObj.text = data.headerContent;
+        if (data.headerType === 'TEXT') {
+          if (data.headerContent) headerObj.text = data.headerContent;
+          const headerMatches = (data.headerContent || '').match(/\{\{(\d+)\}\}/g);
+          if (headerMatches && headerMatches.length > 0) {
+            headerObj.example = {
+              header_text: headerMatches.map((_: any, i: number) => `Sample ${i + 1}`)
+            };
+          }
+        } else if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(data.headerType) && creds.isConnected && creds.accessToken) {
+          const handle = await getMetaUploadHandle(creds.accessToken, creds.wabaId, data.headerMediaUrl || data.headerContent);
+          if (handle) {
+            headerObj.example = { header_handle: [handle] };
+          }
         }
         components.push(headerObj);
       }
 
       if (data.bodyText) {
-        components.push({
+        const bodyObj: any = {
           type: 'BODY',
           text: data.bodyText
-        });
+        };
+        const bodyMatches = (data.bodyText || '').match(/\{\{(\d+)\}\}/g);
+        if (bodyMatches && bodyMatches.length > 0) {
+          bodyObj.example = {
+            body_text: [bodyMatches.map((_: any, i: number) => `Sample ${i + 1}`)]
+          };
+        }
+        components.push(bodyObj);
       }
 
       if (data.footerText) {
@@ -1773,7 +1859,9 @@ export async function saveWhatsAppTemplateAction(data: any) {
               }
               return { type: 'URL', text: b.text || 'Visit Website', url: b.url || `https://${brandDomain}` };
             }
-            if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: b.text || 'Call', phone_number: b.phone_number || brandPhone };
+            if (b.type === 'PHONE_NUMBER') {
+              return { type: 'PHONE_NUMBER', text: b.text || 'Call Us', phone_number: b.phone_number || brandPhone };
+            }
             if (b.type === 'COPY_CODE') {
               const isDynCode = b.isDynamicCode || b.code === '{{1}}';
               if (isDynCode) {
