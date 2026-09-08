@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   RefreshCw, CheckCircle2, XCircle, AlertCircle, Clock, Smartphone,

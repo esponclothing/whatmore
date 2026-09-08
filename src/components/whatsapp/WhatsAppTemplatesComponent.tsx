@@ -7,7 +7,7 @@ import {
   ArrowUpDown, CheckCheck, Radio, Check, ArrowLeft, Layers, ShoppingBag,
   Tag, ChevronLeft, ChevronRight, Image as ImageIcon, Link as LinkIcon,
   Phone, Copy, Smartphone, Upload, Clipboard, CheckSquare, PackageCheck,
-  Truck, CreditCard, BellRing, FileText, Video, FileCheck
+  Truck, CreditCard, BellRing, FileText, Video, FileCheck, ExternalLink
 } from "lucide-react";
 import {
   getWhatsAppTemplates,
