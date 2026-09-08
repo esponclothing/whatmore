@@ -628,8 +628,12 @@ export default function WhatsAppTemplatesComponent() {
     setTestingTemplate(t.name);
     const res = await sendWhatsAppTemplateAction(testPhone, t.name, t.language || "en_US", []);
     setTestingTemplate(null);
-    if (res.success) showToast("Test template sent successfully!");
-    else showToast(res.error || "Send failed.", "error");
+    if (res.success) {
+      showToast("Test template sent successfully!");
+      fetchTemplates();
+    } else {
+      showToast(res.error || "Send failed.", "error");
+    }
   };
 
   // Filter & Sort

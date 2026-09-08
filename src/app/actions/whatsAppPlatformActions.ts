@@ -1302,36 +1302,78 @@ export async function getWhatsAppTemplates() {
       orderBy: { createdAt: 'desc' }
     });
 
-    // 3. Fetch all campaigns to calculate real-time usage and engagement stats per template
-    const campaigns = await prisma.whatsAppCampaign.findMany({
-      select: {
-        id: true,
-        templateId: true,
-        sentCount: true,
-        deliveredCount: true,
-        readCount: true,
-        clicksCount: true,
-        createdAt: true
-      }
-    });
+    // 3. Fetch all campaigns and direct template messages to calculate real-time analytics
+    const [campaigns, allTemplateMessages] = await Promise.all([
+      prisma.whatsAppCampaign.findMany({
+        select: {
+          id: true,
+          templateId: true,
+          sentCount: true,
+          deliveredCount: true,
+          readCount: true,
+          clicksCount: true,
+          createdAt: true
+        }
+      }),
+      prisma.whatsAppMessage.findMany({
+        where: {
+          messageType: 'TEMPLATE'
+        },
+        select: {
+          id: true,
+          metadata: true,
+          content: true,
+          status: true,
+          sentAt: true
+        }
+      })
+    ]);
 
     // 4. Enrich each template with its performance analytics & timestamps
     const enrichedTemplates = allTemplates.map((t) => {
-      const templateCampaigns = campaigns.filter((c) => c.templateId === t.name);
+      const templateCampaigns = campaigns.filter((c) => c.templateId === t.name || c.templateId === t.id);
       const campaignsCount = templateCampaigns.length;
-      const totalSent = templateCampaigns.reduce((acc, c) => acc + (c.sentCount || 0), 0);
-      const totalDelivered = templateCampaigns.reduce((acc, c) => acc + (c.deliveredCount || 0), 0);
-      const totalRead = templateCampaigns.reduce((acc, c) => acc + (c.readCount || 0), 0);
-      const totalClicks = templateCampaigns.reduce((acc, c) => acc + (c.clicksCount || 0), 0);
+      const campaignSent = templateCampaigns.reduce((acc, c) => acc + (c.sentCount || 0), 0);
+      const campaignDelivered = templateCampaigns.reduce((acc, c) => acc + (c.deliveredCount || 0), 0);
+      const campaignRead = templateCampaigns.reduce((acc, c) => acc + (c.readCount || 0), 0);
+      const campaignClicks = templateCampaigns.reduce((acc, c) => acc + (c.clicksCount || 0), 0);
+
+      // Direct template messages (test sends, chat dispatches, automated replies)
+      const directMsgs = allTemplateMessages.filter((m) => {
+        try {
+          if (m.metadata) {
+            const meta = typeof m.metadata === 'string' ? JSON.parse(m.metadata) : m.metadata;
+            if (meta?.templateName === t.name || meta?.templateId === t.id) return true;
+          }
+        } catch {}
+        if (m.content && m.content.includes(`[Template: ${t.name}]`)) return true;
+        return false;
+      });
+
+      const directSent = directMsgs.length;
+      const directDelivered = directMsgs.filter((m) => m.status === 'DELIVERED' || m.status === 'READ').length;
+      const directRead = directMsgs.filter((m) => m.status === 'READ').length;
+
+      const totalSent = campaignSent + directSent;
+      const totalDelivered = campaignDelivered + directDelivered;
+      const totalRead = campaignRead + directRead;
+      const totalClicks = campaignClicks;
 
       const readRate = totalSent > 0 ? Math.round((totalRead / totalSent) * 100) : 0;
       const clickRate = totalSent > 0 ? Math.round((totalClicks / totalSent) * 100) : 0;
 
-      // Find the most recent campaign timestamp
+      // Find the most recent timestamp
       let lastUsedAt: Date | null = null;
       if (templateCampaigns.length > 0) {
         const sorted = [...templateCampaigns].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         lastUsedAt = sorted[0].createdAt;
+      }
+      if (directMsgs.length > 0) {
+        const sortedDirect = directMsgs.sort((a, b) => new Date(b.sentAt || 0).getTime() - new Date(a.sentAt || 0).getTime());
+        const latestDirectTime = sortedDirect[0].sentAt;
+        if (!lastUsedAt || (latestDirectTime && new Date(latestDirectTime).getTime() > new Date(lastUsedAt).getTime())) {
+          lastUsedAt = latestDirectTime;
+        }
       }
 
       return {
@@ -1415,7 +1457,7 @@ export async function sendWhatsAppTemplateAction(
         });
       }
 
-      if (!targetConv) {
+      if (!targetConvId) {
         const last10 = cleanPhone.slice(-10);
         targetConv = await prisma.whatsAppConversation.findFirst({
           where: {
@@ -1426,8 +1468,45 @@ export async function sendWhatsAppTemplateAction(
           },
           include: { customer: true }
         });
+
         if (targetConv) {
           targetConvId = targetConv.id;
+        } else {
+          // Auto-create customer and conversation so test & direct sends are tracked
+          try {
+            let cust = await prisma.customer.findFirst({
+              where: {
+                OR: [
+                  { whatsappNumber: { contains: last10 } },
+                  { mobile: { contains: last10 } }
+                ]
+              }
+            });
+            if (!cust) {
+              cust = await prisma.customer.create({
+                data: {
+                  businessName: `Contact ${cleanPhone}`,
+                  contactPerson: `WhatsApp User (${cleanPhone})`,
+                  mobile: cleanPhone,
+                  whatsappNumber: cleanPhone
+                }
+              });
+            }
+            const acc = await prisma.whatsAppAccount.findFirst();
+            const conv = await prisma.whatsAppConversation.create({
+              data: {
+                accountId: acc?.id || 'default_account',
+                customerId: cust.id,
+                status: 'OPEN',
+                unreadCount: 0,
+                lastMessageText: `[Template] ${templateName}`,
+                lastMessageAt: new Date()
+              }
+            });
+            targetConvId = conv.id;
+          } catch (createConvErr) {
+            console.warn("[sendWhatsAppTemplateAction] Non-fatal auto-conversation creation error:", createConvErr);
+          }
         }
       }
 
