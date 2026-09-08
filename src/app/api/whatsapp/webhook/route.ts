@@ -4,6 +4,7 @@ import { handleIncomingAILogic } from "@/lib/whatsappAI";
 import { executeFlowEngine } from "@/lib/whatsappFlowEngine";
 import { assignWhatsAppLeadAction } from "@/app/actions/whatsAppPlatformActions";
 import { formatWhatsAppPhone } from "@/lib/phoneUtils";
+import { notifyAdminsOfTemplateStatusChange } from "@/lib/pushNotifications";
 
 const PROCESSED_WEBHOOK_IDS = new Set<string>();
 
@@ -47,6 +48,55 @@ export async function POST(req: NextRequest) {
 
     if (!value) {
       return NextResponse.json({ status: "ignored" });
+    }
+
+    // ══════════════════════════════════════════════════════
+    // 0. PROCESS MESSAGE TEMPLATE STATUS UPDATES (APPROVED, REJECTED, PAUSED, DISABLED)
+    // ══════════════════════════════════════════════════════
+    const changeField = changes?.field;
+    if (changeField === "message_template_status_update" || value.event || (value.message_template_name && value.event)) {
+      const templateEvent = (value.event || "").toUpperCase(); // APPROVED, REJECTED, PAUSED, DISABLED, PENDING_DELETION
+      const templateId = value.message_template_id ? String(value.message_template_id) : undefined;
+      const templateName = value.message_template_name;
+      const templateLang = value.message_template_language || "en_US";
+      const rejectionReason = value.reason || value.rejection_reason || value.rejected_reason || (value.disable_info?.disable_date ? "Disabled by Meta" : null);
+
+      if (templateEvent && (templateId || templateName)) {
+        console.log(`[Meta Webhook] Template Status Event: ${templateName || templateId} -> ${templateEvent} (Reason: ${rejectionReason})`);
+
+        try {
+          // 1. Update database record
+          const existing = await prisma.whatsAppTemplate.findFirst({
+            where: {
+              OR: [
+                ...(templateId ? [{ id: templateId }] : []),
+                ...(templateName ? [{ name: templateName }] : [])
+              ]
+            }
+          });
+
+          if (existing) {
+            await prisma.whatsAppTemplate.update({
+              where: { id: existing.id },
+              data: {
+                status: templateEvent,
+                rejectionReason: rejectionReason ? String(rejectionReason) : null,
+                language: templateLang || existing.language
+              }
+            });
+          }
+
+          // 2. Dispatch Push Notification to all Admins
+          await notifyAdminsOfTemplateStatusChange(
+            templateName || existing?.name || "Template",
+            templateEvent,
+            rejectionReason,
+            templateLang
+          );
+        } catch (templateWebhookErr) {
+          console.error("[Meta Webhook] Error processing template status update:", templateWebhookErr);
+        }
+      }
     }
 
     // ══════════════════════════════════════════════════════

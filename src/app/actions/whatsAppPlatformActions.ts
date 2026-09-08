@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { seedWhatsAppPlatformData } from "@/lib/seedWhatsApp";
 import { revalidatePath } from "next/cache";
 import { formatWhatsAppPhone } from "@/lib/phoneUtils";
+import { notifyAdminsOfTemplateStatusChange } from "@/lib/pushNotifications";
 
 export async function getWhatsAppChatbotLogsAction(phone: string) {
   try {
@@ -1241,6 +1242,7 @@ export async function getWhatsAppTemplates() {
             });
 
             if (existing) {
+              const previousStatus = existing.status;
               await prisma.whatsAppTemplate.update({
                 where: { id: existing.id },
                 data: {
@@ -1255,6 +1257,11 @@ export async function getWhatsAppTemplates() {
                   rejectionReason: t.rejected_reason || null
                 }
               }).catch(() => {});
+
+              // If status changed from PENDING to APPROVED / REJECTED, notify admins
+              if (previousStatus === 'PENDING' && (metaStatus === 'APPROVED' || metaStatus === 'REJECTED')) {
+                notifyAdminsOfTemplateStatusChange(t.name, metaStatus, t.rejected_reason, t.language).catch(() => {});
+              }
             } else {
               await prisma.whatsAppTemplate.create({
                 data: {
