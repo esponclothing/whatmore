@@ -96,7 +96,13 @@ interface CarouselCardItem {
   headerType: "IMAGE" | "VIDEO";
   title: string;
   bodyText: string;
-  buttons: { type: "URL" | "QUICK_REPLY"; text: string; url?: string }[];
+  buttons: {
+    type: "URL" | "QUICK_REPLY";
+    text: string;
+    url?: string;
+    urlType?: "STATIC" | "DYNAMIC";
+    urlExample?: string;
+  }[];
 }
 
 export default function WhatsAppTemplatesComponent() {
@@ -148,7 +154,7 @@ export default function WhatsAppTemplatesComponent() {
             title: `${res.brandName} Performance Tee`,
             bodyText: "₹899 • Breathable 4-way stretch fabric",
             buttons: [
-              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "esponsports.com"}/products/tee` },
+              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "esponsports.com"}/products/tee`, urlType: "STATIC" },
               { type: "QUICK_REPLY", text: "View Sizes" }
             ]
           },
@@ -159,7 +165,7 @@ export default function WhatsAppTemplatesComponent() {
             title: `${res.brandName} Pro Shorts`,
             bodyText: "₹1,199 • Zipper pockets & sweat-wicking",
             buttons: [
-              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "esponsports.com"}/products/shorts` },
+              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "esponsports.com"}/products/shorts`, urlType: "STATIC" },
               { type: "QUICK_REPLY", text: "More Colors" }
             ]
           }
@@ -275,7 +281,15 @@ export default function WhatsAppTemplatesComponent() {
       setBodyText(preset.body);
       setFooterText(preset.footer);
       if (presetId === "ORDER_CONFIRMATION" || presetId === "SHIPPING_UPDATE") {
-        setButtons([{ type: "URL", text: "Track Order", url: `https://${activeDomain}/account/orders` }]);
+        setButtons([
+          {
+            type: "URL",
+            text: "Track Order",
+            url: `https://${activeDomain}/track/{{1}}`,
+            urlType: "DYNAMIC",
+            urlExample: "ESP-88294"
+          }
+        ]);
       } else {
         setButtons([]);
       }
@@ -303,7 +317,15 @@ export default function WhatsAppTemplatesComponent() {
     } else if (type === "ORDER_STATUS") {
       setBodyText(`Good news! Your order #{{1}} from ${brandName} has been dispatched! Track your shipment below:`);
       setFooterText(`${brandName} Logistics`);
-      setButtons([{ type: "URL", text: "Track shipment", url: `https://${brandDomain}/account/orders` }]);
+      setButtons([
+        {
+          type: "URL",
+          text: "Track shipment",
+          url: `https://${brandDomain}/track/{{1}}`,
+          urlType: "DYNAMIC",
+          urlExample: "ESP-88294"
+        }
+      ]);
     } else if (type === "CALL_PERMISSIONS") {
       setBodyText(`Hello {{1}}`);
       setFooterText(`${brandName} Support`);
@@ -311,11 +333,11 @@ export default function WhatsAppTemplatesComponent() {
     } else if (type === "LTO_COUPON") {
       setBodyText(`Special offer! Get FLAT 30% OFF on all ${brandName} gear. Use coupon code below at checkout:`);
       setFooterText(`Limited time only | Valid this week`);
-      setButtons([{ type: "COPY_CODE", text: "Copy Code", code: couponCode || "FLAT30" }]);
+      setButtons([{ type: "COPY_CODE", text: "Copy Code", code: couponCode || "FLAT30", isDynamicCode: false, exampleCode: couponCode || "FLAT30" }]);
     } else if (type === "AUTHENTICATION") {
       setBodyText(`{{1}} is your ${brandName} verification code. For your security, do not share this code.`);
       setFooterText("Code expires in 10 minutes");
-      setButtons([{ type: "COPY_CODE", text: "Copy Code", code: "{{1}}" }]);
+      setButtons([{ type: "COPY_CODE", text: "Copy Code", code: "{{1}}", isDynamicCode: true, exampleCode: "583920" }]);
     }
   };
 
@@ -332,7 +354,7 @@ export default function WhatsAppTemplatesComponent() {
       setHeaderMediaPreview(null);
       setBodyText(`{{1}} is your ${brandName} verification code. For your security, do not share this code.`);
       setFooterText("Code expires in 10 minutes");
-      setButtons([{ type: "COPY_CODE", text: "Copy Code", code: "{{1}}" }]);
+      setButtons([{ type: "COPY_CODE", text: "Copy Code", code: "{{1}}", isDynamicCode: true, exampleCode: "583920" }]);
     } else {
       // Marketing
       setTemplateType("STANDARD");
@@ -349,25 +371,17 @@ export default function WhatsAppTemplatesComponent() {
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
       if (target === "HEADER") {
-        if (file.type.startsWith("video/")) {
-          setHeaderType("VIDEO");
-        } else if (file.type.startsWith("application/pdf")) {
-          setHeaderType("DOCUMENT");
-        } else {
-          setHeaderType("IMAGE");
-        }
-        setHeaderContent(dataUrl);
-        setHeaderMediaPreview(dataUrl);
-        showToast("Header media uploaded successfully!");
-      } else if (target === "CAROUSEL_CARD") {
-        const idx = cardIdx !== undefined ? cardIdx : activeCarouselCardIndex;
+        setHeaderMediaPreview(result);
+        if (file.type.startsWith("video/")) setHeaderType("VIDEO");
+        else if (file.type.startsWith("application/pdf")) setHeaderType("DOCUMENT");
+        else setHeaderType("IMAGE");
+      } else if (target === "CAROUSEL_CARD" && typeof cardIdx === "number") {
         setCarouselCards((prev) =>
-          prev.map((c, i) => (i === idx ? { ...c, mediaUrl: dataUrl } : c))
+          prev.map((c, i) => (i === cardIdx ? { ...c, mediaUrl: result } : c))
         );
-        showToast(`Card #${idx + 1} image uploaded successfully!`);
       }
     };
     reader.readAsDataURL(file);
@@ -379,11 +393,8 @@ export default function WhatsAppTemplatesComponent() {
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.indexOf("image") !== -1) {
         const file = items[i].getAsFile();
-        if (file) {
-          handleFileProcess(file, target, cardIdx);
-          e.preventDefault();
-          break;
-        }
+        if (file) handleFileProcess(file, target, cardIdx);
+        break;
       }
     }
   };
@@ -403,34 +414,32 @@ export default function WhatsAppTemplatesComponent() {
 
   const addCarouselCard = () => {
     if (carouselCards.length >= META_LIMITS.MAX_CAROUSEL_CARDS) {
-      showToast("Meta allows maximum 10 carousel cards.", "error");
+      showToast("Meta Carousel supports max 10 cards.", "error");
       return;
     }
-    const newIdx = carouselCards.length + 1;
     const newCard: CarouselCardItem = {
       id: `card_${Date.now()}`,
-      mediaUrl: "https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=500&auto=format&fit=crop&q=80",
+      mediaUrl: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&auto=format&fit=crop&q=80",
       headerType: "IMAGE",
-      title: `${brandName} Item ${newIdx}`,
-      bodyText: "₹999 • Premium Collection",
+      title: `${brandName} Collection ${carouselCards.length + 1}`,
+      bodyText: "₹999 • Premium quality",
       buttons: [
-        { type: "URL", text: "Buy Now", url: `https://${brandDomain}` },
-        { type: "QUICK_REPLY", text: "Inquire" }
+        { type: "URL", text: "Buy Now", url: `https://${brandDomain}/products/{{1}}`, urlType: "DYNAMIC", urlExample: "product" },
+        { type: "QUICK_REPLY", text: "View Details" }
       ]
     };
-    setCarouselCards([...carouselCards, newCard]);
+    setCarouselCards((prev) => [...prev, newCard]);
     setActiveCarouselCardIndex(carouselCards.length);
   };
 
-  const removeCarouselCard = (index: number) => {
+  const removeCarouselCard = (idx: number) => {
     if (carouselCards.length <= 2) {
-      showToast("Meta requires at least 2 cards in a Carousel template.", "error");
+      showToast("Meta Image Carousel requires at least 2 cards.", "error");
       return;
     }
-    const updated = carouselCards.filter((_, i) => i !== index);
-    setCarouselCards(updated);
-    if (activeCarouselCardIndex >= updated.length) {
-      setActiveCarouselCardIndex(Math.max(0, updated.length - 1));
+    setCarouselCards((prev) => prev.filter((_, i) => i !== idx));
+    if (activeCarouselCardIndex >= idx && activeCarouselCardIndex > 0) {
+      setActiveCarouselCardIndex((prev) => prev - 1);
     }
   };
 
@@ -447,7 +456,16 @@ export default function WhatsAppTemplatesComponent() {
       showToast("Meta Carousel cards support up to 2 CTA buttons per card.", "error");
       return;
     }
-    const updatedButtons = [...card.buttons, { type: "URL" as const, text: "Buy Now", url: `https://${brandDomain}` }];
+    const updatedButtons = [
+      ...card.buttons,
+      {
+        type: "URL" as const,
+        text: "Buy Now",
+        url: `https://${brandDomain}/products/{{1}}`,
+        urlType: "DYNAMIC" as const,
+        urlExample: "tee"
+      }
+    ];
     updateActiveCard("buttons", updatedButtons);
   };
 
@@ -458,7 +476,7 @@ export default function WhatsAppTemplatesComponent() {
     updateActiveCard("buttons", updatedButtons);
   };
 
-  const updateCardButton = (btnIdx: number, field: string, val: string) => {
+  const updateCardButton = (btnIdx: number, field: string, val: any) => {
     const card = carouselCards[activeCarouselCardIndex];
     if (!card) return;
     const updatedButtons = card.buttons.map((b, i) => (i === btnIdx ? { ...b, [field]: val } : b));
@@ -471,10 +489,23 @@ export default function WhatsAppTemplatesComponent() {
       showToast("Max 3 buttons allowed.", "error");
       return;
     }
-    setButtons((prev) => [...prev, { type, text: type === "COPY_CODE" ? "Copy Code" : "", url: "", phone_number: "", code: couponCode }]);
+    setButtons((prev) => [
+      ...prev,
+      {
+        type,
+        text: type === "COPY_CODE" ? "Copy Code" : type === "URL" ? "Track Order" : type === "PHONE_NUMBER" ? "Call Us" : "Explore More",
+        url: type === "URL" ? `https://${brandDomain}/track/{{1}}` : "",
+        urlType: type === "URL" ? "DYNAMIC" : "STATIC",
+        urlExample: type === "URL" ? "ESP-88294" : "",
+        phone_number: type === "PHONE_NUMBER" ? "+917404388242" : "",
+        code: couponCode || "FLAT30",
+        isDynamicCode: false,
+        exampleCode: "FLAT30"
+      }
+    ]);
   };
 
-  const updateButton = (idx: number, field: string, val: string) => {
+  const updateButton = (idx: number, field: string, val: any) => {
     setButtons((prev) => prev.map((b, i) => (i === idx ? { ...b, [field]: val } : b)));
   };
 
@@ -558,10 +589,14 @@ export default function WhatsAppTemplatesComponent() {
     const res = await saveWhatsAppTemplateAction(payload);
     setSaving(false);
     if (res.success) {
+      const isApproved = res.template?.status === "APPROVED";
+      const statusLabel = res.template?.status || (res.submitted ? "PENDING" : "PENDING");
       showToast(
-        res.submitted
-          ? "🎉 Template submitted directly to Meta Cloud API! Status: PENDING review"
-          : "✅ Template successfully configured and saved!",
+        isApproved
+          ? "🎉 Template approved directly by Meta!"
+          : res.submitted
+          ? `🎉 Template submitted to Meta Cloud API! Status: ${statusLabel} (Under Review)`
+          : `✅ Template saved locally! Status: ${statusLabel}`,
         "success"
       );
       resetForm();
@@ -601,7 +636,20 @@ export default function WhatsAppTemplatesComponent() {
   const filtered = templates
     .filter((t) => {
       if (categoryFilter !== "ALL" && t.category !== categoryFilter) return false;
-      if (statusFilter !== "ALL" && t.status !== statusFilter) return false;
+      if (statusFilter !== "ALL") {
+        const s = (t.status || "").toUpperCase();
+        if (statusFilter === "PENDING") {
+          if (s !== "PENDING" && s !== "IN_REVIEW" && s !== "IN_APPEAL") return false;
+        } else if (statusFilter === "APPROVED") {
+          if (s !== "APPROVED") return false;
+        } else if (statusFilter === "REJECTED") {
+          if (s !== "REJECTED") return false;
+        } else if (statusFilter === "PAUSED") {
+          if (s !== "PAUSED" && s !== "DISABLED") return false;
+        } else if (t.status !== statusFilter) {
+          return false;
+        }
+      }
       if (
         searchQuery &&
         !t.name?.toLowerCase().includes(searchQuery.toLowerCase()) &&
@@ -640,28 +688,45 @@ export default function WhatsAppTemplatesComponent() {
     });
 
   const statusBadge = (status: string) => {
-    const cfg: Record<string, { bg: string; color: string; icon: React.ReactNode }> = {
-      APPROVED: { bg: "rgba(16,185,129,0.1)", color: "#10b981", icon: <CheckCircle2 size={12} /> },
-      PENDING: { bg: "rgba(245,158,11,0.1)", color: "#f59e0b", icon: <Clock size={12} /> },
-      REJECTED: { bg: "rgba(239,68,68,0.1)", color: "#ef4444", icon: <AlertCircle size={12} /> },
-      PAUSED: { bg: "rgba(107,114,128,0.1)", color: "#6b7280", icon: <Clock size={12} /> }
-    };
-    const c = cfg[status] || cfg.PENDING;
+    const norm = (status || "").toUpperCase();
+    const isApproved = norm === "APPROVED";
+    const isPending = norm === "PENDING" || norm === "IN_REVIEW" || norm === "IN_APPEAL";
+    const isRejected = norm === "REJECTED";
+    const isPaused = norm === "PAUSED" || norm === "DISABLED";
+    const isDeleting = norm === "PENDING_DELETION";
+
+    if (isApproved) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+          <CheckCircle2 size={11} /> APPROVED
+        </span>
+      );
+    }
+    if (isPending) {
+      const label = norm === "IN_REVIEW" ? "IN REVIEW" : norm === "IN_APPEAL" ? "IN APPEAL" : "PENDING";
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+          <Clock size={11} className="animate-spin" /> {label}
+        </span>
+      );
+    }
+    if (isRejected) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+          <AlertCircle size={11} /> REJECTED
+        </span>
+      );
+    }
+    if (isPaused || isDeleting) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-gray-500/10 text-gray-600 dark:text-gray-400 border border-gray-500/20">
+          <Clock size={11} /> {norm}
+        </span>
+      );
+    }
     return (
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "4px",
-          padding: "3px 8px",
-          background: c.bg,
-          color: c.color,
-          borderRadius: "6px",
-          fontSize: "11px",
-          fontWeight: 700
-        }}
-      >
-        {c.icon} {status}
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+        <Clock size={11} /> {status || "PENDING"}
       </span>
     );
   };
@@ -1642,38 +1707,98 @@ export default function WhatsAppTemplatesComponent() {
                         </button>
                       </div>
 
-                      <div className="flex flex-col gap-2">
+                      <div className="flex flex-col gap-2.5">
                         {carouselCards[activeCarouselCardIndex].buttons.map((b, bIdx) => (
-                          <div key={bIdx} className="flex gap-2 items-center">
-                            <select
-                              value={b.type}
-                              onChange={(e) => updateCardButton(bIdx, "type", e.target.value)}
-                              className="px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-bold cursor-pointer"
-                            >
-                              <option value="URL">🔗 URL</option>
-                              <option value="QUICK_REPLY">↩️ Quick Reply</option>
-                            </select>
+                          <div key={bIdx} className="p-3 bg-gray-50 dark:bg-slate-900/60 rounded-xl border border-gray-200 dark:border-slate-700 flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <select
+                                  value={b.type}
+                                  onChange={(e) => updateCardButton(bIdx, "type", e.target.value)}
+                                  className="px-2 py-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-bold cursor-pointer"
+                                >
+                                  <option value="URL">🔗 URL</option>
+                                  <option value="QUICK_REPLY">↩️ Quick Reply</option>
+                                </select>
+                                <span className="text-[10px] font-bold text-gray-400">Button #{bIdx + 1}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeCardButton(bIdx)}
+                                className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg cursor-pointer transition-colors"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+
                             <input
                               value={b.text}
                               onChange={(e) => updateCardButton(bIdx, "text", e.target.value)}
-                              placeholder="Button Label"
-                              className="w-32 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-bold"
+                              placeholder="Button Label (e.g. Buy Now)"
+                              maxLength={25}
+                              className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-bold"
                             />
+
                             {b.type === "URL" && (
-                              <input
-                                value={b.url || ""}
-                                onChange={(e) => updateCardButton(bIdx, "url", e.target.value)}
-                                placeholder={`https://${brandDomain}/...`}
-                                className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-mono"
-                              />
+                              <div className="flex flex-col gap-2 pt-1 border-t border-gray-200/60 dark:border-slate-700/60">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-bold text-gray-500 uppercase">URL Type:</span>
+                                  <div className="inline-flex p-0.5 bg-gray-200/80 dark:bg-slate-800 rounded-lg text-[10px] font-bold">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        updateCardButton(bIdx, "urlType", "STATIC");
+                                        if (b.url?.includes("{{1}}")) {
+                                          updateCardButton(bIdx, "url", b.url.replace("/{{1}}", "").replace("{{1}}", ""));
+                                        }
+                                      }}
+                                      className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
+                                        b.urlType !== "DYNAMIC" ? "bg-white dark:bg-slate-700 text-purple-600 font-bold shadow-2xs" : "text-gray-500"
+                                      }`}
+                                    >
+                                      Static
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        updateCardButton(bIdx, "urlType", "DYNAMIC");
+                                        if (!b.url?.includes("{{1}}")) {
+                                          const base = b.url ? b.url.replace(/\/+$/, "") : `https://${brandDomain}/products`;
+                                          updateCardButton(bIdx, "url", `${base}/{{1}}`);
+                                        }
+                                        if (!b.urlExample) updateCardButton(bIdx, "urlExample", "product-id");
+                                      }}
+                                      className={`px-2 py-0.5 rounded transition-all cursor-pointer flex items-center gap-1 ${
+                                        b.urlType === "DYNAMIC" ? "bg-purple-600 text-white font-bold shadow-2xs" : "text-gray-500"
+                                      }`}
+                                    >
+                                      <Zap size={9} /> Dynamic (&#123;&#123;1&#125;&#125;)
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <input
+                                  value={b.url || ""}
+                                  onChange={(e) => updateCardButton(bIdx, "url", e.target.value)}
+                                  placeholder={b.urlType === "DYNAMIC" ? `https://${brandDomain}/products/{{1}}` : `https://${brandDomain}/products`}
+                                  className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-mono"
+                                />
+
+                                {b.urlType === "DYNAMIC" && (
+                                  <div className="p-2 bg-purple-50/60 dark:bg-purple-950/40 rounded-lg border border-purple-100 dark:border-purple-900/60 flex flex-col gap-1">
+                                    <span className="text-[10px] font-bold text-purple-900 dark:text-purple-200">
+                                      Sample Value for Meta Approval:
+                                    </span>
+                                    <input
+                                      value={b.urlExample || ""}
+                                      onChange={(e) => updateCardButton(bIdx, "urlExample", e.target.value)}
+                                      placeholder="e.g. tee-black or 10294"
+                                      className="w-full px-2.5 py-1 bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-800 rounded text-xs font-mono"
+                                    />
+                                  </div>
+                                )}
+                              </div>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => removeCardButton(bIdx)}
-                              className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
-                            >
-                              <X size={13} />
-                            </button>
                           </div>
                         ))}
                       </div>
@@ -1706,71 +1831,351 @@ export default function WhatsAppTemplatesComponent() {
             {templateType !== "CAROUSEL" && (
               <div className="bg-white dark:bg-slate-800/90 border border-gray-200 dark:border-slate-700 rounded-3xl p-6 shadow-2xs flex flex-col gap-4">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-black uppercase text-gray-500 tracking-wider">
-                    8. Interactive Buttons (Max 3)
-                  </label>
+                  <div>
+                    <label className="text-xs font-black uppercase text-gray-700 dark:text-gray-200 tracking-wider flex items-center gap-1.5">
+                      <span>8. Interactive Action Buttons</span>
+                      <span className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold">
+                        {buttons.length}/3
+                      </span>
+                    </label>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                      Add Call-To-Action URLs (Static or Dynamic variable), Call buttons, or Quick Replies.
+                    </p>
+                  </div>
                   <div className="flex gap-1.5">
                     <button
                       type="button"
+                      onClick={() => addButton("URL")}
+                      disabled={buttons.length >= META_LIMITS.TOTAL_BUTTONS_MAX}
+                      className="px-2.5 py-1.5 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-bold cursor-pointer disabled:opacity-50 flex items-center gap-1 hover:bg-emerald-100 transition-colors shadow-2xs"
+                    >
+                      <Zap size={12} className="text-emerald-600 dark:text-emerald-400" />
+                      + URL
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => addButton("QUICK_REPLY")}
-                      className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-bold cursor-pointer"
+                      disabled={buttons.length >= META_LIMITS.TOTAL_BUTTONS_MAX}
+                      className="px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-bold cursor-pointer disabled:opacity-50 flex items-center gap-1 hover:bg-indigo-100 transition-colors shadow-2xs"
                     >
                       + Quick Reply
                     </button>
                     <button
                       type="button"
-                      onClick={() => addButton("URL")}
-                      className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-bold cursor-pointer"
-                    >
-                      + URL
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => addButton("PHONE_NUMBER")}
-                      className="px-2.5 py-1 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold cursor-pointer"
+                      disabled={buttons.length >= META_LIMITS.TOTAL_BUTTONS_MAX}
+                      className="px-2.5 py-1.5 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-bold cursor-pointer disabled:opacity-50 flex items-center gap-1 hover:bg-amber-100 transition-colors shadow-2xs"
                     >
                       + Call
                     </button>
                   </div>
                 </div>
 
-                {buttons.map((btn, idx) => (
-                  <div key={idx} className="flex gap-2 items-center">
-                    <span className="px-2 py-1 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-bold">
-                      {btn.type === "QUICK_REPLY" ? "↩️ QR" : btn.type === "URL" ? "🔗 URL" : btn.type === "COPY_CODE" ? "🏷️ Code" : "📞 Call"}
-                    </span>
-                    <input
-                      value={btn.text}
-                      onChange={(e) => updateButton(idx, "text", e.target.value)}
-                      placeholder="Button Label"
-                      maxLength={25}
-                      className="w-36 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-bold"
-                    />
-                    {btn.type === "URL" && (
-                      <input
-                        value={btn.url}
-                        onChange={(e) => updateButton(idx, "url", e.target.value)}
-                        placeholder={`https://${brandDomain}/...`}
-                        className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-mono"
-                      />
-                    )}
-                    {btn.type === "PHONE_NUMBER" && (
-                      <input
-                        value={btn.phone_number}
-                        onChange={(e) => updateButton(idx, "phone_number", e.target.value)}
-                        placeholder="+917404388242"
-                        className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-mono"
-                      />
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => removeButton(idx)}
-                      className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
-                    >
-                      <X size={14} />
-                    </button>
+                {buttons.length === 0 ? (
+                  <div className="p-4 border-2 border-dashed border-gray-200 dark:border-slate-700 rounded-2xl text-center flex flex-col items-center justify-center gap-1 text-gray-400">
+                    <Zap size={20} className="text-gray-300 dark:text-gray-600" />
+                    <span className="text-xs font-bold">No buttons added yet</span>
+                    <span className="text-[11px] text-gray-400">Click &quot;+ URL&quot; above to add a Dynamic or Static CTA button.</span>
                   </div>
-                ))}
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {buttons.map((btn, idx) => (
+                      <div key={idx} className="p-4 bg-gray-50/90 dark:bg-slate-900/60 rounded-2xl border border-gray-200 dark:border-slate-700 flex flex-col gap-3">
+                        {/* Header Row */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-200 flex items-center gap-1.5 shadow-2xs">
+                              {btn.type === "QUICK_REPLY" ? "↩️ Quick Reply" : btn.type === "URL" ? "🔗 Website CTA" : btn.type === "COPY_CODE" ? "🏷️ Coupon Code" : "📞 Phone Call"}
+                            </span>
+                            <span className="text-[11px] font-bold text-gray-400">Button #{idx + 1}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeButton(idx)}
+                            className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg cursor-pointer transition-colors"
+                            title="Delete Button"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+
+                        {/* Button Label Input */}
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">
+                            Button Text / Label (Max 25 chars)
+                          </label>
+                          <input
+                            value={btn.text}
+                            onChange={(e) => updateButton(idx, "text", e.target.value)}
+                            placeholder={btn.type === "URL" ? "e.g. Track Order" : btn.type === "PHONE_NUMBER" ? "e.g. Call Support" : "e.g. Yes, I'm interested"}
+                            maxLength={META_LIMITS.BUTTON_TEXT_MAX}
+                            className="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+
+                        {/* If URL Button: Show Static vs Dynamic Mode Selector */}
+                        {btn.type === "URL" && (
+                          <div className="flex flex-col gap-2.5 pt-2 border-t border-gray-200/70 dark:border-slate-700/70">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-gray-500">
+                                URL Type & Destination
+                              </label>
+                              {/* Segmented Mode Selector */}
+                              <div className="inline-flex p-0.5 bg-gray-200/80 dark:bg-slate-800 rounded-xl border border-gray-300/60 dark:border-slate-700 text-[11px] font-bold">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateButton(idx, "urlType", "STATIC");
+                                    if (btn.url?.includes("{{1}}")) {
+                                      updateButton(idx, "url", btn.url.replace("/{{1}}", "").replace("{{1}}", ""));
+                                    }
+                                  }}
+                                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                                    btn.urlType !== "DYNAMIC"
+                                      ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-2xs font-black"
+                                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
+                                  }`}
+                                >
+                                  🌐 Static URL
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateButton(idx, "urlType", "DYNAMIC");
+                                    if (!btn.url?.includes("{{1}}")) {
+                                      const base = btn.url ? btn.url.replace(/\/+$/, "") : `https://${brandDomain}/track`;
+                                      updateButton(idx, "url", `${base}/{{1}}`);
+                                    }
+                                    if (!btn.urlExample) {
+                                      updateButton(idx, "urlExample", "ESP-88294");
+                                    }
+                                  }}
+                                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                                    btn.urlType === "DYNAMIC"
+                                      ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-2xs font-black"
+                                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
+                                  }`}
+                                >
+                                  <Zap size={11} className="fill-current" />
+                                  <span>Dynamic URL (&#123;&#123;1&#125;&#125;)</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Static URL Input */}
+                            {btn.urlType !== "DYNAMIC" ? (
+                              <div>
+                                <input
+                                  value={btn.url || ""}
+                                  onChange={(e) => updateButton(idx, "url", e.target.value)}
+                                  placeholder={`https://${brandDomain}/shop`}
+                                  className="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500"
+                                />
+                                <span className="text-[10px] text-gray-400 mt-1 block">
+                                  Direct web address opened when recipient taps the button.
+                                </span>
+                              </div>
+                            ) : (
+                              /* Dynamic URL Configuration */
+                              <div className="p-3 bg-indigo-50/60 dark:bg-indigo-950/30 rounded-xl border border-indigo-100 dark:border-indigo-900/60 flex flex-col gap-2.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-black text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
+                                    <Zap size={13} className="text-indigo-600 dark:text-indigo-400" />
+                                    Dynamic Website URL
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (!btn.url?.includes("{{1}}")) {
+                                        const base = btn.url ? btn.url.replace(/\/+$/, "") : `https://${brandDomain}/track`;
+                                        updateButton(idx, "url", `${base}/{{1}}`);
+                                      }
+                                    }}
+                                    className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 rounded-md text-[10px] font-bold hover:bg-indigo-200 cursor-pointer"
+                                  >
+                                    + Insert &#123;&#123;1&#125;&#125; Suffix
+                                  </button>
+                                </div>
+
+                                <div>
+                                  <label className="block text-[10px] font-bold text-indigo-800 dark:text-indigo-300 mb-1">
+                                    Base URL with Variable Suffix
+                                  </label>
+                                  <input
+                                    value={btn.url || ""}
+                                    onChange={(e) => updateButton(idx, "url", e.target.value)}
+                                    placeholder={`https://${brandDomain}/track/{{1}}`}
+                                    className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500"
+                                  />
+                                </div>
+
+                                <div>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <label className="text-[10px] font-bold text-indigo-800 dark:text-indigo-300">
+                                      Sample / Example Variable (Required by Meta)
+                                    </label>
+                                    <span className="text-[9px] text-indigo-500 font-semibold">e.g. Order ID, Tracking Code</span>
+                                  </div>
+                                  <input
+                                    value={btn.urlExample || ""}
+                                    onChange={(e) => updateButton(idx, "urlExample", e.target.value)}
+                                    placeholder="e.g. ESP-88294 or 10029"
+                                    className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500"
+                                  />
+                                </div>
+
+                                {/* Quick Dynamic Presets */}
+                                <div>
+                                  <span className="text-[10px] font-bold text-gray-500 block mb-1">Quick Dynamic Presets:</span>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        updateButton(idx, "text", "Track Order");
+                                        updateButton(idx, "url", `https://${brandDomain}/track/{{1}}`);
+                                        updateButton(idx, "urlExample", "ESP-88294");
+                                      }}
+                                      className="px-2 py-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-[10px] font-bold text-gray-700 dark:text-gray-300 hover:border-indigo-400 cursor-pointer shadow-2xs"
+                                    >
+                                      📦 Track Order
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        updateButton(idx, "text", "Complete Order");
+                                        updateButton(idx, "url", `https://${brandDomain}/checkout?token={{1}}`);
+                                        updateButton(idx, "urlExample", "cart_tok_9912");
+                                      }}
+                                      className="px-2 py-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-[10px] font-bold text-gray-700 dark:text-gray-300 hover:border-indigo-400 cursor-pointer shadow-2xs"
+                                    >
+                                      🛒 Shopify Checkout
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        updateButton(idx, "text", "View Invoice");
+                                        updateButton(idx, "url", `https://${brandDomain}/invoices/{{1}}`);
+                                        updateButton(idx, "urlExample", "INV-2026-091");
+                                      }}
+                                      className="px-2 py-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-[10px] font-bold text-gray-700 dark:text-gray-300 hover:border-indigo-400 cursor-pointer shadow-2xs"
+                                    >
+                                      🧾 View Invoice
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        updateButton(idx, "text", "Claim Offer");
+                                        updateButton(idx, "url", `https://${brandDomain}/deals?promo={{1}}`);
+                                        updateButton(idx, "urlExample", "SAVE30");
+                                      }}
+                                      className="px-2 py-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-[10px] font-bold text-gray-700 dark:text-gray-300 hover:border-indigo-400 cursor-pointer shadow-2xs"
+                                    >
+                                      🎁 Promo Link
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Simulated URL Review Preview */}
+                                <div className="p-2 bg-white/90 dark:bg-slate-800/90 rounded-lg border border-indigo-100 dark:border-indigo-900 text-[10.5px] text-gray-600 dark:text-gray-300 flex items-center gap-1.5 font-mono">
+                                  <span className="font-sans font-bold text-indigo-600">Simulated Review Link:</span>
+                                  <span className="truncate text-gray-900 dark:text-white font-black">
+                                    {btn.url ? (btn.url.includes("{{1}}") ? btn.url.replace("{{1}}", btn.urlExample || "ESP-88294") : `${btn.url}/${btn.urlExample || "ESP-88294"}`) : `https://${brandDomain}/track/ESP-88294`}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Phone Number Input */}
+                        {btn.type === "PHONE_NUMBER" && (
+                          <div className="flex flex-col gap-1 pt-2 border-t border-gray-200/70 dark:border-slate-700/70">
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase">
+                              Phone Number (with Country Code)
+                            </label>
+                            <input
+                              value={btn.phone_number || ""}
+                              onChange={(e) => updateButton(idx, "phone_number", e.target.value)}
+                              placeholder="+917404388242"
+                              className="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </div>
+                        )}
+
+                        {/* Copy Code / Coupon Input */}
+                        {btn.type === "COPY_CODE" && (
+                          <div className="flex flex-col gap-2.5 pt-2 border-t border-gray-200/70 dark:border-slate-700/70">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-gray-500">
+                                Coupon Code Type
+                              </label>
+                              <div className="inline-flex p-0.5 bg-gray-200/80 dark:bg-slate-800 rounded-xl border border-gray-300/60 dark:border-slate-700 text-[11px] font-bold">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateButton(idx, "isDynamicCode", false);
+                                    updateButton(idx, "code", couponCode || "FLAT30");
+                                  }}
+                                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                                    !btn.isDynamicCode && btn.code !== "{{1}}"
+                                      ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-2xs font-black"
+                                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
+                                  }`}
+                                >
+                                  🏷️ Static Code
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateButton(idx, "isDynamicCode", true);
+                                    updateButton(idx, "code", "{{1}}");
+                                    if (!btn.exampleCode) updateButton(idx, "exampleCode", "FLAT30");
+                                  }}
+                                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                                    btn.isDynamicCode || btn.code === "{{1}}"
+                                      ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-2xs font-black"
+                                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
+                                  }`}
+                                >
+                                  <Zap size={11} className="fill-current" />
+                                  <span>Dynamic (&#123;&#123;1&#125;&#125;)</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {btn.isDynamicCode || btn.code === "{{1}}" ? (
+                              <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-xl border border-emerald-100 dark:border-emerald-900/60 flex flex-col gap-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-black text-emerald-900 dark:text-emerald-200">
+                                    Sample Coupon Code (For Meta Approval)
+                                  </span>
+                                  <span className="text-[10px] font-mono bg-emerald-100 dark:bg-emerald-900 px-2 py-0.5 rounded text-emerald-800 dark:text-emerald-200">
+                                    Code: &#123;&#123;1&#125;&#125;
+                                  </span>
+                                </div>
+                                <input
+                                  value={btn.exampleCode || "FLAT30"}
+                                  onChange={(e) => updateButton(idx, "exampleCode", e.target.value)}
+                                  placeholder="e.g. FLAT30 or SUMMER20"
+                                  className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-emerald-500"
+                                />
+                              </div>
+                            ) : (
+                              <div>
+                                <input
+                                  value={btn.code || couponCode}
+                                  onChange={(e) => updateButton(idx, "code", e.target.value)}
+                                  placeholder="FLAT30"
+                                  className="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-emerald-500"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1965,15 +2370,41 @@ export default function WhatsAppTemplatesComponent() {
                     {/* Standard CTA Buttons inside bubble */}
                     {templateType !== "CAROUSEL" && templateType !== "CATALOGUE" && templateType !== "FLOWS" && templateType !== "ORDER_DETAILS" && templateType !== "ORDER_STATUS" && templateType !== "CALL_PERMISSIONS" && category !== "AUTHENTICATION" && buttons.length > 0 && (
                       <div className="flex flex-col gap-1.5 mt-2 pt-2 border-t border-gray-100 dark:border-slate-700">
-                        {buttons.map((b, i) => (
-                          <div
-                            key={i}
-                            className="bg-gray-50 dark:bg-slate-700 rounded-xl py-1.5 px-3 text-center text-xs font-bold text-sky-600 dark:text-sky-400 border border-gray-200 dark:border-slate-600 flex items-center justify-center gap-1.5"
-                          >
-                            {b.type === "URL" ? "🔗" : b.type === "PHONE_NUMBER" ? "📞" : "↩️"}
-                            <span>{b.text || "Action"}</span>
-                          </div>
-                        ))}
+                        {buttons.map((b, i) => {
+                          const isDynamicUrl = b.type === "URL" && (b.urlType === "DYNAMIC" || b.url?.includes("{{1}}"));
+                          const isDynamicCode = b.type === "COPY_CODE" && (b.isDynamicCode || b.code === "{{1}}");
+                          const dynamicVal = b.urlExample || "ESP-88294";
+                          const resolvedLink = b.url ? (b.url.includes("{{1}}") ? b.url.replace("{{1}}", dynamicVal) : `${b.url}/${dynamicVal}`) : "";
+
+                          return (
+                            <div
+                              key={i}
+                              title={isDynamicUrl ? `Dynamic Link: ${resolvedLink}` : undefined}
+                              className="bg-gray-50 dark:bg-slate-700 rounded-xl py-2 px-3 text-center text-xs font-bold text-sky-600 dark:text-sky-400 border border-gray-200 dark:border-slate-600 flex items-center justify-center gap-1.5 shadow-2xs hover:bg-sky-50 dark:hover:bg-slate-600 transition-colors"
+                            >
+                              {b.type === "URL" ? (
+                                isDynamicUrl ? <Zap size={12} className="text-amber-500 fill-amber-500" /> : <ExternalLink size={12} />
+                              ) : b.type === "PHONE_NUMBER" ? (
+                                <Phone size={12} />
+                              ) : b.type === "COPY_CODE" ? (
+                                <Copy size={12} />
+                              ) : (
+                                <span>↩️</span>
+                              )}
+                              <span>{b.text || "Action"}</span>
+                              {isDynamicUrl && (
+                                <span className="px-1.5 py-0.2 text-[9px] rounded bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 font-mono font-normal">
+                                  &#123;&#123;1&#125;&#125;
+                                </span>
+                              )}
+                              {isDynamicCode && (
+                                <span className="px-1.5 py-0.2 text-[9px] rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 font-mono font-normal">
+                                  Dynamic
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
@@ -2043,15 +2474,25 @@ export default function WhatsAppTemplatesComponent() {
 
                             {/* Card Buttons */}
                             <div className="p-2 pt-0 flex flex-col gap-1 border-t border-gray-100 dark:border-slate-700 mt-2">
-                              {card.buttons.map((b, bi) => (
-                                <div
-                                  key={bi}
-                                  className="bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded-lg py-1 px-2 text-center text-[10px] font-bold border border-indigo-200 dark:border-indigo-800"
-                                >
-                                  {b.type === "URL" ? "🔗 " : "↩️ "}
-                                  {b.text || "Action"}
-                                </div>
-                              ))}
+                              {card.buttons.map((b, bi) => {
+                                const isDynamic = b.type === "URL" && (b.urlType === "DYNAMIC" || b.url?.includes("{{1}}"));
+                                return (
+                                  <div
+                                    key={bi}
+                                    className="bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded-lg py-1 px-2 text-center text-[10px] font-bold border border-indigo-200 dark:border-indigo-800 flex items-center justify-center gap-1"
+                                  >
+                                    {b.type === "URL" ? (
+                                      isDynamic ? <Zap size={10} className="text-amber-500 fill-amber-500" /> : <ExternalLink size={10} />
+                                    ) : (
+                                      "↩️ "
+                                    )}
+                                    <span>{b.text || "Action"}</span>
+                                    {isDynamic && (
+                                      <span className="text-[8px] font-mono text-amber-600 dark:text-amber-300">&#123;&#123;1&#125;&#125;</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         ))}
@@ -2200,8 +2641,9 @@ export default function WhatsAppTemplatesComponent() {
           >
             <option value="ALL">All Statuses</option>
             <option value="APPROVED">✅ Approved</option>
-            <option value="PENDING">⏳ Pending</option>
+            <option value="PENDING">⏳ Pending / In Review</option>
             <option value="REJECTED">❌ Rejected</option>
+            <option value="PAUSED">⏸️ Paused</option>
           </select>
 
           {/* Time Range Filter */}
@@ -2408,8 +2850,8 @@ export default function WhatsAppTemplatesComponent() {
                     </div>
                   </div>
 
-                  {/* Test Send Button */}
-                  {t.status === "APPROVED" && (
+                  {/* Test Send Button / Review Status Badge */}
+                  {t.status === "APPROVED" ? (
                     <button
                       onClick={() => handleTest(t)}
                       disabled={testingTemplate === t.name}
@@ -2422,6 +2864,11 @@ export default function WhatsAppTemplatesComponent() {
                       )}
                       <span>{testingTemplate === t.name ? "Sending Test..." : "Send Test to Phone"}</span>
                     </button>
+                  ) : (
+                    <div className="w-full py-2 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-1.5 border border-amber-200 dark:border-amber-800/60">
+                      <Clock size={13} className="animate-pulse" />
+                      <span>{t.status === "REJECTED" ? "Template Rejected by Meta" : "Under Review by Meta (Dispatch Locked)"}</span>
+                    </div>
                   )}
                 </div>
               </div>

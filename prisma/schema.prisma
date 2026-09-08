@@ -1404,7 +1404,7 @@ model WhatsAppTemplate {
   name             String   // e.g., "order_confirmation_v2"
   category         String   @default("MARKETING") // MARKETING, UTILITY, AUTHENTICATION
   language         String   @default("en_US")
-  status           String   @default("APPROVED") // APPROVED, PENDING, REJECTED, PAUSED
+  status           String   @default("PENDING") // APPROVED, PENDING, IN_REVIEW, REJECTED, PAUSED
   headerType       String   @default("NONE") // NONE, TEXT, IMAGE, VIDEO, DOCUMENT
   headerContent    String?
   bodyText         String   // Standard body text with {{customer_name}}, {{order_number}}, etc.

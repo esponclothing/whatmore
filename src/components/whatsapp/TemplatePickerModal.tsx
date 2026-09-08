@@ -20,6 +20,7 @@ export default function TemplatePickerModal({ onClose, activeConvDetail, onSendT
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Template | null>(null);
   const [variables, setVariables] = useState<Record<string, string>>({});
+  const [buttonVariables, setButtonVariables] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
@@ -39,6 +40,20 @@ export default function TemplatePickerModal({ onClose, activeConvDetail, onSendT
   };
 
   const bodyVars = selected ? extractVariables(selected.bodyText) : [];
+
+  // Parse template buttons
+  const templateButtons: any[] = (() => {
+    if (!selected?.buttons) return [];
+    try {
+      if (typeof selected.buttons === "string") return JSON.parse(selected.buttons);
+      if (Array.isArray(selected.buttons)) return selected.buttons;
+    } catch (e) {}
+    return [];
+  })();
+
+  const dynamicButtons = templateButtons
+    .map((b, idx) => ({ ...b, originalIndex: idx }))
+    .filter(b => (b.type === "URL" && (b.urlType === "DYNAMIC" || b.url?.includes("{{1}}"))) || (b.type === "COPY_CODE" && (b.code === "{{1}}" || b.isDynamicCode)));
 
   // Extract contextual customer, agent, brand, and tag variables from active conversation
   const customerName = activeConvDetail?.customer?.contactPerson || activeConvDetail?.contactName || activeConvDetail?.customer?.businessName || "";
@@ -83,6 +98,15 @@ export default function TemplatePickerModal({ onClose, activeConvDetail, onSendT
       newVars[bodyVars[2]] = brandName;
     }
     setVariables(newVars);
+
+    const newBtnVars: Record<string, string> = { ...buttonVariables };
+    dynamicButtons.forEach(btn => {
+      const key = `btn_${btn.originalIndex}`;
+      if (!newBtnVars[key]) {
+        newBtnVars[key] = phone ? phone.slice(-6) : "ESP-10029";
+      }
+    });
+    setButtonVariables(newBtnVars);
   };
 
   const handleSelectTemplate = (t: Template) => {
@@ -93,6 +117,20 @@ export default function TemplatePickerModal({ onClose, activeConvDetail, onSendT
       initialVars[vars[0]] = customerName;
     }
     setVariables(initialVars);
+
+    let parsed: any[] = [];
+    try {
+      if (typeof t.buttons === "string") parsed = JSON.parse(t.buttons);
+      else if (Array.isArray(t.buttons)) parsed = t.buttons;
+    } catch (e) {}
+
+    const initBtnVars: Record<string, string> = {};
+    parsed.forEach((b, idx) => {
+      if ((b.type === "URL" && (b.urlType === "DYNAMIC" || b.url?.includes("{{1}}"))) || (b.type === "COPY_CODE" && (b.code === "{{1}}" || b.isDynamicCode))) {
+        initBtnVars[`btn_${idx}`] = phone ? phone.slice(-6) : (b.urlExample || "ESP-10029");
+      }
+    });
+    setButtonVariables(initBtnVars);
   };
 
   const previewBody = (text: string) => {
@@ -110,6 +148,28 @@ export default function TemplatePickerModal({ onClose, activeConvDetail, onSendT
         parameters: bodyVars.map(v => ({ type: "text", text: variables[v] || v }))
       });
     }
+
+    // Dynamic Button components
+    dynamicButtons.forEach(btn => {
+      const key = `btn_${btn.originalIndex}`;
+      const val = buttonVariables[key] || btn.urlExample || "ESP-10029";
+      if (btn.type === "URL") {
+        components.push({
+          type: "button",
+          sub_type: "url",
+          index: String(btn.originalIndex),
+          parameters: [{ type: "text", text: val }]
+        });
+      } else if (btn.type === "COPY_CODE") {
+        components.push({
+          type: "button",
+          sub_type: "copy_code",
+          index: String(btn.originalIndex),
+          parameters: [{ type: "coupon_code", coupon_code: val }]
+        });
+      }
+    });
+
     await onSendTemplate(selected.name, selected.language || "en", components);
     setSending(false);
     onClose();
@@ -213,11 +273,11 @@ export default function TemplatePickerModal({ onClose, activeConvDetail, onSendT
                   </div>
 
                   {/* Variable Inputs & Selectable Chips */}
-                  {bodyVars.length > 0 ? (
-                    <div>
+                  {bodyVars.length > 0 && (
+                    <div style={{ marginBottom: "16px" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
                         <div style={{ fontSize: "11px", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                          Fill Variables ({bodyVars.length})
+                          Fill Body Variables ({bodyVars.length})
                         </div>
                         {suggestions.length > 0 && (
                           <button
@@ -314,10 +374,68 @@ export default function TemplatePickerModal({ onClose, activeConvDetail, onSendT
                         </div>
                       ))}
                     </div>
-                  ) : (
+                  )}
+
+                  {/* Dynamic Button Parameters */}
+                  {dynamicButtons.length > 0 && (
+                    <div style={{ marginBottom: "16px" }}>
+                      <div style={{ fontSize: "11px", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "10px" }}>
+                        ⚡ Dynamic Button Parameters ({dynamicButtons.length})
+                      </div>
+                      {dynamicButtons.map(btn => {
+                        const key = `btn_${btn.originalIndex}`;
+                        return (
+                          <div key={key} style={{ marginBottom: "12px", background: "white", padding: "10px 12px", borderRadius: "10px", border: "1px solid #c7d2fe", boxShadow: "0 1px 2px rgba(0,0,0,0.03)" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                              <label style={{ fontSize: "12px", fontWeight: 700, color: "#3730a3" }}>
+                                🔗 {btn.text || "Dynamic Button"} (Suffix / Value)
+                              </label>
+                              <span style={{ fontSize: "10px", color: "#6366f1", fontWeight: 600 }}>{btn.url || btn.code}</span>
+                            </div>
+                            <input
+                              value={buttonVariables[key] || ""}
+                              onChange={e => setButtonVariables(prev => ({ ...prev, [key]: e.target.value }))}
+                              placeholder="e.g. Order ID, Tracking Code, or Promo Code"
+                              style={{
+                                width: "100%",
+                                padding: "8px 10px",
+                                border: "1px solid #cbd5e1",
+                                borderRadius: "8px",
+                                fontSize: "13px",
+                                outline: "none",
+                                boxSizing: "border-box",
+                                background: "#f8fafc",
+                                marginBottom: "6px"
+                              }}
+                            />
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
+                              {phone && (
+                                <button
+                                  type="button"
+                                  onClick={() => setButtonVariables(prev => ({ ...prev, [key]: phone.slice(-10) }))}
+                                  style={{ padding: "2px 8px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "12px", fontSize: "11px", cursor: "pointer" }}
+                                >
+                                  📱 Phone: {phone.slice(-10)}
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setButtonVariables(prev => ({ ...prev, [key]: `ESP-${Date.now().toString().slice(-5)}` }))}
+                                style={{ padding: "2px 8px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "12px", fontSize: "11px", cursor: "pointer" }}
+                              >
+                                📦 Random Order ID
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {bodyVars.length === 0 && dynamicButtons.length === 0 && (
                     <div style={{ padding: "12px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", color: "#166534", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
                       <CheckCircle2 size={16} color="#16a34a" />
-                      <span>This template has no variable placeholders. It is ready to send as-is!</span>
+                      <span>This template is ready to send as-is!</span>
                     </div>
                   )}
                 </div>

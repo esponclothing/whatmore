@@ -39,10 +39,11 @@ export async function getMetaApiCredentials() {
       token: account?.accessToken || '',
       accessToken: account?.accessToken || '',
       wabaId: account?.businessAccountId || '',
+      businessAccountId: account?.businessAccountId || '',
       isConnected: Boolean(account?.accessToken && account?.phoneId)
     };
   } catch (e) {
-    return { phoneId: '', token: '', accessToken: '', wabaId: '', isConnected: false };
+    return { phoneId: '', token: '', accessToken: '', wabaId: '', businessAccountId: '', isConnected: false };
   }
 }
 
@@ -1217,6 +1218,8 @@ export async function getWhatsAppTemplates() {
         const data = await response.json();
 
         if (data.data && Array.isArray(data.data)) {
+          const metaTemplateNames = new Set(data.data.map((m: any) => m.name));
+
           for (const t of data.data) {
             const bodyComponent = t.components?.find((c: any) => c.type === 'BODY');
             const headerComponent = t.components?.find((c: any) => c.type === 'HEADER');
@@ -1225,52 +1228,61 @@ export async function getWhatsAppTemplates() {
 
             let headerType = 'NONE';
             if (headerComponent?.format) headerType = headerComponent.format;
+            const metaStatus = (t.status || 'PENDING').toUpperCase();
 
-            await prisma.whatsAppTemplate.upsert({
-              where: { id: t.id },
-              update: {
-                status: t.status || 'APPROVED',
-                category: t.category || 'MARKETING',
-                language: t.language || 'en_US',
-                headerType,
-                headerContent: headerComponent?.text || '',
-                bodyText: bodyComponent?.text || '',
-                footerText: footerComponent?.text || '',
-                buttons: buttonsComponent ? JSON.stringify(buttonsComponent.buttons) : '[]',
-                rejectionReason: t.rejected_reason || null
-              },
-              create: {
-                id: t.id,
-                name: t.name,
-                status: t.status || 'APPROVED',
-                category: t.category || 'MARKETING',
-                language: t.language || 'en_US',
-                headerType,
-                headerContent: headerComponent?.text || '',
-                bodyText: bodyComponent?.text || '',
-                footerText: footerComponent?.text || '',
-                buttons: buttonsComponent ? JSON.stringify(buttonsComponent.buttons) : '[]',
-                rejectionReason: t.rejected_reason || null
-              }
-            }).catch(async () => {
-              // If ID matches standard name
-              const existingByName = await prisma.whatsAppTemplate.findFirst({ where: { name: t.name } });
-              if (existingByName) {
-                await prisma.whatsAppTemplate.update({
-                  where: { id: existingByName.id },
-                  data: {
-                    status: t.status || 'APPROVED',
-                    category: t.category || 'MARKETING',
-                    language: t.language || 'en_US',
-                    headerType,
-                    headerContent: headerComponent?.text || '',
-                    bodyText: bodyComponent?.text || '',
-                    footerText: footerComponent?.text || '',
-                    buttons: buttonsComponent ? JSON.stringify(buttonsComponent.buttons) : '[]'
-                  }
-                }).catch(() => {});
+            // Find existing local template by Meta ID or template name
+            const existing = await prisma.whatsAppTemplate.findFirst({
+              where: {
+                OR: [
+                  { id: t.id },
+                  { name: t.name }
+                ]
               }
             });
+
+            if (existing) {
+              await prisma.whatsAppTemplate.update({
+                where: { id: existing.id },
+                data: {
+                  status: metaStatus,
+                  category: t.category || 'MARKETING',
+                  language: t.language || 'en_US',
+                  headerType,
+                  headerContent: headerComponent?.text || '',
+                  bodyText: bodyComponent?.text || '',
+                  footerText: footerComponent?.text || '',
+                  buttons: buttonsComponent ? JSON.stringify(buttonsComponent.buttons) : '[]',
+                  rejectionReason: t.rejected_reason || null
+                }
+              }).catch(() => {});
+            } else {
+              await prisma.whatsAppTemplate.create({
+                data: {
+                  id: t.id,
+                  name: t.name,
+                  status: metaStatus,
+                  category: t.category || 'MARKETING',
+                  language: t.language || 'en_US',
+                  headerType,
+                  headerContent: headerComponent?.text || '',
+                  bodyText: bodyComponent?.text || '',
+                  footerText: footerComponent?.text || '',
+                  buttons: buttonsComponent ? JSON.stringify(buttonsComponent.buttons) : '[]',
+                  rejectionReason: t.rejected_reason || null
+                }
+              }).catch(() => {});
+            }
+          }
+
+          // Any local templates not in Meta should NOT remain as APPROVED
+          const allLocal = await prisma.whatsAppTemplate.findMany();
+          for (const localT of allLocal) {
+            if (!metaTemplateNames.has(localT.name) && localT.status === 'APPROVED') {
+              await prisma.whatsAppTemplate.update({
+                where: { id: localT.id },
+                data: { status: 'PENDING' }
+              }).catch(() => {});
+            }
           }
         }
       } catch (metaErr) {
@@ -1375,7 +1387,11 @@ export async function sendWhatsAppTemplateAction(
       const data = await res.json();
       if (data.error) {
         console.error(`[WhatsApp Template Error] Failed to send template "${templateName}" to ${cleanPhone}:`, data.error);
-        throw new Error(data.error.message || JSON.stringify(data.error));
+        const errMsg = data.error.error_user_msg || data.error.message || JSON.stringify(data.error);
+        if (data.error.code === 132001 || errMsg.includes('132001') || errMsg.includes('does not exist')) {
+          throw new Error(`Meta Error: Template "${templateName}" (${languageCode}) is not approved or does not exist on your Meta WABA account. Click "Sync Meta" to refresh approved templates.`);
+        }
+        throw new Error(errMsg);
       }
       
       const metaMessageId = data.messages?.[0]?.id;
@@ -1491,7 +1507,7 @@ export async function saveWhatsAppTemplateAction(data: any) {
     const creds = await getMetaApiCredentials();
     const brandDetails = await getWhatsAppBrandDetailsAction();
     const brandDomain = brandDetails.brandDomain || 'esponsports.com';
-    const brandPhone = brandDetails.brandPhone || '+917404388242';
+    const brandPhone = (brandDetails as any).brandPhone || (brandDetails as any).phoneNumber || '+917404388242';
     
     const templateName = data.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
     const templateType = data.templateType || 'STANDARD';
@@ -1499,7 +1515,8 @@ export async function saveWhatsAppTemplateAction(data: any) {
     const language = data.language || 'en_US';
 
     let metaSubmitted = false;
-    let metaTemplateId = null;
+    let metaTemplateId: string | null = null;
+    let metaStatus = 'PENDING';
 
     // Build Meta Graph API components payload
     const components: any[] = [];
@@ -1539,9 +1556,22 @@ export async function saveWhatsAppTemplateAction(data: any) {
             type: 'BUTTONS',
             buttons: card.buttons.map((b: any) => {
               if (b.type === 'URL') {
-                return { type: 'URL', text: b.text, url: b.url || `https://${brandDomain}` };
+                const isDyn = b.urlType === 'DYNAMIC' || (b.url && b.url.includes('{{1}}')) || b.isDynamic;
+                if (isDyn) {
+                  const finalUrl = b.url?.includes('{{1}}') ? b.url : (b.url ? `${b.url.replace(/\/+$/, '')}/{{1}}` : `https://${brandDomain}/products/{{1}}`);
+                  const sample = b.urlExample
+                    ? (b.urlExample.startsWith('http') ? b.urlExample : finalUrl.replace('{{1}}', b.urlExample))
+                    : finalUrl.replace('{{1}}', '12345');
+                  return {
+                    type: 'URL',
+                    text: b.text || 'View Product',
+                    url: finalUrl,
+                    example: [sample]
+                  };
+                }
+                return { type: 'URL', text: b.text || 'View Product', url: b.url || `https://${brandDomain}` };
               }
-              return { type: 'QUICK_REPLY', text: b.text };
+              return { type: 'QUICK_REPLY', text: b.text || 'Inquire' };
             })
           });
         }
@@ -1632,7 +1662,12 @@ export async function saveWhatsAppTemplateAction(data: any) {
       components.push({
         type: 'BUTTONS',
         buttons: [
-          { type: 'URL', text: 'Track shipment', url: `https://${brandDomain}/account/orders` }
+          {
+            type: 'URL',
+            text: 'Track shipment',
+            url: `https://${brandDomain}/track/{{1}}`,
+            example: [`https://${brandDomain}/track/ESP-88294`]
+          }
         ]
       });
     } else if (templateType === 'CALL_PERMISSIONS') {
@@ -1722,10 +1757,34 @@ export async function saveWhatsAppTemplateAction(data: any) {
         components.push({
           type: 'BUTTONS',
           buttons: buttonsList.map((b: any) => {
-            if (b.type === 'URL') return { type: 'URL', text: b.text, url: b.url || `https://${brandDomain}` };
-            if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone_number || brandPhone };
-            if (b.type === 'COPY_CODE') return { type: 'COPY_CODE', text: b.text, code: b.code || b.text };
-            return { type: 'QUICK_REPLY', text: b.text };
+            if (b.type === 'URL') {
+              const isDyn = b.urlType === 'DYNAMIC' || (b.url && b.url.includes('{{1}}')) || b.isDynamic;
+              if (isDyn) {
+                const finalUrl = b.url?.includes('{{1}}') ? b.url : (b.url ? `${b.url.replace(/\/+$/, '')}/{{1}}` : `https://${brandDomain}/track/{{1}}`);
+                const sample = b.urlExample
+                  ? (b.urlExample.startsWith('http') ? b.urlExample : finalUrl.replace('{{1}}', b.urlExample))
+                  : finalUrl.replace('{{1}}', '12345');
+                return {
+                  type: 'URL',
+                  text: b.text || 'Visit Website',
+                  url: finalUrl,
+                  example: [sample]
+                };
+              }
+              return { type: 'URL', text: b.text || 'Visit Website', url: b.url || `https://${brandDomain}` };
+            }
+            if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: b.text || 'Call', phone_number: b.phone_number || brandPhone };
+            if (b.type === 'COPY_CODE') {
+              const isDynCode = b.isDynamicCode || b.code === '{{1}}';
+              if (isDynCode) {
+                return {
+                  type: 'COPY_CODE',
+                  example: b.exampleCode || 'FLAT30'
+                };
+              }
+              return { type: 'COPY_CODE', text: b.text || 'Copy Code', code: b.code || b.text || 'FLAT30' };
+            }
+            return { type: 'QUICK_REPLY', text: b.text || 'Reply' };
           })
         });
       }
@@ -1756,11 +1815,20 @@ export async function saveWhatsAppTemplateAction(data: any) {
         if (metaJson.id) {
           metaSubmitted = true;
           metaTemplateId = metaJson.id;
+          metaStatus = metaJson.status || 'PENDING';
         } else if (metaJson.error) {
-          console.warn("[saveWhatsAppTemplateAction] Meta submission response:", metaJson.error.message);
+          console.warn("[saveWhatsAppTemplateAction] Meta submission error:", metaJson.error);
+          return {
+            success: false,
+            error: metaJson.error.error_user_msg || metaJson.error.message || 'Meta template submission failed.'
+          };
         }
-      } catch (metaErr) {
+      } catch (metaErr: any) {
         console.warn("[saveWhatsAppTemplateAction] Meta API POST error:", metaErr);
+        return {
+          success: false,
+          error: `Meta connection error: ${metaErr.message || metaErr}`
+        };
       }
     }
 
@@ -1780,7 +1848,7 @@ export async function saveWhatsAppTemplateAction(data: any) {
         templateType,
         carouselCards: data.carouselCards ? (typeof data.carouselCards === 'string' ? data.carouselCards : JSON.stringify(data.carouselCards)) : null,
         catalogId: data.catalogId || null,
-        status: metaSubmitted ? 'PENDING' : 'APPROVED'
+        status: metaStatus
       },
       create: {
         id: metaTemplateId || `local_${templateName}_${Date.now()}`,
@@ -1796,7 +1864,7 @@ export async function saveWhatsAppTemplateAction(data: any) {
         templateType,
         carouselCards: data.carouselCards ? (typeof data.carouselCards === 'string' ? data.carouselCards : JSON.stringify(data.carouselCards)) : null,
         catalogId: data.catalogId || null,
-        status: metaSubmitted ? 'PENDING' : 'APPROVED'
+        status: metaStatus
       }
     });
 
