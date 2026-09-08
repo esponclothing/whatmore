@@ -2049,6 +2049,445 @@ export async function saveWhatsAppTemplateAction(data: any) {
   }
 }
 
+// ---------------------------------------------------------
+// AI TEMPLATE STUDIO CO-PILOT GENERATOR (DYNAMIC BRAND & KNOWLEDGE GUIDED)
+// ---------------------------------------------------------
+interface BrandIntelligenceContext {
+  brandName: string;
+  brandDomain: string;
+  brandPhone: string;
+  brandEmail: string;
+  brandAddress: string;
+  gstin?: string;
+  knowledgeBase?: string;
+  systemRules?: string;
+  activeProducts?: Array<{ name: string; sellingPrice?: number; category?: string; images?: string }>;
+  activeCombos?: Array<{ combo_name?: string; combo_price?: number; discount_code?: string }>;
+  cannedFaqs?: string;
+}
+
+function generateContextualTemplateFallback(
+  prompt: string,
+  brand: BrandIntelligenceContext,
+  preferredCategory?: string,
+  preferredType?: string
+) {
+  const p = prompt.toLowerCase();
+  const slugPrompt = p.replace(/[^a-z0-9]+/g, '_').slice(0, 30).replace(/^_+|_+$/g, '') || 'campaign';
+  const brandName = brand.brandName;
+  const brandDomain = brand.brandDomain;
+  const brandPhone = brand.brandPhone;
+  const brandEmail = brand.brandEmail;
+  
+  // Real product names or defaults
+  const p1 = brand.activeProducts?.[0]?.name || `${brandName} Performance Tee`;
+  const p1Price = brand.activeProducts?.[0]?.sellingPrice ? `₹${brand.activeProducts[0].sellingPrice}` : '₹899';
+  const p2 = brand.activeProducts?.[1]?.name || `${brandName} Pro Shorts`;
+  const p2Price = brand.activeProducts?.[1]?.sellingPrice ? `₹${brand.activeProducts[1].sellingPrice}` : '₹1,199';
+  const p3 = brand.activeProducts?.[2]?.name || `${brandName} Gym Trackpant`;
+  const p3Price = brand.activeProducts?.[2]?.sellingPrice ? `₹${brand.activeProducts[2].sellingPrice}` : '₹1,499';
+
+  // Real combo code or default
+  const defaultCombo = brand.activeCombos?.[0]?.discount_code || 'FLAT30';
+  const defaultDiscount = brand.activeCombos?.[0]?.combo_price ? `Special @ ₹${brand.activeCombos[0].combo_price}` : 'FLAT 30% OFF';
+
+  if (/order|track|dispatch|shipped|delivery|invoice|awb/i.test(p)) {
+    return {
+      name: `order_update_${slugPrompt}`,
+      category: "UTILITY",
+      language: "en_US",
+      templateType: "ORDER_STATUS",
+      headerType: "TEXT",
+      headerContent: `🚚 ${brandName} Order Update!`,
+      bodyText: `Hi {{1}}, great news! Your order #{{2}} from ${brandName} has been packed & dispatched. Your tracking ID is {{3}}. Click below to track your shipment live or call our team for delivery assistance.`,
+      footerText: `${brandName} Logistics Desk | ${brandPhone}`,
+      buttons: [
+        { type: "URL", text: "Track Shipment", url: `https://${brandDomain}/track/{{1}}`, urlType: "DYNAMIC", urlExample: `https://${brandDomain}/track/ESP-88294` },
+        { type: "PHONE_NUMBER", text: "Call Logistics", phone_number: brandPhone }
+      ],
+      variables: [
+        { param: "{{1}}", name: "Customer Name", example: "Rahul Sharma", description: "Customer Name" },
+        { param: "{{2}}", name: "Order Number", example: "ESP-99412", description: "Order ID" },
+        { param: "{{3}}", name: "Tracking ID", example: "ICARRY-7721", description: "AWB Number" }
+      ],
+      couponCode: "TRACKNOW",
+      explanation: `Utility order status template dynamically branded for ${brandName} with real-time tracking deep link and direct phone hotline (${brandPhone}).`,
+      complianceChecks: [
+        "✅ Clean snake_case template name compliant with Meta policies",
+        "✅ Utility category approved for non-promotional transactional order updates",
+        "✅ Sequential {{1}}, {{2}}, {{3}} variables with realistic examples provided",
+        "✅ Direct link and click-to-call action buttons with valid destinations"
+      ]
+    };
+  }
+
+  if (/carousel|collection|showcase|catalog|products|combo|trio|pack|bestseller/i.test(p)) {
+    return {
+      name: `carousel_${slugPrompt}`,
+      category: "MARKETING",
+      language: "en_US",
+      templateType: "CAROUSEL",
+      headerType: "NONE",
+      headerContent: "",
+      bodyText: `Hi {{1}}, explore the hottest trending styles at ${brandName}! Swipe through our curated collection below and enjoy {{2}} on your order with code *${defaultCombo}*.`,
+      footerText: `${brandName} | Official Store: ${brandDomain}`,
+      buttons: [
+        { type: "URL", text: "Shop Store", url: `https://${brandDomain}/collections/trending`, urlType: "STATIC" },
+        { type: "COPY_CODE", text: "Copy Coupon", code: defaultCombo }
+      ],
+      variables: [
+        { param: "{{1}}", name: "Customer Name", example: "Aman Gupta", description: "Customer Name" },
+        { param: "{{2}}", name: "Offer Banner", example: defaultDiscount, description: "Discount percentage or promo" }
+      ],
+      couponCode: defaultCombo,
+      carouselCards: [
+        {
+          id: "card_1",
+          mediaUrl: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80",
+          headerType: "IMAGE",
+          title: p1,
+          bodyText: `${p1Price} • Breathable 4-Way Stretch Cotton`,
+          buttons: [
+            { type: "URL", text: "Buy Now", url: `https://${brandDomain}/products/item1`, urlType: "STATIC" },
+            { type: "QUICK_REPLY", text: "Check Sizes" }
+          ]
+        },
+        {
+          id: "card_2",
+          mediaUrl: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=800&auto=format&fit=crop&q=80",
+          headerType: "IMAGE",
+          title: p2,
+          bodyText: `${p2Price} • Zipper Pockets & Ultra Comfort`,
+          buttons: [
+            { type: "URL", text: "Buy Now", url: `https://${brandDomain}/products/item2`, urlType: "STATIC" },
+            { type: "QUICK_REPLY", text: "More Colors" }
+          ]
+        },
+        {
+          id: "card_3",
+          mediaUrl: "https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800&auto=format&fit=crop&q=80",
+          headerType: "IMAGE",
+          title: p3,
+          bodyText: `${p3Price} • Tapered Fit & Premium Fabric`,
+          buttons: [
+            { type: "URL", text: "Buy Now", url: `https://${brandDomain}/products/item3`, urlType: "STATIC" },
+            { type: "QUICK_REPLY", text: "View Details" }
+          ]
+        }
+      ],
+      explanation: `Multi-card WhatsApp Product Carousel showcasing live catalog items (${p1}, ${p2}, ${p3}) with Buy Now store links and coupon code *${defaultCombo}*.`,
+      complianceChecks: [
+        "✅ Meta Multi-Card Carousel layout with 3 interactive product cards",
+        "✅ High-resolution sample image URLs attached to each card",
+        "✅ Individual Buy Now CTA buttons on every product card",
+        "✅ Sequential body text greeting parameters {{1}} and {{2}}"
+      ]
+    };
+  }
+
+  if (/cart|abandoned|checkout|recover|bag/i.test(p)) {
+    return {
+      name: `cart_recovery_${slugPrompt}`,
+      category: "MARKETING",
+      language: "en_US",
+      templateType: "LTO_COUPON",
+      headerType: "IMAGE",
+      headerContent: "",
+      headerMediaUrl: "https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=800&auto=format&fit=crop&q=80",
+      bodyText: `Hi {{1}}, you left items in your shopping bag at ${brandName}! Your reserved cart is about to expire. Complete your order today and use code *{{2}}* for an extra *{{3}}* at checkout.`,
+      footerText: `${brandName} | Reserved for 24 Hours • Call ${brandPhone}`,
+      buttons: [
+        { type: "URL", text: "Checkout Now", url: `https://${brandDomain}/cart/{{1}}`, urlType: "DYNAMIC", urlExample: `https://${brandDomain}/cart/checkout` },
+        { type: "COPY_CODE", text: "Copy Coupon", code: defaultCombo },
+        { type: "PHONE_NUMBER", text: "Order on Call", phone_number: brandPhone }
+      ],
+      variables: [
+        { param: "{{1}}", name: "Customer Name", example: "Priya Sharma", description: "Customer Name" },
+        { param: "{{2}}", name: "Coupon Code", example: defaultCombo, description: "Promo code" },
+        { param: "{{3}}", name: "Discount Amount", example: defaultDiscount, description: "Discount percentage" }
+      ],
+      couponCode: defaultCombo,
+      explanation: `High-urgency abandoned cart recovery template with 1-click Copy Coupon (${defaultCombo}), personalized checkout deep link (${brandDomain}), and direct phone call option (${brandPhone}).`,
+      complianceChecks: [
+        "✅ Native Meta Copy Code button for instantaneous 1-tap coupon copying",
+        "✅ Dynamic URL parameter configured for direct cart recovery deep linking",
+        "✅ Meta Marketing guidelines strictly followed for promotional re-engagement",
+        "✅ Sequential {{1}}, {{2}}, {{3}} variables validated"
+      ]
+    };
+  }
+
+  if (/b2b|wholesale|bulk|retailer|gst|dealer/i.test(p)) {
+    return {
+      name: `b2b_wholesale_${slugPrompt}`,
+      category: "MARKETING",
+      language: "en_US",
+      templateType: "STANDARD",
+      headerType: "IMAGE",
+      headerContent: "",
+      headerMediaUrl: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&auto=format&fit=crop&q=80",
+      bodyText: `Hello {{1}}, welcome to ${brandName} B2B Wholesale! 🏭 Access factory-direct wholesale pricing, GST invoicing, and ready bulk inventory on all apparel collections. Minimum order quantity: {{2}}. View our full catalog below.`,
+      footerText: `${brandName} B2B Desk • GSTIN: ${brand.gstin || 'Verified'}`,
+      buttons: [
+        { type: "URL", text: "Wholesale Catalog", url: `https://${brandDomain}/wholesale/{{1}}`, urlType: "DYNAMIC", urlExample: `https://${brandDomain}/wholesale/catalog` },
+        { type: "PHONE_NUMBER", text: "Call B2B Manager", phone_number: brandPhone },
+        { type: "QUICK_REPLY", text: "Request Price List" }
+      ],
+      variables: [
+        { param: "{{1}}", name: "Business Name", example: "Fashion Hub Retails", description: "Store / Retailer Name" },
+        { param: "{{2}}", name: "MOQ Requirement", example: "50 Pieces per style", description: "Minimum Order Quantity" }
+      ],
+      explanation: `B2B Wholesale outreach template tailored for ${brandName}, highlighting factory pricing, GST invoicing, and a direct line to ${brandPhone}.`,
+      complianceChecks: [
+        "✅ B2B compliant copy tailored for wholesale and retail buyers",
+        "✅ Clear parameters with business-oriented example values",
+        "✅ Multi-channel CTA combining digital wholesale portal and direct telephone contact",
+        "✅ Professional tone matching company business policies"
+      ]
+    };
+  }
+
+  // Default: Festive / Flash Sale / Promotion
+  return {
+    name: `promo_sale_${slugPrompt}`,
+    category: preferredCategory || "MARKETING",
+    language: "en_US",
+    templateType: preferredType || "LTO_COUPON",
+    headerType: "IMAGE",
+    headerContent: "",
+    headerMediaUrl: "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800&auto=format&fit=crop&q=80",
+    bodyText: `Hi {{1}}, celebrate with ${brandName}! 🔥 Enjoy an exclusive *{{2}}* across our entire collection. Use promo code *{{3}}* at checkout before the offer ends! Need help? Call ${brandPhone}.`,
+    footerText: `${brandName} | Reply STOP to unsubscribe`,
+    buttons: [
+      { type: "URL", text: "Shop Offer", url: `https://${brandDomain}/sale/{{1}}`, urlType: "DYNAMIC", urlExample: `https://${brandDomain}/sale/festive` },
+      { type: "COPY_CODE", text: "Copy Code", code: defaultCombo },
+      { type: "PHONE_NUMBER", text: "Call Support", phone_number: brandPhone }
+    ],
+    variables: [
+      { param: "{{1}}", name: "Customer Name", example: "Rahul", description: "Customer Name" },
+      { param: "{{2}}", name: "Discount Tag", example: defaultDiscount, description: "Discount Offer" },
+      { param: "{{3}}", name: "Promo Code", example: defaultCombo, description: "Promo / Coupon code" }
+    ],
+    couponCode: defaultCombo,
+    explanation: `Engaging promotional template for ${brandName} featuring high-converting Copy Code button (*${defaultCombo}*), dynamic store link (https://${brandDomain}), and direct customer support hotline (${brandPhone}).`,
+    complianceChecks: [
+      "✅ Strictly lowercase snake_case alphanumeric template name",
+      "✅ Sequential numbering {{1}}, {{2}}, {{3}} with descriptive sample parameters",
+      "✅ Under 1024 characters with proper punctuation and spacing",
+      "✅ Interactive CTA buttons containing valid URLs, copy codes, and telephone numbers"
+    ]
+  };
+}
+
+export async function generateAITemplateAction(prompt: string, context?: {
+  category?: string;
+  templateType?: string;
+  brandName?: string;
+  brandDomain?: string;
+  currentDraft?: any;
+}) {
+  try {
+    // 1. Fetch Dynamic Brand Identity, Contact Details, Knowledge Base & Products
+    const [
+      settings,
+      company,
+      account,
+      legacySetting,
+      organization,
+      activeProducts,
+      activeCombos,
+      cannedResponses
+    ] = await Promise.all([
+      prisma.whatsAppSettings.findFirst().catch(() => null),
+      prisma.companySettings.findFirst().catch(() => null),
+      prisma.whatsAppAccount.findFirst().catch(() => null),
+      prisma.whatsAppLegacySetting.findFirst().catch(() => null),
+      prisma.organization.findFirst().catch(() => null),
+      prisma.product.findMany({ where: { status: 'Active' }, take: 10, select: { name: true, sellingPrice: true, category: true, subCategory: true, images: true } }).catch(() => []),
+      prisma.shopifyCombo.findMany({ where: { is_active: true }, take: 6, select: { combo_name: true, combo_price: true, discount_code: true } }).catch(() => []),
+      prisma.whatsAppCannedResponse.findMany({ take: 6, select: { title: true, shortcut: true, content: true, category: true } }).catch(() => [])
+    ]);
+
+    // Build comprehensive Brand Intelligence Profile
+    const brandName = context?.brandName || company?.companyName || organization?.name || account?.name || "Espon Clothing";
+    const brandDomain = context?.brandDomain || (company?.shopifyStoreDomain ? company.shopifyStoreDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : (company?.website ? company.website.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : "www.espon.in"));
+    const brandPhone = company?.mobile || company?.phone || account?.phoneNumber || "+91 7206066678";
+    const brandEmail = company?.email || organization?.email || `support@${brandDomain}`;
+    const brandAddress = company?.address 
+      ? `${company.address}, ${company.city || ''}, ${company.state || ''} ${company.pincode || ''}, ${company.country || 'India'}`.replace(/\s+,/g, ',').trim()
+      : (company?.city || "Rohtak, Haryana, India");
+    const gstin = company?.gstin || organization?.gstin || "06AAHCE7721Q1Z4";
+
+    // 2. Aggregate AI Knowledge Base & Business Rules
+    const kbPieces: string[] = [];
+    if (settings?.aiKnowledgeBase) kbPieces.push(settings.aiKnowledgeBase);
+    if (legacySetting?.knowledge_base) kbPieces.push(legacySetting.knowledge_base);
+    if (legacySetting?.inst_brand_policies) kbPieces.push(`Brand Policies: ${legacySetting.inst_brand_policies}`);
+    if (legacySetting?.inst_size_advisor) kbPieces.push(`Size Guidelines: ${legacySetting.inst_size_advisor}`);
+    if (legacySetting?.inst_order_security) kbPieces.push(`Order & Payment Rules: ${legacySetting.inst_order_security}`);
+
+    const aiKnowledgeBase = kbPieces.join('\n\n') || "Leading apparel manufacturer & B2B wholesale brand with premium fabrics, fast nationwide delivery, GST invoicing, and easy exchanges.";
+    const aiSystemRules = settings?.aiSystemPrompt || "Be polite, high-converting, professional, and Meta compliant.";
+    const fallbackLanguage = settings?.aiFallbackLanguage || "English";
+
+    // Format Catalog & Combos Summaries
+    const productCatalogSummary = activeProducts.length > 0 
+      ? activeProducts.map(p => `• ${p.name} (₹${p.sellingPrice || 'N/A'}) - Category: ${p.category || 'Apparel'}`).join('\n')
+      : `• Espon Performance T-Shirts (₹899)\n• Espon Pro Gym Shorts (₹1,199)\n• Espon Active Trackpants (₹1,499)`;
+
+    const comboDealsSummary = activeCombos.length > 0
+      ? activeCombos.map(c => `• ${c.combo_name || 'Combo Pack'} @ ₹${c.combo_price || 'Special'} (Promo Code: ${c.discount_code || 'COMBO'})`).join('\n')
+      : `• Festive Mega Pack (Promo Code: FLAT30)\n• Buy 2 Get 1 Free (Promo Code: B2G1)`;
+
+    const cannedFaqsSummary = cannedResponses.length > 0
+      ? cannedResponses.map(r => `• [${r.title || r.shortcut}]: ${r.content}`).join('\n')
+      : "";
+
+    const brandIntel: BrandIntelligenceContext = {
+      brandName,
+      brandDomain,
+      brandPhone,
+      brandEmail,
+      brandAddress,
+      gstin,
+      knowledgeBase: aiKnowledgeBase,
+      systemRules: aiSystemRules,
+      activeProducts,
+      activeCombos,
+      cannedFaqs: cannedFaqsSummary
+    };
+
+    let apiKey = process.env.GEMINI_API_KEY || '';
+    let preferredModel = settings?.aiModel || "gemini-2.0-flash";
+    if (settings?.geminiApiKey) apiKey = settings.geminiApiKey;
+
+    const cleanPrompt = (prompt || '').trim();
+    if (!cleanPrompt) {
+      return { success: false, error: "Please enter a prompt describing the template you want to create." };
+    }
+
+    let generatedJson: any = null;
+
+    if (apiKey) {
+      const systemInstruction = `You are an elite Meta WhatsApp Business API Template Architect and Direct-Response Copywriting AI.
+Your task is to take the user's requirement and create a high-converting, 100% Meta-compliant WhatsApp Message Template structure.
+
+=== 🏢 DYNAMIC BRAND IDENTITY & CONTACT DETAILS ===
+- Brand Name: "${brandName}"
+- Official Website / Online Store: "https://${brandDomain}"
+- Customer Support Phone / WhatsApp: "${brandPhone}"
+- Official Support Email: "${brandEmail}"
+- Business Location & Address: "${brandAddress}"
+- GSTIN Number: "${gstin}"
+
+=== 📚 VERIFIED BUSINESS KNOWLEDGE BASE & BRAND POLICIES ===
+${aiKnowledgeBase}
+
+=== ⚙️ SYSTEM PROMPT & TONE GUIDELINES ===
+- Tone: ${aiSystemRules}
+- Preferred Language: ${fallbackLanguage}
+
+=== 🛍️ LIVE PRODUCT CATALOG SAMPLES (REAL DATA) ===
+${productCatalogSummary}
+
+=== 🔥 ACTIVE COMBO PROMOTIONS & REAL DISCOUNT CODES ===
+${comboDealsSummary}
+
+${cannedFaqsSummary ? `=== 💬 FREQUENTLY ASKED QUESTIONS & POLICY SNIPPETS ===\n${cannedFaqsSummary}\n` : ''}
+
+=== 🚨 META WHATSAPP TEMPLATE CONSTRAINTS (STRICT COMPLIANCE REQUIRED) ===
+1. "name": lowercase alphanumeric with underscores only (e.g. "festive_sale_2026", "order_tracking_update", "cart_recovery_offer"). Max 512 chars, no spaces, no uppercase, no dashes.
+2. "category": Must be one of "MARKETING", "UTILITY", "AUTHENTICATION".
+3. "language": Standard code ("en_US", "hi", "mr", "gu"). Default "en_US".
+4. "templateType": "STANDARD", "CAROUSEL", "CATALOGUE", "FLOWS", "LTO_COUPON", "ORDER_DETAILS", "ORDER_STATUS".
+5. "headerType": "NONE", "TEXT", "IMAGE", "VIDEO", "DOCUMENT".
+   - If TEXT, provide "headerContent" (max 60 chars).
+   - If IMAGE, provide "headerMediaUrl" (e.g. Unsplash URL).
+6. "bodyText": Engaging, high-conversion copy tailored to ${brandName}.
+   - Dynamic parameters MUST strictly follow sequential numbering {{1}}, {{2}}, {{3}} without skipping numbers.
+   - Weave in the real brand name, brand domain, or contact phone when suitable.
+   - Maximum 1024 characters.
+7. "footerText": Short footer (max 60 chars, e.g. "${brandName} | Reply STOP to unsubscribe" or "${brandName} | Call ${brandPhone}").
+8. "buttons": Array of up to 3 interactive buttons:
+   - Dynamic URL: { "type": "URL", "text": "Shop Now", "url": "https://${brandDomain}/shop/{{1}}", "urlType": "DYNAMIC", "urlExample": "https://${brandDomain}/shop/sale" }
+   - Static URL: { "type": "URL", "text": "Visit Website", "url": "https://${brandDomain}", "urlType": "STATIC" }
+   - Copy Code: { "type": "COPY_CODE", "text": "Copy Coupon", "code": "SAVE20" } (Use real combo codes if available)
+   - Phone Call: { "type": "PHONE_NUMBER", "text": "Call Support", "phone_number": "${brandPhone}" }
+   - Quick Reply: { "type": "QUICK_REPLY", "text": "Inquire" }
+9. "variables": Array of variable descriptors: [{ "param": "{{1}}", "name": "Customer Name", "example": "Rahul", "description": "Customer Name" }]
+10. "couponCode": Coupon code string if applicable (e.g. "FLAT30", "SAVE20").
+11. "carouselCards": If CAROUSEL, provide 2 to 3 cards with id, mediaUrl, headerType, title, bodyText, buttons using real ${brandName} products.
+12. "explanation": 1-2 sentences explaining how this template addresses the user's specific requirement and utilizes the brand's unique assets.
+13. "complianceChecks": Array of 3-4 Meta compliance guarantee bullet points.
+
+RETURN ONLY RAW VALID JSON without markdown ticks if possible or inside \`\`\`json block.`;
+
+      try {
+        const { callGeminiRest } = await import('@/lib/whatsappAI');
+        const rawResponse = await callGeminiRest(apiKey, preferredModel, cleanPrompt, systemInstruction, 1400);
+        const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          generatedJson = JSON.parse(jsonMatch[0]);
+        }
+      } catch (aiErr: any) {
+        console.warn("[generateAITemplateAction] AI API call warning, using rule fallback:", aiErr.message);
+      }
+    }
+
+    if (!generatedJson || !generatedJson.bodyText) {
+      generatedJson = generateContextualTemplateFallback(cleanPrompt, brandIntel, context?.category, context?.templateType);
+    }
+
+    const sanitizedTemplate = {
+      name: String(generatedJson.name || 'custom_template').toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 512),
+      category: ['MARKETING', 'UTILITY', 'AUTHENTICATION'].includes(generatedJson.category) ? generatedJson.category : (context?.category || 'MARKETING'),
+      language: generatedJson.language || 'en_US',
+      templateType: generatedJson.templateType || (generatedJson.carouselCards?.length ? 'CAROUSEL' : 'STANDARD'),
+      headerType: ['NONE', 'TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT'].includes(generatedJson.headerType) ? generatedJson.headerType : (generatedJson.headerMediaUrl ? 'IMAGE' : 'NONE'),
+      headerContent: generatedJson.headerContent || '',
+      headerMediaUrl: generatedJson.headerMediaUrl || (generatedJson.headerType === 'IMAGE' ? 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800&auto=format&fit=crop&q=80' : ''),
+      bodyText: generatedJson.bodyText || `Hi {{1}}, thank you for shopping with ${brandName}! Use code {{2}} at checkout for an exclusive discount.`,
+      footerText: generatedJson.footerText || `${brandName} | Reply STOP to unsubscribe`,
+      buttons: Array.isArray(generatedJson.buttons) && generatedJson.buttons.length > 0 ? generatedJson.buttons : [
+        { type: 'URL', text: 'Shop Now', url: `https://${brandDomain}/shop/{{1}}`, urlType: 'DYNAMIC', urlExample: `https://${brandDomain}/shop/sale` },
+        { type: 'COPY_CODE', text: 'Copy Code', code: generatedJson.couponCode || 'FLAT30' }
+      ],
+      variables: Array.isArray(generatedJson.variables) && generatedJson.variables.length > 0 ? generatedJson.variables : [
+        { param: '{{1}}', name: 'Customer Name', example: 'Rahul', description: 'Customer Name' }
+      ],
+      couponCode: generatedJson.couponCode || 'FLAT30',
+      carouselCards: Array.isArray(generatedJson.carouselCards) && generatedJson.carouselCards.length > 0 ? generatedJson.carouselCards : undefined,
+      explanation: generatedJson.explanation || `Template tailored dynamically for ${brandName} with real contact details, product references, and Meta-compliant CTA buttons.`,
+      complianceChecks: Array.isArray(generatedJson.complianceChecks) && generatedJson.complianceChecks.length > 0 ? generatedJson.complianceChecks : [
+        '✅ Name is strictly lowercase snake_case alphanumeric',
+        '✅ Sequential variable placeholders {{1}}, {{2}} with examples provided',
+        '✅ Character counts comply with Meta 1024-character body limit',
+        '✅ CTA buttons have valid target URLs with sample parameter mappings'
+      ]
+    };
+
+    return {
+      success: true,
+      brandInfo: {
+        brandName,
+        brandDomain,
+        brandPhone,
+        brandEmail,
+        brandAddress,
+        gstin,
+        hasAiKnowledge: !!aiKnowledgeBase,
+        productsCount: activeProducts.length,
+        combosCount: activeCombos.length
+      },
+      template: sanitizedTemplate,
+      explanation: sanitizedTemplate.explanation,
+      complianceChecks: sanitizedTemplate.complianceChecks
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to generate AI template" };
+  }
+}
+
 export async function getWhatsAppReplyLibrary() {
   try {
     await ensureSeeded();
@@ -2636,6 +3075,15 @@ export async function launchWhatsAppBroadcastAction(data: {
   couponCode?: string;   // Limited-Time Offer Coupon Code
   offerExpiration?: string; // LTO Expiration Date
   carouselCardsJson?: string;
+  // A/B Split Testing
+  isAbTest?: boolean;
+  variantTemplateName?: string;
+  abSplitRatio?: number; // e.g. 50 (for 50/50 split)
+  // Drip Sequence Follow-up Automation
+  isDripCampaign?: boolean;
+  dripStepsJson?: string;
+  parentCampaignId?: string;
+  dripStepNumber?: number;
 }) {
   try {
     let contactsToQueue: Array<{
@@ -2721,6 +3169,15 @@ export async function launchWhatsAppBroadcastAction(data: {
         couponCode: data.couponCode || null,
         offerExpiration: data.offerExpiration ? new Date(data.offerExpiration) : null,
         carouselCardsJson: data.carouselCardsJson || null,
+        // A/B Testing fields
+        isAbTest: data.isAbTest || false,
+        variantTemplateId: data.variantTemplateName || null,
+        abSplitRatio: data.abSplitRatio || 50,
+        // Drip sequence fields
+        isDripCampaign: data.isDripCampaign || false,
+        dripStepsJson: data.dripStepsJson || null,
+        parentCampaignId: data.parentCampaignId || null,
+        dripStepNumber: data.dripStepNumber || 1,
         sentCount: 0,
         deliveredCount: 0,
         readCount: 0,
@@ -2733,15 +3190,20 @@ export async function launchWhatsAppBroadcastAction(data: {
       }
     });
 
-    // Populate queue table
+    // Populate queue table with A/B variant assignments
     if (contactsToQueue.length > 0) {
+      const splitRatio = data.abSplitRatio || 50;
+      const splitIndex = data.isAbTest ? Math.round((contactsToQueue.length * splitRatio) / 100) : contactsToQueue.length;
+
       await prisma.whatsAppCampaignQueue.createMany({
-        data: contactsToQueue.map(c => ({
+        data: contactsToQueue.map((c, idx) => ({
           campaignId: campaign.id,
           toPhone: c.toPhone,
           customerName: c.customerName,
           customerCity: c.customerCity,
-          status: 'PENDING'
+          status: 'PENDING',
+          variant: (data.isAbTest && idx >= splitIndex) ? 'B' : 'A',
+          dripStep: data.dripStepNumber || 1
         }))
       });
     }
@@ -2816,7 +3278,7 @@ export async function getWhatsAppAudienceSegments() {
 }
 
 // ---------------------------------------------------------
-// GET BROADCAST CAMPAIGN ANALYTICS & LOGS
+// GET BROADCAST CAMPAIGN ANALYTICS & LOGS (WITH A/B COMPARISON)
 // ---------------------------------------------------------
 export async function getBroadcastCampaignAnalyticsAction(campaignId: string) {
   try {
@@ -2824,7 +3286,7 @@ export async function getBroadcastCampaignAnalyticsAction(campaignId: string) {
       where: { id: campaignId },
       include: {
         queues: {
-          take: 200,
+          take: 300,
           orderBy: { updatedAt: 'desc' }
         }
       }
@@ -2918,6 +3380,60 @@ export async function getBroadcastCampaignAnalyticsAction(campaignId: string) {
     const replyRate = totalSent > 0 ? Math.round((totalReplies / totalSent) * 100) : 0;
     const conversionRate = totalSent > 0 ? ((totalOrders / totalSent) * 100).toFixed(1) : "0.0";
 
+    // Detailed A/B Testing Comparative Analytics
+    let abComparison: any = null;
+    if (campaign.isAbTest && campaign.variantTemplateId) {
+      const allQueues = campaign.queues || [];
+      const queuesA = allQueues.filter(q => q.variant === 'A' || !q.variant);
+      const queuesB = allQueues.filter(q => q.variant === 'B');
+
+      const sentA = queuesA.filter(q => ['SENT', 'DELIVERED', 'READ', 'CLICKED', 'REPLIED'].includes(q.status)).length;
+      const deliveredA = queuesA.filter(q => ['DELIVERED', 'READ', 'CLICKED', 'REPLIED'].includes(q.status) || q.deliveredAt).length;
+      const readA = queuesA.filter(q => ['READ', 'CLICKED', 'REPLIED'].includes(q.status) || q.readAt).length;
+      const clicksA = queuesA.filter(q => q.status === 'CLICKED' || q.clickedAt || q.buttonClicked).length;
+      const repliedA = queuesA.filter(q => q.status === 'REPLIED' || q.repliedAt).length;
+
+      const sentB = queuesB.filter(q => ['SENT', 'DELIVERED', 'READ', 'CLICKED', 'REPLIED'].includes(q.status)).length;
+      const deliveredB = queuesB.filter(q => ['DELIVERED', 'READ', 'CLICKED', 'REPLIED'].includes(q.status) || q.deliveredAt).length;
+      const readB = queuesB.filter(q => ['READ', 'CLICKED', 'REPLIED'].includes(q.status) || q.readAt).length;
+      const clicksB = queuesB.filter(q => q.status === 'CLICKED' || q.clickedAt || q.buttonClicked).length;
+      const repliedB = queuesB.filter(q => q.status === 'REPLIED' || q.repliedAt).length;
+
+      const readRateA = sentA > 0 ? Math.round((readA / sentA) * 100) : 0;
+      const clickRateA = sentA > 0 ? Math.round((clicksA / sentA) * 100) : 0;
+      const readRateB = sentB > 0 ? Math.round((readB / sentB) * 100) : 0;
+      const clickRateB = sentB > 0 ? Math.round((clicksB / sentB) * 100) : 0;
+
+      const winner = (clickRateB > clickRateA || (clickRateB === clickRateA && readRateB > readRateA)) ? 'B' : 'A';
+
+      abComparison = {
+        isAbTest: true,
+        winner,
+        variantA: {
+          templateName: campaign.templateId,
+          total: queuesA.length,
+          sent: sentA,
+          delivered: deliveredA,
+          read: readA,
+          clicks: clicksA,
+          replied: repliedA,
+          readRate: readRateA,
+          clickRate: clickRateA
+        },
+        variantB: {
+          templateName: campaign.variantTemplateId,
+          total: queuesB.length,
+          sent: sentB,
+          delivered: deliveredB,
+          read: readB,
+          clicks: clicksB,
+          replied: repliedB,
+          readRate: readRateB,
+          clickRate: clickRateB
+        }
+      };
+    }
+
     return {
       success: true,
       campaign,
@@ -2942,7 +3458,75 @@ export async function getBroadcastCampaignAnalyticsAction(campaignId: string) {
         replyRate,
         conversionRate
       },
+      abComparison,
       recentRecipients: campaign.queues || []
+    };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+// ---------------------------------------------------------
+// DRIP SEQUENCE FOLLOW-UP STEP PROCESSOR
+// ---------------------------------------------------------
+export async function processDripCampaignStepAction(parentCampaignId: string, stepIndex: number) {
+  try {
+    const parent = await prisma.whatsAppCampaign.findUnique({
+      where: { id: parentCampaignId },
+      include: { queues: true }
+    });
+
+    if (!parent || !parent.dripStepsJson) {
+      return { success: false, error: "Parent campaign or drip configuration not found" };
+    }
+
+    let dripSteps: any[] = [];
+    try {
+      dripSteps = JSON.parse(parent.dripStepsJson);
+    } catch (_) {
+      return { success: false, error: "Invalid drip steps configuration" };
+    }
+
+    const stepConfig = dripSteps.find((s: any) => s.stepNumber === stepIndex);
+    if (!stepConfig || !stepConfig.templateId) {
+      return { success: false, error: `Drip step #${stepIndex} not configured` };
+    }
+
+    // Filter recipients based on trigger condition
+    let eligibleQueues = parent.queues;
+    if (stepConfig.condition === 'IF_NOT_READ') {
+      eligibleQueues = parent.queues.filter(q => q.status !== 'READ' && q.status !== 'CLICKED' && q.status !== 'REPLIED' && q.status !== 'FAILED');
+    } else if (stepConfig.condition === 'IF_NOT_CLICKED') {
+      eligibleQueues = parent.queues.filter(q => q.status !== 'CLICKED' && q.status !== 'REPLIED' && q.status !== 'FAILED');
+    } else {
+      eligibleQueues = parent.queues.filter(q => q.status !== 'FAILED');
+    }
+
+    if (eligibleQueues.length === 0) {
+      return { success: true, message: "No eligible recipients for this drip condition", dispatchedCount: 0 };
+    }
+
+    // Launch child drip broadcast
+    const childCampaign = await launchWhatsAppBroadcastAction({
+      name: `${parent.name} - Drip Step ${stepIndex} (${stepConfig.name || stepConfig.templateId})`,
+      templateName: stepConfig.templateId,
+      audienceType: 'CUSTOM',
+      customRecipients: eligibleQueues.map(q => ({
+        toPhone: q.toPhone,
+        customerName: q.customerName || 'Customer',
+        customerCity: q.customerCity || 'India'
+      })),
+      category: parent.category || 'MARKETING',
+      parentCampaignId: parent.id,
+      dripStepNumber: stepIndex
+    });
+
+    return {
+      success: true,
+      parentCampaignId,
+      stepNumber: stepIndex,
+      childCampaignId: childCampaign.campaignId,
+      dispatchedCount: eligibleQueues.length
     };
   } catch (e: any) {
     return { success: false, error: e.message };
@@ -4149,11 +4733,18 @@ export async function processCampaignQueueAction(campaignId: string) {
           components.push({ type: "body", parameters: bodyParameters });
         }
 
+        // Resolve active template for Variant A vs Variant B
+        const isVariantB = Boolean(campaign.isAbTest && item.variant === 'B' && campaign.variantTemplateId);
+        const activeTemplateName = isVariantB ? (campaign.variantTemplateId as string) : campaign.templateId;
+        const activeTemplate = isVariantB
+          ? ((await prisma.whatsAppTemplate.findFirst({ where: { name: activeTemplateName } })) || localTemplate)
+          : localTemplate;
+
         // Media Header parameter support (Image/Video/Document)
-        if (localTemplate?.headerType && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(localTemplate.headerType.toUpperCase())) {
-          const mediaUrl = localTemplate.headerMediaUrl || localTemplate.headerContent;
+        if (activeTemplate?.headerType && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(activeTemplate.headerType.toUpperCase())) {
+          const mediaUrl = activeTemplate.headerMediaUrl || activeTemplate.headerContent;
           if (mediaUrl && mediaUrl.startsWith('http')) {
-            const hType = localTemplate.headerType.toLowerCase();
+            const hType = activeTemplate.headerType.toLowerCase();
             components.push({
               type: "header",
               parameters: [
@@ -4192,8 +4783,8 @@ export async function processCampaignQueueAction(campaignId: string) {
             to: phone,
             type: "template",
             template: {
-              name: campaign.templateId,
-              language: { code: "en_US" },
+              name: activeTemplateName,
+              language: { code: activeTemplate?.language || "en_US" },
               components
             }
           })
@@ -4213,8 +4804,8 @@ export async function processCampaignQueueAction(campaignId: string) {
               to: phone,
               type: "template",
               template: {
-                name: campaign.templateId,
-                language: { code: "en_US" },
+                name: activeTemplateName,
+                language: { code: activeTemplate?.language || "en_US" },
                 components
               }
             })
@@ -4247,7 +4838,7 @@ export async function processCampaignQueueAction(campaignId: string) {
 
         // Resolve conversation & save message to inbox and chatbox
         try {
-          let readableContent = localTemplate?.bodyText || `[Broadcast: ${campaign.templateId}]`;
+          let readableContent = activeTemplate?.bodyText || `[Broadcast: ${activeTemplateName}]`;
           bodyParameters.forEach((param: any, pIdx: number) => {
             readableContent = readableContent.replace(new RegExp(`\\{\\{${pIdx + 1}\\}\\}`, 'g'), param.text);
           });
@@ -5161,20 +5752,55 @@ export async function createWhatsAppContactAction(data: {
 // ---------------------------------------------------------
 export async function getWhatsAppBrandDetailsAction() {
   try {
-    const [client, account] = await Promise.all([
-      prisma.client.findFirst(),
-      prisma.whatsAppAccount.findFirst()
+    const [settings, company, account, legacySetting, org, productsCount, combosCount] = await Promise.all([
+      prisma.whatsAppSettings.findFirst().catch(() => null),
+      prisma.companySettings.findFirst().catch(() => null),
+      prisma.whatsAppAccount.findFirst().catch(() => null),
+      prisma.whatsAppLegacySetting.findFirst().catch(() => null),
+      prisma.organization.findFirst().catch(() => null),
+      prisma.product.count({ where: { status: 'Active' } }).catch(() => 0),
+      prisma.shopifyCombo.count({ where: { is_active: true } }).catch(() => 0)
     ]);
-    const brandName = client?.businessName || account?.name || "Espon Sports";
-    const brandDomain = client?.shopifyDomain ? client.shopifyDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : "esponsports.com";
+
+    const brandName = company?.companyName || org?.name || account?.name || "Espon Clothing";
+    const brandDomain = company?.shopifyStoreDomain 
+      ? company.shopifyStoreDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '') 
+      : (company?.website ? company.website.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : "www.espon.in");
+    const phoneNumber = company?.mobile || company?.phone || account?.phoneNumber || "+91 7206066678";
+    const brandEmail = company?.email || org?.email || `support@${brandDomain}`;
+    const brandAddress = company?.address 
+      ? `${company.address}, ${company.city || ''}, ${company.state || ''} ${company.pincode || ''}`.replace(/\s+,/g, ',').trim()
+      : (company?.city || "Rohtak, Haryana, India");
+    const gstin = company?.gstin || org?.gstin || "06AAHCE7721Q1Z4";
+
+    const hasAiKnowledge = !!(settings?.aiKnowledgeBase || legacySetting?.knowledge_base);
+    const knowledgeLength = (settings?.aiKnowledgeBase?.length || 0) + (legacySetting?.knowledge_base?.length || 0);
+
     return {
       success: true,
       brandName,
       brandDomain,
-      phoneNumber: account?.phoneNumber || "+91 74043 88242"
+      phoneNumber,
+      brandPhone: phoneNumber,
+      brandEmail,
+      brandAddress,
+      gstin,
+      hasAiKnowledge,
+      knowledgeLength,
+      productsCount,
+      combosCount
     };
   } catch (e: any) {
-    return { success: false, brandName: "Espon Sports", brandDomain: "esponsports.com", phoneNumber: "+91 74043 88242" };
+    return { 
+      success: false, 
+      brandName: "Espon Clothing", 
+      brandDomain: "www.espon.in", 
+      phoneNumber: "+91 7206066678", 
+      brandPhone: "+91 7206066678",
+      brandEmail: "clothingespon@gmail.com",
+      brandAddress: "Rohtak, Haryana, India",
+      hasAiKnowledge: true
+    };
   }
 }
 

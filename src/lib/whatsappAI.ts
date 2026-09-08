@@ -444,11 +444,46 @@ export async function sendWhatsAppProductCards(toPhone: string, cards: any[]) {
 }
 
 export async function handleIncomingAILogic(senderPhone: string, userText: string, historyLines: string[], conversationId?: string) {
-  let brandName = "Espon Sports";
+  let brandName = "Espon Clothing";
+  let brandDomain = "www.espon.in";
+  let brandPhone = "+91 7206066678";
+  let brandEmail = "clothingespon@gmail.com";
+  let brandAddress = "Rohtak, Haryana, India";
+  let gstin = "06AAHCE7721Q1Z4";
+
+  let settings: any = null;
+  let legacySetting: any = null;
+  let activeCombos: any[] = [];
+
   try {
-    const settings = await prisma.companySettings.findFirst();
-    if (settings?.companyName) brandName = settings.companyName;
+    const [company, s, acc, legacy, combos] = await Promise.all([
+      prisma.companySettings.findFirst().catch(() => null),
+      prisma.whatsAppSettings.findFirst().catch(() => null),
+      prisma.whatsAppAccount.findFirst().catch(() => null),
+      prisma.whatsAppLegacySetting.findFirst().catch(() => null),
+      prisma.shopifyCombo.findMany({ where: { is_active: true }, take: 4 }).catch(() => [])
+    ]);
+    settings = s;
+    legacySetting = legacy;
+    activeCombos = combos;
+
+    if (company?.companyName) brandName = company.companyName;
+    else if (acc?.name) brandName = acc.name;
+
+    if (company?.shopifyStoreDomain) {
+      brandDomain = company.shopifyStoreDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    } else if (company?.website) {
+      brandDomain = company.website.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    }
+
+    if (company?.mobile) brandPhone = company.mobile;
+    else if (acc?.phoneNumber) brandPhone = acc.phoneNumber;
+
+    if (company?.email) brandEmail = company.email;
+    if (company?.address) brandAddress = `${company.address}, ${company.city || ''}, ${company.state || ''} ${company.pincode || ''}`.replace(/\s+,/g, ',').trim();
+    if (company?.gstin) gstin = company.gstin;
   } catch (_) {}
+
   const history = historyLines.join('\n');
   let toolContext = '';
   let carouselCards: any[] = [];
@@ -486,22 +521,39 @@ export async function handleIncomingAILogic(senderPhone: string, userText: strin
     toolContext += `\n${sizeInfo}`;
   }
 
-    const settings = await prisma.whatsAppSettings.findFirst();
-  const systemRules = settings?.aiSystemPrompt || "You are a helpful and polite customer service representative.";
-  const knowledgeBase = settings?.aiKnowledgeBase || "";
+  const systemRules = settings?.aiSystemPrompt || "You are an elite sales, customer service, and stylist assistant.";
+  const kbPieces: string[] = [];
+  if (settings?.aiKnowledgeBase) kbPieces.push(settings.aiKnowledgeBase);
+  if (legacySetting?.knowledge_base) kbPieces.push(legacySetting.knowledge_base);
+  if (legacySetting?.inst_brand_policies) kbPieces.push(`Policies: ${legacySetting.inst_brand_policies}`);
+  const knowledgeBase = kbPieces.join('\n\n') || "Leading apparel brand with premium fabrics, fast nationwide delivery, GST invoicing, and easy returns.";
+
+  const activeCombosStr = activeCombos.length > 0 
+    ? activeCombos.map(c => `• ${c.combo_name || 'Combo Pack'} @ ₹${c.combo_price || 'Special Price'} (Code: ${c.discount_code || 'COMBO'})`).join('\n')
+    : "• Festive Pack: Use code FLAT30 at checkout.";
 
   const systemPrompt = `Tum "${brandName} AI Stylist & Sales Assistant" ho!
 
-=== 🤖 AI PERSONA & SYSTEM RULES (Strict guidelines you MUST follow) ===
+=== 🏢 DYNAMIC BRAND IDENTITY & CONTACT DETAILS ===
+- Brand Name: "${brandName}"
+- Official Website / Online Store: "https://${brandDomain}"
+- Customer Support Phone / WhatsApp: "${brandPhone}"
+- Support Email: "${brandEmail}"
+- Business Location: "${brandAddress}"
+- GSTIN: "${gstin}"
+
+=== 🤖 AI PERSONA & SYSTEM RULES ===
 ${systemRules}
 
 === 🗣️ DYNAMIC LANGUAGE & TONE MIRRORING ===
 - Start the conversation in Professional English. If the customer speaks another language (like Hindi/Hinglish), smoothly adapt and respond in their language.
 - Provide a helpful, natural, and complete response without suddenly cutting off. Do NOT output any internal thoughts, markdown formatting, bullet points, or prefixes (like "Reply:" or "2-4 lines:"). Output ONLY the final raw text to be sent.
 
-=== 🏢 B2B FOCUS (WHOLESALE ONLY) ===
-- ONLY entertain B2B customers (Wholesalers, Retailers, Business owners).
-- If the customer is asking for personal use (B2C), politely decline and state that we only do wholesale and do not sell single pieces for personal use.
+=== 🏢 B2B FOCUS (WHOLESALE & RETAIL) ===
+- We cater to B2B wholesalers, retailers, boutique owners as well as direct retail shoppers. Provide GST invoicing and bulk discounts when asked.
+
+=== 🔥 ACTIVE PROMOTIONS & DISCOUNT CODES ===
+${activeCombosStr}
 
 === 🔐 CUSTOMER LIVE WHATSAPP NUMBER ===
 Customer ka Current WhatsApp Number: ${senderPhone}

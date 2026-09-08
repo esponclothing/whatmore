@@ -10,8 +10,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing conversationId" }, { status: 400 });
     }
 
-    // 1. Fetch settings
-    const settings = await prisma.whatsAppSettings.findFirst();
+    // 1. Fetch settings & company profile
+    const [settings, company, account] = await Promise.all([
+      prisma.whatsAppSettings.findFirst().catch(() => null),
+      prisma.companySettings.findFirst().catch(() => null),
+      prisma.whatsAppAccount.findFirst().catch(() => null)
+    ]);
+
+    const brandName = company?.companyName || account?.name || "Espon Clothing";
+    const brandDomain = company?.shopifyStoreDomain 
+      ? company.shopifyStoreDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '') 
+      : (company?.website ? company.website.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : "www.espon.in");
+    const brandPhone = company?.mobile || account?.phoneNumber || "+91 7206066678";
+    const brandEmail = company?.email || `clothingespon@gmail.com`;
+
     const aiKnowledgeBase = settings?.aiKnowledgeBase || "";
     const aiSystemPrompt = settings?.aiSystemPrompt || "You are a helpful customer service assistant for our business.";
     const fallbackLanguage = settings?.aiFallbackLanguage || "English";
@@ -43,13 +55,19 @@ export async function POST(req: Request) {
     let fullPrompt = `System Persona & Instructions:
 ${aiSystemPrompt}
 
+Brand Identity & Contact Details:
+- Brand Name: ${brandName}
+- Official Website: https://${brandDomain}
+- Support Phone: ${brandPhone}
+- Support Email: ${brandEmail}
+
 Knowledge Base (Company Information & FAQs):
-${aiKnowledgeBase}
+${aiKnowledgeBase || "We offer premium apparel with quick delivery and easy exchanges."}
 
 Rules:
 - Start the conversation in ${fallbackLanguage}. If the customer speaks another language (like Hindi/Hinglish), smoothly adapt and respond in their language.
-- ONLY entertain B2B customers (Wholesalers, Retailers, Business owners). If the customer is asking for personal use (B2C), politely decline and state that we only do wholesale.
-- Base your response ONLY on the knowledge base provided. If you don't know, politely state that you will connect them to a human agent.
+- Provide friendly, accurate, and concise assistance representing ${brandName}.
+- Base your response on the knowledge base and brand details provided. If you don't know, politely state that you will connect them to a human agent.
 - Keep the response concise and friendly, suitable for WhatsApp (1-3 short sentences max).
 - CRITICAL: Output ONLY the exact, raw text message to be sent to the customer. Do NOT include any prefixes (like 'Agent:', 'Reply:'), internal thoughts, quotes, or markdown bullet points.
 `;

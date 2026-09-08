@@ -14,7 +14,8 @@ import {
   saveWhatsAppTemplateAction,
   deleteWhatsAppTemplateAction,
   sendWhatsAppTemplateAction,
-  getWhatsAppBrandDetailsAction
+  getWhatsAppBrandDetailsAction,
+  generateAITemplateAction
 } from "@/app/actions/whatsAppPlatformActions";
 
 // Meta API Constraints
@@ -114,9 +115,14 @@ export default function WhatsAppTemplatesComponent() {
   const [timeRangeFilter, setTimeRangeFilter] = useState<"ALL" | "TODAY" | "7D" | "30D">("ALL");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "most_used" | "highest_read" | "alphabetical">("newest");
   
-  // Dynamic Brand Details from Database
-  const [brandName, setBrandName] = useState("Espon Sports");
-  const [brandDomain, setBrandDomain] = useState("esponsports.com");
+  // Dynamic Brand Details & Intelligence from Database
+  const [brandName, setBrandName] = useState("Espon Clothing");
+  const [brandDomain, setBrandDomain] = useState("www.espon.in");
+  const [brandPhone, setBrandPhone] = useState("+91 7206066678");
+  const [brandEmail, setBrandEmail] = useState("clothingespon@gmail.com");
+  const [hasAiKnowledge, setHasAiKnowledge] = useState(true);
+  const [productsCount, setProductsCount] = useState<number>(0);
+  const [combosCount, setCombosCount] = useState<number>(0);
 
   // Page View Mode: 'LIST' or 'CREATE'
   const [viewMode, setViewMode] = useState<"LIST" | "CREATE">("LIST");
@@ -139,12 +145,18 @@ export default function WhatsAppTemplatesComponent() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch brand details on component mount
+  // Fetch brand details & AI intelligence on component mount
   useEffect(() => {
     getWhatsAppBrandDetailsAction().then((res) => {
       if (res && res.brandName) {
         setBrandName(res.brandName);
         if (res.brandDomain) setBrandDomain(res.brandDomain);
+        if (res.phoneNumber || res.brandPhone) setBrandPhone(res.phoneNumber || res.brandPhone);
+        if (res.brandEmail) setBrandEmail(res.brandEmail);
+        if (res.hasAiKnowledge !== undefined) setHasAiKnowledge(res.hasAiKnowledge);
+        if (res.productsCount) setProductsCount(res.productsCount);
+        if (res.combosCount) setCombosCount(res.combosCount);
+
         // Also update initial carousel cards with real brand name & domain
         setCarouselCards([
           {
@@ -154,7 +166,7 @@ export default function WhatsAppTemplatesComponent() {
             title: `${res.brandName} Performance Tee`,
             bodyText: "₹899 • Breathable 4-way stretch fabric",
             buttons: [
-              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "esponsports.com"}/products/tee`, urlType: "STATIC" },
+              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "www.espon.in"}/products/tee`, urlType: "STATIC" },
               { type: "QUICK_REPLY", text: "View Sizes" }
             ]
           },
@@ -165,7 +177,7 @@ export default function WhatsAppTemplatesComponent() {
             title: `${res.brandName} Pro Shorts`,
             bodyText: "₹1,199 • Zipper pockets & sweat-wicking",
             buttons: [
-              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "esponsports.com"}/products/shorts`, urlType: "STATIC" },
+              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "www.espon.in"}/products/shorts`, urlType: "STATIC" },
               { type: "QUICK_REPLY", text: "More Colors" }
             ]
           }
@@ -241,6 +253,87 @@ export default function WhatsAppTemplatesComponent() {
 
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState("");
+
+  // -------------------------------------------------------------
+  // AI Template Studio Co-Pilot State & Handlers
+  // -------------------------------------------------------------
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiDraft, setAiDraft] = useState<any | null>(null);
+  const [aiIsOpen, setAiIsOpen] = useState(true);
+  const [aiRefineInput, setAiRefineInput] = useState("");
+
+  const handleGenerateWithAI = async (customPrompt?: string) => {
+    const promptToUse = (customPrompt || aiPrompt).trim();
+    if (!promptToUse) {
+      showToast("Please describe the template you want the AI to create.", "error");
+      return;
+    }
+    setAiGenerating(true);
+    try {
+      const res = await generateAITemplateAction(promptToUse, {
+        category,
+        templateType,
+        brandName,
+        brandDomain,
+        currentDraft: {
+          templateName,
+          bodyText,
+          headerType,
+          headerContent
+        }
+      });
+      if (res.success && res.template) {
+        setAiDraft(res);
+        showToast("✨ AI generated your template draft! Review and click 'Approve & Apply'.", "success");
+      } else {
+        showToast(res.error || "Failed to generate AI template.", "error");
+      }
+    } catch (e: any) {
+      showToast(e.message || "AI generation failed.", "error");
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handleApplyAIDraft = (draftData = aiDraft) => {
+    if (!draftData || !draftData.template) return;
+    const t = draftData.template;
+
+    if (t.name) {
+      const cleanName = t.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+      setTemplateName(cleanName);
+      setNameError("");
+    }
+    if (t.category) setCategory(t.category);
+    if (t.templateType) setTemplateType(t.templateType);
+    if (t.language) setLanguage(t.language);
+    
+    if (t.headerType) setHeaderType(t.headerType);
+    if (t.headerContent) setHeaderContent(t.headerContent);
+    if (t.headerMediaUrl) setHeaderMediaPreview(t.headerMediaUrl);
+
+    if (t.bodyText) setBodyText(t.bodyText);
+    if (t.footerText) setFooterText(t.footerText);
+
+    if (t.buttons && Array.isArray(t.buttons)) {
+      setButtons(t.buttons);
+    }
+    if (t.couponCode) setCouponCode(t.couponCode);
+
+    if (t.carouselCards && Array.isArray(t.carouselCards) && t.carouselCards.length > 0) {
+      setCarouselCards(t.carouselCards);
+    }
+
+    showToast("🎉 AI Template Approved! Loaded directly into Studio & phone simulator.", "success");
+  };
+
+  const handleRefineAIDraft = async () => {
+    if (!aiRefineInput.trim()) return;
+    const compositePrompt = `Previous Draft: "${aiDraft?.template?.bodyText}". User revision: "${aiRefineInput}". Brand: ${brandName}. Ensure Meta compliance.`;
+    setAiRefineInput("");
+    await handleGenerateWithAI(compositePrompt);
+  };
 
   // Test send state
   const [testPhone, setTestPhone] = useState("");
@@ -914,6 +1007,264 @@ export default function WhatsAppTemplatesComponent() {
           {/* Left Column: Editor Controls (7 Cols) */}
           <div className="lg:col-span-7 flex flex-col gap-6">
             
+            {/* ========================================================= */}
+            {/* EMBEDDED AI TEMPLATE STUDIO CO-PILOT (Prompt-to-Template) */}
+            {/* ========================================================= */}
+            <div className="bg-gradient-to-br from-indigo-900/95 via-slate-900 to-purple-950 border-2 border-indigo-500/50 rounded-3xl p-6 text-white shadow-xl shadow-indigo-950/40 relative overflow-hidden">
+              {/* Background Glow */}
+              <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-60 h-60 bg-purple-500/15 rounded-full blur-2xl pointer-events-none" />
+
+              {/* Header Badge & Brand Guide Notice */}
+              <div className="flex items-center justify-between gap-4 mb-3 relative z-10">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-md shadow-indigo-500/30">
+                    <Sparkles size={18} className="text-white animate-pulse" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-black tracking-tight text-white flex items-center gap-1.5">
+                        AI Template Architect & Co-Pilot
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black uppercase tracking-wider">
+                        Meta 100% Compliant
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-indigo-200/80">
+                      Explain your campaign need in plain English — the AI will draft, validate, and load the template in front of you.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setAiIsOpen(!aiIsOpen)}
+                  className="px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/15 rounded-xl text-xs font-bold text-white transition flex items-center gap-1 cursor-pointer"
+                >
+                  {aiIsOpen ? "Hide Co-Pilot" : "Open Co-Pilot"}
+                </button>
+              </div>
+
+              {/* Dynamic Brand Intelligence Badge */}
+              <div className="mb-4 px-3.5 py-2.5 bg-indigo-950/80 border border-indigo-500/40 rounded-2xl flex flex-wrap items-center gap-2.5 text-[11px] text-indigo-200 relative z-10 shadow-inner">
+                <span className="flex items-center gap-1.5 font-bold text-indigo-300">
+                  🧠 Dynamic Brand Guidance:
+                </span>
+                <span className="bg-indigo-500/25 border border-indigo-400/30 px-2.5 py-0.5 rounded-lg font-bold text-white flex items-center gap-1">
+                  🏢 {brandName}
+                </span>
+                <span className="bg-indigo-500/25 border border-indigo-400/30 px-2.5 py-0.5 rounded-lg font-bold text-white flex items-center gap-1">
+                  🌐 {brandDomain}
+                </span>
+                <span className="bg-indigo-500/25 border border-indigo-400/30 px-2.5 py-0.5 rounded-lg font-bold text-white flex items-center gap-1">
+                  📞 {brandPhone}
+                </span>
+                {brandEmail && (
+                  <span className="bg-indigo-500/25 border border-indigo-400/30 px-2.5 py-0.5 rounded-lg font-bold text-white hidden md:flex items-center gap-1">
+                    ✉️ {brandEmail}
+                  </span>
+                )}
+                {productsCount > 0 && (
+                  <span className="bg-purple-500/20 border border-purple-400/30 px-2 py-0.5 rounded-lg font-semibold text-purple-200 flex items-center gap-1">
+                    🛍️ {productsCount} Products Loaded
+                  </span>
+                )}
+                <span className="bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 px-2.5 py-0.5 rounded-lg font-bold flex items-center gap-1">
+                  ✓ {hasAiKnowledge ? "AI Knowledge Base Connected" : "Standard Rules Active"}
+                </span>
+              </div>
+
+              {aiIsOpen && (
+                <div className="flex flex-col gap-4 relative z-10 animate-in fade-in duration-150">
+                  {/* Quick Starter Inspiration Chips */}
+                  <div>
+                    <div className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <Zap size={12} className="text-amber-400" />
+                      Quick Campaign Inspiration:
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { label: "🎁 Festive 30% OFF Flash Sale", prompt: `Create a festive mega flash sale template for ${brandName} with a 30% coupon code FLAT30, image header, limited-time urgency, shop now dynamic button, and call support button.` },
+                        { label: "📦 Order Dispatched & Tracking", prompt: `Create a transactional order dispatched utility template for ${brandName} with order number, tracking ID, and dynamic track order button.` },
+                        { label: "🛒 Abandoned Cart Recovery", prompt: `Create an abandoned cart recovery template for ${brandName} with a 15% discount coupon SAVE15, urgency reminder, and 1-click checkout button.` },
+                        { label: "🛍️ Bestsellers Product Carousel", prompt: `Create a 3-card product carousel template showcasing top trending apparel styles at ${brandName} with Buy Now buttons.` },
+                        { label: "⭐️ VIP Review & Feedback", prompt: `Create a customer review & feedback template for ${brandName} thanking the customer and providing a quick link to rate their order.` }
+                      ].map((chip, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setAiPrompt(chip.prompt);
+                            handleGenerateWithAI(chip.prompt);
+                          }}
+                          className="px-2.5 py-1 bg-white/10 hover:bg-white/20 border border-white/15 rounded-lg text-[11px] text-indigo-100 font-medium transition active:scale-95 cursor-pointer text-left"
+                        >
+                          {chip.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* AI Prompt Input Bar */}
+                  <div className="flex flex-col gap-2">
+                    <div className="relative">
+                      <textarea
+                        value={aiPrompt}
+                        onChange={(e) => setAiPrompt(e.target.value)}
+                        placeholder={`Explain what you want to create (e.g., "Create a Diwali sale template for ${brandName} with a coupon code, image header, shop now button and phone support")...`}
+                        rows={3}
+                        className="w-full px-4 py-3 bg-slate-900/90 border border-indigo-400/40 rounded-2xl text-xs text-white placeholder-indigo-300/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-[11px] text-indigo-300">
+                        {aiGenerating ? (
+                          <span className="flex items-center gap-1.5 text-amber-300 font-bold animate-pulse">
+                            <RefreshCw size={12} className="animate-spin" />
+                            AI is structuring Meta template...
+                          </span>
+                        ) : (
+                          <span>💡 Be specific about offers, discount codes, or buttons you want included.</span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleGenerateWithAI()}
+                        disabled={aiGenerating || !aiPrompt.trim()}
+                        className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white rounded-xl text-xs font-black transition flex items-center gap-2 shadow-lg shadow-emerald-500/25 active:scale-95 disabled:opacity-50 cursor-pointer"
+                      >
+                        {aiGenerating ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                        <span>{aiGenerating ? "Generating..." : "Generate with AI ✨"}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* PROPOSED AI DRAFT CARD & INTERACTIVE APPROVAL */}
+                  {aiDraft && aiDraft.template && (
+                    <div className="mt-2 p-4 bg-slate-900/95 border-2 border-emerald-500/60 rounded-2xl flex flex-col gap-3 text-white shadow-2xl animate-in zoom-in-95 duration-200">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-700/80">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                          <h4 className="text-xs font-black text-emerald-300 uppercase tracking-wider">
+                            AI Proposed Template Draft
+                          </h4>
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-950 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold">
+                            {aiDraft.template.category} • {aiDraft.template.templateType}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-mono text-indigo-300 bg-indigo-950/80 px-2 py-0.5 rounded-md border border-indigo-700/50">
+                          {aiDraft.template.name}
+                        </span>
+                      </div>
+
+                      {/* Header Preview */}
+                      {aiDraft.template.headerType !== "NONE" && (
+                        <div className="text-[11px] bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
+                          <span className="font-bold text-indigo-300 block mb-1">Header ({aiDraft.template.headerType}):</span>
+                          {aiDraft.template.headerType === "TEXT" ? (
+                            <span className="text-white font-semibold">{aiDraft.template.headerContent}</span>
+                          ) : (
+                            <span className="text-gray-300 italic">Media Header: {aiDraft.template.headerMediaUrl ? "Image attached ✓" : "Standard Media"}</span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Body Copy Preview with Variable Highlights */}
+                      <div className="text-xs bg-slate-800/80 p-3 rounded-xl border border-slate-700 leading-relaxed text-gray-100 whitespace-pre-wrap">
+                        <span className="font-bold text-indigo-300 block mb-1 text-[11px]">Body Message:</span>
+                        {aiDraft.template.bodyText}
+                      </div>
+
+                      {/* Footer Preview */}
+                      {aiDraft.template.footerText && (
+                        <div className="text-[10px] text-gray-400 px-1">
+                          <span className="font-bold text-gray-300">Footer:</span> {aiDraft.template.footerText}
+                        </div>
+                      )}
+
+                      {/* Dynamic Buttons Preview */}
+                      {aiDraft.template.buttons && aiDraft.template.buttons.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {aiDraft.template.buttons.map((b: any, bIdx: number) => (
+                            <span
+                              key={bIdx}
+                              className="px-2.5 py-1 bg-indigo-950/90 border border-indigo-500/40 rounded-lg text-[11px] text-indigo-200 font-bold flex items-center gap-1.5"
+                            >
+                              {b.type === "URL" ? <LinkIcon size={11} /> : b.type === "COPY_CODE" ? <Copy size={11} /> : <Phone size={11} />}
+                              {b.text} {b.type === "COPY_CODE" && `[${b.code || aiDraft.template.couponCode}]`}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Meta Variables Breakdown */}
+                      {aiDraft.template.variables && aiDraft.template.variables.length > 0 && (
+                        <div className="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800 text-[11px]">
+                          <span className="font-bold text-indigo-300 block mb-1">Dynamic Variables Mapping:</span>
+                          <div className="flex flex-wrap gap-2">
+                            {aiDraft.template.variables.map((v: any, vIdx: number) => (
+                              <span key={vIdx} className="bg-slate-800 px-2 py-0.5 rounded text-gray-200">
+                                <strong className="text-indigo-400">{v.param}</strong>: {v.name || v.description} (e.g. <em>{v.example}</em>)
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Compliance Guarantee */}
+                      {aiDraft.complianceChecks && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[10px] text-emerald-300 bg-emerald-950/30 p-2 rounded-xl border border-emerald-900/40">
+                          {aiDraft.complianceChecks.map((chk: string, cIdx: number) => (
+                            <span key={cIdx}>{chk}</span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* AI Explanation */}
+                      {aiDraft.explanation && (
+                        <div className="text-[11px] text-indigo-200 bg-indigo-950/40 px-3 py-1.5 rounded-lg border border-indigo-800/40">
+                          💡 <strong>AI Architect Rationale:</strong> {aiDraft.explanation}
+                        </div>
+                      )}
+
+                      {/* Refinement Bar & 1-Click Approval */}
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-slate-700/80">
+                        <div className="flex items-center gap-1.5 flex-1">
+                          <input
+                            type="text"
+                            value={aiRefineInput}
+                            onChange={(e) => setAiRefineInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleRefineAIDraft(); }}
+                            placeholder="Need tweaks? (e.g. 'Make it punchier', 'Add copy coupon', 'Change language')..."
+                            className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-indigo-400"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleRefineAIDraft}
+                            disabled={!aiRefineInput.trim() || aiGenerating}
+                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-50 cursor-pointer whitespace-nowrap"
+                          >
+                            Refine
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleApplyAIDraft()}
+                          className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-600 hover:to-teal-600 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 active:scale-95 cursor-pointer whitespace-nowrap"
+                        >
+                          <CheckCircle2 size={15} />
+                          <span>Approve & Load into Studio Form ✨</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* STEP 1: CATEGORY SELECTION (MARKETING vs UTILITY vs AUTHENTICATION) */}
             <div className="bg-white dark:bg-slate-800/90 border border-gray-200 dark:border-slate-700 rounded-3xl p-6 shadow-2xs">
               <label className="block text-xs font-black uppercase text-gray-500 tracking-wider mb-3">

@@ -123,6 +123,30 @@ export default function WhatsAppBroadcastsComponent() {
   const [couponCode, setCouponCode] = useState<string>("");
   const [offerExpiration, setOfferExpiration] = useState<string>("");
 
+  // A/B Split Testing State
+  const [isAbTest, setIsAbTest] = useState<boolean>(false);
+  const [selectedVariantBTemplate, setSelectedVariantBTemplate] = useState<any | null>(null);
+  const [abSplitRatio, setAbSplitRatio] = useState<number>(50); // 50% A / 50% B
+  const [templateBSearch, setTemplateBSearch] = useState<string>("");
+
+  // Drip Sequence (Follow-up Automation) State
+  const [isDripCampaign, setIsDripCampaign] = useState<boolean>(false);
+  const [dripSteps, setDripSteps] = useState<Array<{
+    stepNumber: number;
+    delayHours: number;
+    condition: 'IF_NOT_READ' | 'IF_NOT_CLICKED' | 'ALL';
+    templateId: string;
+    name: string;
+  }>>([
+    {
+      stepNumber: 2,
+      delayHours: 24,
+      condition: 'IF_NOT_READ',
+      templateId: '',
+      name: 'Unread Reminder (24h)'
+    }
+  ]);
+
   // Schedule & Dispatch State
   const [isScheduled, setIsScheduled] = useState<boolean>(false);
   const [scheduledAt, setScheduledAt] = useState<string>("");
@@ -216,6 +240,19 @@ export default function WhatsAppBroadcastsComponent() {
     setIsScheduled(false);
     setScheduledAt("");
     setHeaderMediaUrl("");
+    setIsAbTest(false);
+    setSelectedVariantBTemplate(null);
+    setAbSplitRatio(50);
+    setIsDripCampaign(false);
+    setDripSteps([
+      {
+        stepNumber: 2,
+        delayHours: 24,
+        condition: 'IF_NOT_READ',
+        templateId: '',
+        name: 'Unread Reminder (24h)'
+      }
+    ]);
     setCurrentStep(1);
     setShowWizard(true);
   };
@@ -425,6 +462,10 @@ export default function WhatsAppBroadcastsComponent() {
       showToast("Please select a message template first.", "error");
       return;
     }
+    if (isAbTest && !selectedVariantBTemplate) {
+      showToast("Please select Variant B template for the A/B Split Test.", "error");
+      return;
+    }
     if (!campaignName.trim()) {
       showToast("Please enter a campaign name.", "error");
       return;
@@ -467,7 +508,14 @@ export default function WhatsAppBroadcastsComponent() {
       headerMediaUrl: headerMediaUrl.trim() || undefined,
       category: selectedTemplate.category || "MARKETING",
       couponCode: hasLtoOffer && couponCode.trim() ? couponCode.trim().toUpperCase() : undefined,
-      offerExpiration: hasLtoOffer && offerExpiration ? offerExpiration : undefined
+      offerExpiration: hasLtoOffer && offerExpiration ? offerExpiration : undefined,
+      // A/B Split Testing
+      isAbTest,
+      variantTemplateName: isAbTest && selectedVariantBTemplate ? selectedVariantBTemplate.name : undefined,
+      abSplitRatio: isAbTest ? abSplitRatio : undefined,
+      // Drip Sequence Automation
+      isDripCampaign,
+      dripStepsJson: isDripCampaign ? JSON.stringify(dripSteps) : undefined
     });
 
     setLaunching(false);
@@ -477,6 +525,10 @@ export default function WhatsAppBroadcastsComponent() {
       showToast(
         isScheduled
           ? `✓ Broadcast scheduled successfully for ${new Date(scheduledAt).toLocaleString()}!`
+          : isAbTest
+          ? `🔬 A/B Split Test launched to ${res.totalAudience || 0} contacts (${abSplitRatio}% / ${100 - abSplitRatio}%)!`
+          : isDripCampaign
+          ? `🚀 Broadcast & Drip Sequence launched to ${res.totalAudience || 0} contacts!`
           : `🚀 Broadcast launched successfully to ${res.totalAudience || 0} contacts!`
       );
       fetchCampaignsAndTemplates();
@@ -931,16 +983,35 @@ export default function WhatsAppBroadcastsComponent() {
                           <Radio size={14} className="text-indigo-600 flex-shrink-0" />
                           <span className="truncate max-w-[200px]">{c.name}</span>
                         </div>
-                        <div className="text-[10px] text-gray-400 mt-0.5 font-mono">
-                          ID: {c.id.slice(0, 8)}...
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <span className="text-[10px] text-gray-400 font-mono">
+                            ID: {c.id.slice(0, 8)}...
+                          </span>
+                          {c.isAbTest && (
+                            <span className="px-1.5 py-0.2 bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 rounded text-[9px] font-black border border-purple-300 dark:border-purple-800">
+                              🔬 A/B ({c.abSplitRatio || 50}/{100 - (c.abSplitRatio || 50)})
+                            </span>
+                          )}
+                          {c.isDripCampaign && (
+                            <span className="px-1.5 py-0.2 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 rounded text-[9px] font-black border border-emerald-300 dark:border-emerald-800">
+                              🚀 Drip Sequence
+                            </span>
+                          )}
                         </div>
                       </td>
 
                       {/* 2. Template */}
                       <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg text-[11px] font-bold font-mono">
-                          <FileCode size={12} /> {c.templateId}
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg text-[11px] font-bold font-mono">
+                            <FileCode size={12} /> {c.templateId}
+                          </span>
+                          {c.isAbTest && c.variantTemplateId && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-md text-[10px] font-bold font-mono">
+                              Variant B: {c.variantTemplateId}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* 3. Funnel & Engagement */}
@@ -1134,69 +1205,144 @@ export default function WhatsAppBroadcastsComponent() {
               {/* STEP 1: SELECT TEMPLATE */}
               {/* ----------------------------------------------------------------- */}
               {currentStep === 1 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="flex flex-col gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1.5">
+                <div className="flex flex-col gap-6">
+                  {/* Top Campaign Header & A/B Split Test Toggle */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-gray-50 dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-700">
+                    <div className="flex-1">
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
                         Campaign Name <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
                         value={campaignName}
                         onChange={(e) => setCampaignName(e.target.value)}
-                        placeholder="e.g. VIP Festive Flash Sale"
-                        className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="e.g. VIP Festive Flash Sale 2026"
+                        className="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
 
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">
-                          Select Meta Template
+                    <div className="flex items-center gap-3 self-end sm:self-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAbTest(!isAbTest);
+                          if (!isAbTest && !selectedVariantBTemplate && filteredTemplates.length > 1) {
+                            const second = filteredTemplates.find(t => t.name !== selectedTemplate?.name);
+                            if (second) setSelectedVariantBTemplate(second);
+                          }
+                        }}
+                        className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 border cursor-pointer ${
+                          isAbTest
+                            ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-purple-500 shadow-md shadow-purple-500/20"
+                            : "bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-slate-600 hover:border-indigo-400"
+                        }`}
+                      >
+                        <Zap size={14} className={isAbTest ? "text-amber-300 animate-bounce" : "text-gray-400"} />
+                        <span>{isAbTest ? "🔬 A/B Split Test Active" : "+ Enable A/B Split Test"}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* A/B Split Ratio Slider Bar (if enabled) */}
+                  {isAbTest && (
+                    <div className="p-4 bg-purple-50/80 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/40 rounded-2xl flex flex-col gap-2.5 animate-in fade-in duration-150">
+                      <div className="flex items-center justify-between text-xs font-black">
+                        <span className="text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                          <span>🔬 Traffic Split Ratio:</span>
+                          <span className="px-2 py-0.5 bg-indigo-600 text-white rounded-md text-[11px]">
+                            Variant A: {abSplitRatio}%
+                          </span>
+                          <span className="text-gray-400">vs</span>
+                          <span className="px-2 py-0.5 bg-purple-600 text-white rounded-md text-[11px]">
+                            Variant B: {100 - abSplitRatio}%
+                          </span>
+                        </span>
+
+                        <div className="flex items-center gap-1.5">
+                          {[50, 60, 70, 80].map((ratio) => (
+                            <button
+                              key={ratio}
+                              type="button"
+                              onClick={() => setAbSplitRatio(ratio)}
+                              className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${
+                                abSplitRatio === ratio
+                                  ? "bg-purple-600 text-white"
+                                  : "bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700"
+                              }`}
+                            >
+                              {ratio}/{100 - ratio}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <input
+                        type="range"
+                        min="10"
+                        max="90"
+                        step="5"
+                        value={abSplitRatio}
+                        onChange={(e) => setAbSplitRatio(Number(e.target.value))}
+                        className="w-full h-2 bg-purple-200 dark:bg-purple-900 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                      />
+
+                      <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400">
+                        <span>Variant A (Primary Hook / Offer)</span>
+                        <span>Variant B (Challenger Headline / Creative)</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Template Selectors & Dual / Single Phone Simulator */}
+                  <div className={`grid grid-cols-1 ${isAbTest ? "lg:grid-cols-2" : "md:grid-cols-2"} gap-6`}>
+                    {/* VARIANT A COLUMN */}
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-black uppercase text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                          <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black">A</span>
+                          {isAbTest ? "Select Variant A Template" : "Select Meta Template"}
                         </label>
                         <span className="text-[11px] text-gray-400 font-bold">
                           {filteredTemplates.length} templates
                         </span>
                       </div>
 
-                      <div className="flex gap-2 mb-2">
-                        <input
-                          type="text"
-                          value={templateSearch}
-                          onChange={(e) => setTemplateSearch(e.target.value)}
-                          placeholder="Search templates..."
-                          className="flex-1 px-3 py-1.5 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl outline-none"
-                        />
-                      </div>
+                      <input
+                        type="text"
+                        value={templateSearch}
+                        onChange={(e) => setTemplateSearch(e.target.value)}
+                        placeholder="Search templates for Variant A..."
+                        className="w-full px-3 py-1.5 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl outline-none"
+                      />
 
-                      <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto pr-1">
+                      <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
                         {filteredTemplates.length === 0 ? (
                           <div className="text-xs text-gray-400 italic p-4 text-center bg-gray-50 dark:bg-slate-900 rounded-xl">
-                            No templates found. Create one in the Templates tab first.
+                            No templates found.
                           </div>
                         ) : (
                           filteredTemplates.map((t) => {
                             const isSelected = selectedTemplate?.id === t.id || selectedTemplate?.name === t.name;
                             return (
                               <button
-                                key={t.id || t.name}
+                                key={`A_${t.id || t.name}`}
                                 type="button"
                                 onClick={() => setSelectedTemplate(t)}
-                                className={`p-3 rounded-2xl text-left transition border flex items-center justify-between ${
+                                className={`p-2.5 rounded-2xl text-left transition border flex items-center justify-between cursor-pointer ${
                                   isSelected
                                     ? "bg-indigo-50/90 dark:bg-indigo-950/40 border-indigo-600 shadow-sm ring-1 ring-indigo-500"
                                     : "bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:border-indigo-300"
                                 }`}
                               >
-                                <div>
+                                <div className="truncate">
                                   <div className="font-extrabold text-xs text-gray-900 dark:text-white flex items-center gap-1.5">
-                                    <FileCode size={13} className="text-indigo-600" />
-                                    <span>{t.name}</span>
-                                    <span className="text-[9px] px-1.5 py-0.5 bg-gray-100 dark:bg-slate-700 rounded text-gray-500 uppercase font-mono">
+                                    <FileCode size={13} className="text-indigo-600 shrink-0" />
+                                    <span className="truncate">{t.name}</span>
+                                    <span className="text-[9px] px-1.5 py-0.5 bg-gray-100 dark:bg-slate-700 rounded text-gray-500 uppercase font-mono shrink-0">
                                       {t.category || "MARKETING"}
                                     </span>
                                   </div>
-                                  <div className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1 mt-1 font-normal">
+                                  <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
                                     {t.bodyText}
                                   </div>
                                 </div>
@@ -1206,57 +1352,114 @@ export default function WhatsAppBroadcastsComponent() {
                           })
                         )}
                       </div>
-                    </div>
-                  </div>
 
-                  {/* Live WhatsApp Mockup Preview */}
-                  <div className="bg-slate-100 dark:bg-slate-900/80 rounded-3xl p-4 border border-gray-200 dark:border-slate-700 flex flex-col items-center justify-center">
-                    <span className="text-[11px] font-black text-gray-500 uppercase mb-3 flex items-center gap-1.5">
-                      <Phone size={13} className="text-emerald-500" /> WhatsApp Live Mockup
-                    </span>
-
-                    <div className="w-full max-w-[280px] bg-[#EFEAE2] dark:bg-[#121b22] rounded-3xl p-3.5 shadow-xl border border-gray-300 dark:border-slate-700">
-                      <div className="bg-white dark:bg-[#1f2c34] rounded-2xl p-3 shadow-md text-xs text-gray-800 dark:text-gray-200 relative">
-                        {/* Header preview */}
-                        {selectedTemplate?.headerType && selectedTemplate.headerType !== "NONE" && (
-                          selectedTemplate.headerType.toUpperCase() === "TEXT" ? (
-                            <div className="font-bold text-xs text-gray-900 dark:text-white mb-1.5 pb-1 border-b border-gray-100 dark:border-slate-700 leading-snug">
-                              {selectedTemplate.headerContent || selectedTemplate.headerText || selectedTemplate.name}
+                      {/* Phone Simulator for Variant A */}
+                      <div className="bg-slate-100 dark:bg-slate-900/80 rounded-3xl p-3.5 border border-gray-200 dark:border-slate-700 flex flex-col items-center justify-center mt-2">
+                        <span className="text-[10px] font-black text-indigo-600 uppercase mb-2 flex items-center gap-1">
+                          <Phone size={11} className="text-emerald-500" /> Phone Preview (Variant A - {selectedTemplate?.name || 'Selected'})
+                        </span>
+                        <div className="w-full max-w-[260px] bg-[#EFEAE2] dark:bg-[#121b22] rounded-3xl p-3 shadow-xl border border-gray-300 dark:border-slate-700">
+                          <div className="bg-white dark:bg-[#1f2c34] rounded-2xl p-2.5 shadow-md text-xs text-gray-800 dark:text-gray-200 relative">
+                            {selectedTemplate?.headerContent && (
+                              <div className="font-bold text-[11px] text-gray-900 dark:text-white mb-1 pb-1 border-b border-gray-100 dark:border-slate-700">
+                                {selectedTemplate.headerContent}
+                              </div>
+                            )}
+                            <div className="whitespace-pre-wrap leading-relaxed text-[11px] font-sans">
+                              {getRenderedPreviewBody()}
                             </div>
-                          ) : (
-                            <div className="mb-2.5 rounded-xl overflow-hidden border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800">
-                              {headerMediaUrl && selectedTemplate.headerType.toUpperCase() === "IMAGE" ? (
-                                <img
-                                  src={headerMediaUrl}
-                                  alt="Header"
-                                  className="w-full h-28 object-cover"
-                                  onError={(e) => ((e.target as HTMLElement).style.display = "none")}
-                                />
-                              ) : (
-                                <div className="p-3 text-center flex flex-col items-center justify-center gap-1 text-gray-500 dark:text-gray-400">
-                                  {selectedTemplate.headerType.toUpperCase() === "IMAGE" && <ImageIcon size={18} className="text-indigo-500" />}
-                                  {selectedTemplate.headerType.toUpperCase() === "VIDEO" && <VideoIcon size={18} className="text-indigo-500" />}
-                                  {selectedTemplate.headerType.toUpperCase() === "DOCUMENT" && <FileText size={18} className="text-indigo-500" />}
-                                  <span className="text-[10px] font-bold uppercase tracking-wider">
-                                    {selectedTemplate.headerType} Header {headerMediaUrl ? "Attached" : ""}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          )
-                        )}
-
-                        <div className="whitespace-pre-wrap leading-relaxed font-sans">{getRenderedPreviewBody()}</div>
-
-                        {selectedTemplate?.footerText && (
-                          <div className="text-[10px] text-gray-400 mt-2 border-t border-gray-100 dark:border-slate-700 pt-1">
-                            {selectedTemplate.footerText}
+                            {selectedTemplate?.footerText && (
+                              <div className="text-[9px] text-gray-400 mt-1.5 border-t border-gray-100 dark:border-slate-700 pt-1">
+                                {selectedTemplate.footerText}
+                              </div>
+                            )}
+                            <div className="text-[8px] text-gray-400 text-right mt-1 font-mono">12:30 PM ✓✓</div>
                           </div>
-                        )}
-
-                        <div className="text-[9px] text-gray-400 text-right mt-1 font-mono">12:30 PM ✓✓</div>
+                        </div>
                       </div>
                     </div>
+
+                    {/* VARIANT B COLUMN (WHEN A/B TESTING IS ENABLED) */}
+                    {isAbTest && (
+                      <div className="flex flex-col gap-3 animate-in fade-in duration-200">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-black uppercase text-purple-800 dark:text-purple-300 flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-black">B</span>
+                            Select Variant B Template (Challenger)
+                          </label>
+                          <span className="text-[11px] text-purple-600 font-bold">
+                            {selectedVariantBTemplate ? selectedVariantBTemplate.name : "Choose template"}
+                          </span>
+                        </div>
+
+                        <input
+                          type="text"
+                          value={templateBSearch}
+                          onChange={(e) => setTemplateBSearch(e.target.value)}
+                          placeholder="Search templates for Variant B..."
+                          className="w-full px-3 py-1.5 text-xs bg-gray-50 dark:bg-slate-900 border border-purple-300 dark:border-purple-700 rounded-xl outline-none"
+                        />
+
+                        <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
+                          {filteredTemplates
+                            .filter(t => !templateBSearch || t.name.toLowerCase().includes(templateBSearch.toLowerCase()))
+                            .map((t) => {
+                              const isSelectedB = selectedVariantBTemplate?.id === t.id || selectedVariantBTemplate?.name === t.name;
+                              return (
+                                <button
+                                  key={`B_${t.id || t.name}`}
+                                  type="button"
+                                  onClick={() => setSelectedVariantBTemplate(t)}
+                                  className={`p-2.5 rounded-2xl text-left transition border flex items-center justify-between cursor-pointer ${
+                                    isSelectedB
+                                      ? "bg-purple-50/90 dark:bg-purple-950/40 border-purple-600 shadow-sm ring-1 ring-purple-500"
+                                      : "bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:border-purple-300"
+                                  }`}
+                                >
+                                  <div className="truncate">
+                                    <div className="font-extrabold text-xs text-gray-900 dark:text-white flex items-center gap-1.5">
+                                      <FileCode size={13} className="text-purple-600 shrink-0" />
+                                      <span className="truncate">{t.name}</span>
+                                      <span className="text-[9px] px-1.5 py-0.5 bg-gray-100 dark:bg-slate-700 rounded text-gray-500 uppercase font-mono shrink-0">
+                                        {t.category || "MARKETING"}
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                                      {t.bodyText}
+                                    </div>
+                                  </div>
+                                  {isSelectedB && <Check size={16} className="text-purple-600 stroke-[3] shrink-0 ml-2" />}
+                                </button>
+                              );
+                            })}
+                        </div>
+
+                        {/* Phone Simulator for Variant B */}
+                        <div className="bg-purple-950/20 dark:bg-purple-950/30 rounded-3xl p-3.5 border border-purple-300 dark:border-purple-800 flex flex-col items-center justify-center mt-2">
+                          <span className="text-[10px] font-black text-purple-600 dark:text-purple-300 uppercase mb-2 flex items-center gap-1">
+                            <Phone size={11} className="text-purple-400" /> Phone Preview (Variant B - {selectedVariantBTemplate?.name || 'Not selected'})
+                          </span>
+                          <div className="w-full max-w-[260px] bg-[#EFEAE2] dark:bg-[#121b22] rounded-3xl p-3 shadow-xl border border-purple-300 dark:border-purple-800">
+                            <div className="bg-white dark:bg-[#1f2c34] rounded-2xl p-2.5 shadow-md text-xs text-gray-800 dark:text-gray-200 relative">
+                              {selectedVariantBTemplate?.headerContent && (
+                                <div className="font-bold text-[11px] text-gray-900 dark:text-white mb-1 pb-1 border-b border-gray-100 dark:border-slate-700">
+                                  {selectedVariantBTemplate.headerContent}
+                                </div>
+                              )}
+                              <div className="whitespace-pre-wrap leading-relaxed text-[11px] font-sans">
+                                {selectedVariantBTemplate?.bodyText || "Select a template for Variant B to see preview..."}
+                              </div>
+                              {selectedVariantBTemplate?.footerText && (
+                                <div className="text-[9px] text-gray-400 mt-1.5 border-t border-gray-100 dark:border-slate-700 pt-1">
+                                  {selectedVariantBTemplate.footerText}
+                                </div>
+                              )}
+                              <div className="text-[8px] text-gray-400 text-right mt-1 font-mono">12:30 PM ✓✓</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1862,111 +2065,176 @@ export default function WhatsAppBroadcastsComponent() {
                       </button>
                     </div>
 
-                    {/* Schedule Picker & Quick Presets */}
                     {isScheduled && (
-                      <div className="p-4 bg-gray-50 dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-700 flex flex-col gap-3.5">
-                        <div>
-                          <label className="block text-[11px] font-bold text-gray-600 dark:text-gray-400 uppercase mb-1.5">
-                            Quick Schedule Presets:
-                          </label>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            {[
-                              {
-                                label: "Today 6:00 PM",
-                                getDate: () => {
-                                  const d = new Date();
-                                  d.setHours(18, 0, 0, 0);
-                                  if (d.getTime() < Date.now()) d.setHours(d.getHours() + 2);
-                                  return d;
-                                }
-                              },
-                              {
-                                label: "Tomorrow 10:00 AM",
-                                getDate: () => {
-                                  const d = new Date();
-                                  d.setDate(d.getDate() + 1);
-                                  d.setHours(10, 0, 0, 0);
-                                  return d;
-                                }
-                              },
-                              {
-                                label: "Tomorrow 3:00 PM",
-                                getDate: () => {
-                                  const d = new Date();
-                                  d.setDate(d.getDate() + 1);
-                                  d.setHours(15, 0, 0, 0);
-                                  return d;
-                                }
-                              },
-                              {
-                                label: "In 2 Days 11:00 AM",
-                                getDate: () => {
-                                  const d = new Date();
-                                  d.setDate(d.getDate() + 2);
-                                  d.setHours(11, 0, 0, 0);
-                                  return d;
-                                }
-                              }
-                            ].map((preset, pIdx) => (
-                              <button
-                                key={pIdx}
-                                type="button"
-                                onClick={() => {
-                                  const d = preset.getDate();
-                                  const localIso = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-                                    .toISOString()
-                                    .slice(0, 16);
-                                  setScheduledAt(localIso);
-                                }}
-                                className="px-2.5 py-2 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 border border-gray-200 dark:border-slate-700 hover:border-indigo-400 rounded-xl text-[11px] font-bold text-gray-700 dark:text-gray-300 transition text-center"
-                              >
-                                {preset.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+                      <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800 rounded-xl flex flex-col gap-1.5 animate-in fade-in">
+                        <label className="text-[10px] font-black uppercase text-indigo-900 dark:text-indigo-300">
+                          Select Date & Time (IST)
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={scheduledAt}
+                          onChange={(e) => setScheduledAt(e.target.value)}
+                          className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                    )}
+                  </div>
 
-                        {/* Interactive Styled DateTime Picker */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-                          <div>
-                            <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
-                              Custom Date & Time:
-                            </label>
-                            <input
-                              type="datetime-local"
-                              value={scheduledAt}
-                              min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
-                              onChange={(e) => setScheduledAt(e.target.value)}
-                              className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl text-xs font-bold text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs cursor-pointer"
-                            />
-                          </div>
+                  {/* Automated Drip Sequence (Follow-up Automation) Section */}
+                  <div className="p-4 sm:p-5 bg-white dark:bg-slate-800/90 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-2xs flex flex-col gap-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100 dark:border-slate-700">
+                      <div>
+                        <h4 className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-wide flex items-center gap-1.5">
+                          <TrendingUp size={15} className="text-purple-600" />
+                          Automated Drip Sequence (Multi-Step Follow-ups)
+                        </h4>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                          Automatically re-engage recipients who do not open or click the broadcast after a set time.
+                        </p>
+                      </div>
 
-                          <div className="p-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
+                      <button
+                        type="button"
+                        onClick={() => setIsDripCampaign(!isDripCampaign)}
+                        className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 border cursor-pointer ${
+                          isDripCampaign
+                            ? "bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-500/20"
+                            : "bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-slate-600 hover:border-purple-400"
+                        }`}
+                      >
+                        <span>{isDripCampaign ? "✓ Drip Automation Active" : "+ Enable Drip Sequence"}</span>
+                      </button>
+                    </div>
+
+                    {isDripCampaign && (
+                      <div className="flex flex-col gap-4 animate-in fade-in duration-150">
+                        {/* Step 1 indicator (Primary) */}
+                        <div className="p-3 bg-indigo-50/60 dark:bg-indigo-950/30 rounded-xl border border-indigo-200 dark:border-indigo-800 flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-black">1</span>
                             <div>
-                              <span className="font-bold text-gray-700 dark:text-gray-300">Timezone:</span> India Standard Time (IST / UTC+5:30)
+                              <strong className="text-indigo-950 dark:text-indigo-200">Step 1: Initial Broadcast</strong>
+                              <span className="text-[11px] text-indigo-700 dark:text-indigo-300 block font-mono">Template: {selectedTemplate?.name || 'Selected'}</span>
                             </div>
                           </div>
+                          <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300 rounded text-[10px] font-bold">
+                            Immediate / Scheduled Start
+                          </span>
                         </div>
 
-                        {scheduledAt && (
-                          <div className="p-3 bg-indigo-50/90 dark:bg-indigo-950/40 rounded-xl border border-indigo-200 dark:border-indigo-800/40 flex items-center gap-2.5">
-                            <CalendarDays size={18} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
-                            <div className="text-xs">
-                              <span className="text-indigo-950 dark:text-indigo-200">Broadcast will dispatch on: </span>
-                              <strong className="text-indigo-700 dark:text-indigo-400 font-black block sm:inline">
-                                {new Date(scheduledAt).toLocaleString("en-IN", {
-                                  weekday: "short",
-                                  day: "numeric",
-                                  month: "short",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  hour12: true
-                                })} (IST)
-                              </strong>
+                        {/* Follow-up Drip Steps */}
+                        {dripSteps.map((step, sIdx) => (
+                          <div key={sIdx} className="p-4 bg-purple-50/50 dark:bg-purple-950/20 rounded-2xl border border-purple-200 dark:border-purple-800/60 flex flex-col gap-3 relative">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs font-black">
+                                  {step.stepNumber}
+                                </span>
+                                <span className="text-xs font-black text-purple-950 dark:text-purple-200">
+                                  Step {step.stepNumber}: Automated Follow-up
+                                </span>
+                              </div>
+
+                              {dripSteps.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setDripSteps(dripSteps.filter((_, idx) => idx !== sIdx))}
+                                  className="text-red-500 hover:text-red-700 p-1 text-xs font-bold cursor-pointer"
+                                >
+                                  Remove Step
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              {/* Delay Selector */}
+                              <div>
+                                <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">
+                                  Trigger Delay:
+                                </label>
+                                <select
+                                  value={step.delayHours}
+                                  onChange={(e) => {
+                                    const updated = [...dripSteps];
+                                    updated[sIdx].delayHours = Number(e.target.value);
+                                    setDripSteps(updated);
+                                  }}
+                                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl text-xs font-bold outline-none cursor-pointer"
+                                >
+                                  <option value={2}>After 2 Hours</option>
+                                  <option value={6}>After 6 Hours</option>
+                                  <option value={12}>After 12 Hours</option>
+                                  <option value={24}>After 24 Hours (1 Day)</option>
+                                  <option value={48}>After 48 Hours (2 Days)</option>
+                                  <option value={72}>After 72 Hours (3 Days)</option>
+                                </select>
+                              </div>
+
+                              {/* Trigger Condition */}
+                              <div>
+                                <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">
+                                  Send Only If:
+                                </label>
+                                <select
+                                  value={step.condition}
+                                  onChange={(e) => {
+                                    const updated = [...dripSteps];
+                                    updated[sIdx].condition = e.target.value as any;
+                                    setDripSteps(updated);
+                                  }}
+                                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl text-xs font-bold outline-none cursor-pointer"
+                                >
+                                  <option value="IF_NOT_READ">Unread / No Blue Tick 👁️</option>
+                                  <option value="IF_NOT_CLICKED">No CTA Button Click 👆</option>
+                                  <option value="ALL">Send to All Recipients</option>
+                                </select>
+                              </div>
+
+                              {/* Follow-up Template Picker */}
+                              <div>
+                                <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">
+                                  Follow-up Template:
+                                </label>
+                                <select
+                                  value={step.templateId || ''}
+                                  onChange={(e) => {
+                                    const updated = [...dripSteps];
+                                    updated[sIdx].templateId = e.target.value;
+                                    setDripSteps(updated);
+                                  }}
+                                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl text-xs font-bold font-mono outline-none cursor-pointer"
+                                >
+                                  <option value="">-- Choose Approved Template --</option>
+                                  {filteredTemplates.map((t) => (
+                                    <option key={t.id || t.name} value={t.name}>
+                                      {t.name} ({t.category || 'MARKETING'})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
                             </div>
                           </div>
+                        ))}
+
+                        {dripSteps.length < 3 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDripSteps([
+                                ...dripSteps,
+                                {
+                                  stepNumber: dripSteps.length + 2,
+                                  delayHours: 48,
+                                  condition: 'IF_NOT_READ',
+                                  templateId: '',
+                                  name: `Final Reminder (${(dripSteps.length + 1) * 24}h)`
+                                }
+                              ]);
+                            }}
+                            className="px-4 py-2 border-2 border-dashed border-purple-300 dark:border-purple-800 hover:border-purple-500 rounded-xl text-xs font-bold text-purple-700 dark:text-purple-300 transition text-center cursor-pointer"
+                          >
+                            + Add Another Follow-up Step (Step {dripSteps.length + 2})
+                          </button>
                         )}
                       </div>
                     )}
@@ -2151,6 +2419,100 @@ export default function WhatsAppBroadcastsComponent() {
                       </div>
                     </div>
                   </div>
+
+                  {/* SIDE-BY-SIDE A/B SPLIT TESTING COMPARATIVE CARD */}
+                  {analyticsData.abComparison && (
+                    <div className="p-5 bg-gradient-to-br from-purple-900/10 via-indigo-900/10 to-slate-900/10 dark:from-purple-950/40 dark:to-indigo-950/40 rounded-3xl border-2 border-purple-300 dark:border-purple-800 shadow-md flex flex-col gap-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-purple-200 dark:border-purple-800/60">
+                        <div className="flex items-center gap-2">
+                          <span className="w-7 h-7 rounded-xl bg-purple-600 text-white flex items-center justify-center text-sm font-black">
+                            🔬
+                          </span>
+                          <div>
+                            <h4 className="text-xs font-black text-purple-950 dark:text-purple-200 uppercase tracking-wider">
+                              A/B Split Test Comparative Performance
+                            </h4>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                              Side-by-side breakdown comparing Variant A vs Variant B recipient cohorts.
+                            </p>
+                          </div>
+                        </div>
+
+                        {analyticsData.abComparison.winner && (
+                          <span className="px-3 py-1 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-xs font-black rounded-xl shadow-md flex items-center gap-1.5 animate-bounce">
+                            🏆 Winner: Variant {analyticsData.abComparison.winner}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Side-by-Side Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* VARIANT A CARD */}
+                        <div className={`p-4 rounded-2xl border transition ${
+                          analyticsData.abComparison.winner === "A"
+                            ? "bg-indigo-50/90 dark:bg-indigo-950/60 border-indigo-500 shadow-md ring-2 ring-indigo-500/30"
+                            : "bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700"
+                        }`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black">A</span>
+                              <strong className="text-xs font-black text-gray-900 dark:text-white">Variant A (Primary)</strong>
+                            </div>
+                            <span className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-950 px-2 py-0.5 rounded font-bold">
+                              {analyticsData.abComparison.templateA}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="p-2 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                              <span className="text-[10px] text-gray-500 font-bold block">Sent</span>
+                              <strong className="text-sm text-gray-900 dark:text-white">{analyticsData.abComparison.sentA}</strong>
+                            </div>
+                            <div className="p-2 bg-cyan-50 dark:bg-cyan-950/40 rounded-xl">
+                              <span className="text-[10px] text-cyan-600 font-bold block">Read Rate</span>
+                              <strong className="text-sm text-cyan-600">{analyticsData.abComparison.readRateA}%</strong>
+                            </div>
+                            <div className="p-2 bg-purple-50 dark:bg-purple-950/40 rounded-xl">
+                              <span className="text-[10px] text-purple-600 font-bold block">CTR %</span>
+                              <strong className="text-sm text-purple-600">{analyticsData.abComparison.clickRateA}%</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* VARIANT B CARD */}
+                        <div className={`p-4 rounded-2xl border transition ${
+                          analyticsData.abComparison.winner === "B"
+                            ? "bg-purple-50/90 dark:bg-purple-950/60 border-purple-500 shadow-md ring-2 ring-purple-500/30"
+                            : "bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700"
+                        }`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-black">B</span>
+                              <strong className="text-xs font-black text-gray-900 dark:text-white">Variant B (Challenger)</strong>
+                            </div>
+                            <span className="text-[10px] font-mono text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-950 px-2 py-0.5 rounded font-bold">
+                              {analyticsData.abComparison.templateB}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="p-2 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                              <span className="text-[10px] text-gray-500 font-bold block">Sent</span>
+                              <strong className="text-sm text-gray-900 dark:text-white">{analyticsData.abComparison.sentB}</strong>
+                            </div>
+                            <div className="p-2 bg-cyan-50 dark:bg-cyan-950/40 rounded-xl">
+                              <span className="text-[10px] text-cyan-600 font-bold block">Read Rate</span>
+                              <strong className="text-sm text-cyan-600">{analyticsData.abComparison.readRateB}%</strong>
+                            </div>
+                            <div className="p-2 bg-purple-50 dark:bg-purple-950/40 rounded-xl">
+                              <span className="text-[10px] text-purple-600 font-bold block">CTR %</span>
+                              <strong className="text-sm text-purple-600">{analyticsData.abComparison.clickRateB}%</strong>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* ENGAGEMENT & FUNNEL METRICS GRID */}
                   <div>

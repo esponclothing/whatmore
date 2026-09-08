@@ -1508,6 +1508,16 @@ model WhatsAppCampaign {
   couponCode      String?   // Promo / Coupon code for copy button
   optOutCount     Int      @default(0) // Count of recipients who clicked Opt-Out or replied STOP
   metaQualityStatus String? // GREEN, YELLOW, RED
+  // A/B Testing
+  isAbTest        Boolean  @default(false)
+  variantTemplateId String?
+  abSplitRatio    Int      @default(50) // e.g. 50 for 50/50 split
+  // Drip Sequence Automation
+  isDripCampaign  Boolean  @default(false)
+  dripStepsJson   String?  // JSON string array of follow-up steps
+  parentCampaignId String?
+  dripStepNumber  Int      @default(1)
+
   queues          WhatsAppCampaignQueue[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1521,6 +1531,8 @@ model WhatsAppCampaignQueue {
   customerName String?
   customerCity String?
   status       String           @default("PENDING") // PENDING, SENT, DELIVERED, READ, CLICKED, REPLIED, FAILED
+  variant      String?          @default("A")       // "A" or "B" for A/B Testing
+  dripStep     Int?             @default(1)         // Drip sequence step number
   deliveredAt  DateTime?
   readAt       DateTime?
   clickedAt    DateTime?
