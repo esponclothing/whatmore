@@ -15,7 +15,8 @@ import {
   deleteWhatsAppTemplateAction,
   sendWhatsAppTemplateAction,
   getWhatsAppBrandDetailsAction,
-  generateAITemplateAction
+  generateAITemplateAction,
+  getWhatsAppInventoryCatalogAction
 } from "@/app/actions/whatsAppPlatformActions";
 
 // Meta API Constraints
@@ -333,6 +334,175 @@ export default function WhatsAppTemplatesComponent() {
     const compositePrompt = `Previous Draft: "${aiDraft?.template?.bodyText}". User revision: "${aiRefineInput}". Brand: ${brandName}. Ensure Meta compliance.`;
     setAiRefineInput("");
     await handleGenerateWithAI(compositePrompt);
+  };
+
+  // -------------------------------------------------------------
+  // Live Store Inventory & Product Injector State
+  // -------------------------------------------------------------
+  const [inventoryProducts, setInventoryProducts] = useState<any[]>([]);
+  const [inventoryCategories, setInventoryCategories] = useState<string[]>([]);
+  const [inventoryCombos, setInventoryCombos] = useState<any[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventorySearch, setInventorySearch] = useState("");
+  const [inventoryCategoryFilter, setInventoryCategoryFilter] = useState("ALL");
+  const [inventoryInStockOnly, setInventoryInStockOnly] = useState(false);
+  const [inventoryStats, setInventoryStats] = useState({ totalProducts: 0, inStockProducts: 0, categoriesCount: 0 });
+  const [inventoryDrawerOpen, setInventoryDrawerOpen] = useState(true);
+
+  const fetchInventory = async (search = inventorySearch, cat = inventoryCategoryFilter, inStock = inventoryInStockOnly) => {
+    setInventoryLoading(true);
+    try {
+      const res = await getWhatsAppInventoryCatalogAction({
+        search,
+        category: cat,
+        inStockOnly: inStock,
+        limit: 60
+      });
+      if (res.success) {
+        setInventoryProducts(res.products || []);
+        setInventoryCategories(res.categories || []);
+        setInventoryCombos(res.combos || []);
+        if (res.stats) setInventoryStats(res.stats);
+      }
+    } catch (e) {
+      console.error("Failed to fetch inventory catalog:", e);
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchInventory();
+  }, [inventoryCategoryFilter, inventoryInStockOnly]);
+
+  // Product Direct Injection Handlers
+  const handleInjectProductAsHeader = (p: any) => {
+    setHeaderType("IMAGE");
+    setHeaderMediaPreview(p.primaryImage || (p.images && p.images[0]) || null);
+    setHeaderContent("");
+
+    if (!templateName || templateName.startsWith("custom_") || templateName.startsWith("promo_")) {
+      const slug = (p.name || "product").toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 30);
+      setTemplateName(`promo_${slug}`);
+      setNameError("");
+    }
+
+    if (!bodyText || bodyText.length < 10) {
+      setBodyText(
+        `Hi {{1}}, check out our bestseller *${p.name}* at ${brandName}! 🔥\n\nGrab yours today for only *₹${p.sellingPrice}* (MRP ₹${p.mrp || p.sellingPrice} • ${p.discountPercent}% OFF). Crafted with ${p.fabric || 'premium fabric'} for ultimate comfort.\n\nUse code *${couponCode || 'FLAT30'}* at checkout for extra savings!`
+      );
+    }
+
+    if (!footerText) {
+      setFooterText(`${brandName} | Limited Stock Available`);
+    }
+
+    setButtons([
+      {
+        type: "URL",
+        text: "Buy Now",
+        url: p.productUrl || `https://${brandDomain}/products/${p.sku || 'item'}`,
+        urlType: "STATIC"
+      },
+      {
+        type: "COPY_CODE",
+        text: "Copy Coupon",
+        code: couponCode || "FLAT30"
+      },
+      {
+        type: "PHONE_NUMBER",
+        text: "Order on Call",
+        phone_number: brandPhone
+      }
+    ]);
+
+    showToast(`🖼️ Injected "${p.name}" photo, price & Buy Now link into Header!`, "success");
+  };
+
+  const handleInjectProductAsCarouselCard = (p: any) => {
+    setTemplateType("CAROUSEL");
+    const newCard: CarouselCardItem = {
+      id: `card_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+      mediaUrl: p.primaryImage || (p.images && p.images[0]) || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80",
+      headerType: "IMAGE",
+      title: p.name,
+      bodyText: `₹${p.sellingPrice} (MRP ₹${p.mrp}) • ${p.category || 'Apparel'}`,
+      buttons: [
+        {
+          type: "URL",
+          text: "Buy Now",
+          url: p.productUrl || `https://${brandDomain}/products/${p.sku || 'item'}`,
+          urlType: "STATIC"
+        },
+        {
+          type: "QUICK_REPLY",
+          text: "Check Sizes"
+        }
+      ]
+    };
+
+    if (!bodyText) {
+      setBodyText(`Hi {{1}}, explore top trending styles from ${brandName}! Swipe through our curated collection below:`);
+    }
+
+    setCarouselCards(prev => [...prev, newCard]);
+    showToast(`➕ Added "${p.name}" with photo & Buy Now link to Carousel Cards!`, "success");
+  };
+
+  const handleAutoFillCarouselWithTopProducts = () => {
+    setTemplateType("CAROUSEL");
+    const inStockList = inventoryProducts.filter(p => p.inStock);
+    const itemsToUse = inStockList.length >= 2 ? inStockList.slice(0, 4) : inventoryProducts.slice(0, 3);
+
+    if (itemsToUse.length === 0) {
+      showToast("No products found in inventory to populate carousel.", "error");
+      return;
+    }
+
+    const generatedCards: CarouselCardItem[] = itemsToUse.map((p, idx) => ({
+      id: `card_${idx + 1}_${Date.now()}`,
+      mediaUrl: p.primaryImage || (p.images && p.images[0]) || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80",
+      headerType: "IMAGE",
+      title: p.name,
+      bodyText: `₹${p.sellingPrice} (MRP ₹${p.mrp}) • ${p.category || 'Apparel'}`,
+      buttons: [
+        {
+          type: "URL",
+          text: "Buy Now",
+          url: p.productUrl || `https://${brandDomain}/products/${p.sku || 'item'}`,
+          urlType: "STATIC"
+        },
+        {
+          type: "QUICK_REPLY",
+          text: "View Details"
+        }
+      ]
+    }));
+
+    setCarouselCards(generatedCards);
+    setTemplateName(`carousel_collection_${Date.now().toString().slice(-4)}`);
+    setNameError("");
+    setBodyText(`Hi {{1}}, check out the top trending collections at ${brandName}! Swipe through the carousel below and use code *${couponCode || 'FLAT30'}* at checkout:`);
+    setFooterText(`${brandName} Store | Official Online Shop`);
+    setButtons([
+      { type: "URL", text: "Shop Full Store", url: `https://${brandDomain}`, urlType: "STATIC" },
+      { type: "COPY_CODE", text: "Copy Coupon", code: couponCode || "FLAT30" }
+    ]);
+
+    showToast(`✨ Successfully auto-populated ${generatedCards.length} product cards with live inventory photos & links!`, "success");
+  };
+
+  const handleInjectProductIntoBody = (p: any) => {
+    const snippet = `\n• *${p.name}* — ₹${p.sellingPrice} (MRP ₹${p.mrp} • ${p.discountPercent}% OFF)`;
+    setBodyText(prev => (prev ? `${prev}${snippet}` : `Hi {{1}}, check out *${p.name}* at ₹${p.sellingPrice}! Link: ${p.productUrl}`));
+    showToast(`📝 Injected "${p.name}" details into body message!`, "success");
+  };
+
+  const handlePromptAIForProduct = (p: any) => {
+    const promptText = `Create a high-converting promotional template for ${p.name} (Selling Price: ₹${p.sellingPrice}, MRP: ₹${p.mrp}, Category: ${p.category}) with image header, urgency discount code ${couponCode || 'FLAT30'}, and direct shop now CTA button.`;
+    setAiPrompt(promptText);
+    setAiIsOpen(true);
+    handleGenerateWithAI(promptText);
   };
 
   // Test send state
@@ -1010,27 +1180,23 @@ export default function WhatsAppTemplatesComponent() {
             {/* ========================================================= */}
             {/* EMBEDDED AI TEMPLATE STUDIO CO-PILOT (Prompt-to-Template) */}
             {/* ========================================================= */}
-            <div className="bg-gradient-to-br from-indigo-900/95 via-slate-900 to-purple-950 border-2 border-indigo-500/50 rounded-3xl p-6 text-white shadow-xl shadow-indigo-950/40 relative overflow-hidden">
-              {/* Background Glow */}
-              <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute bottom-0 left-0 w-60 h-60 bg-purple-500/15 rounded-full blur-2xl pointer-events-none" />
-
+            <div className="bg-white dark:bg-slate-800 border-2 border-indigo-200/80 dark:border-indigo-900/60 rounded-3xl p-5 shadow-xs relative overflow-hidden bg-gradient-to-br from-indigo-50/30 via-white to-purple-50/20 dark:from-slate-800 dark:via-slate-800 dark:to-indigo-950/20">
               {/* Header Badge & Brand Guide Notice */}
               <div className="flex items-center justify-between gap-4 mb-3 relative z-10">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-md shadow-indigo-500/30">
-                    <Sparkles size={18} className="text-white animate-pulse" />
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-md shadow-indigo-500/25 text-white">
+                    <Sparkles size={18} />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="text-base font-black tracking-tight text-white flex items-center gap-1.5">
+                      <h3 className="text-base font-black tracking-tight text-gray-900 dark:text-white flex items-center gap-1.5">
                         AI Template Architect & Co-Pilot
                       </h3>
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black uppercase tracking-wider">
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black uppercase tracking-wider">
                         Meta 100% Compliant
                       </span>
                     </div>
-                    <p className="text-[11px] text-indigo-200/80">
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
                       Explain your campaign need in plain English — the AI will draft, validate, and load the template in front of you.
                     </p>
                   </div>
@@ -1039,47 +1205,42 @@ export default function WhatsAppTemplatesComponent() {
                 <button
                   type="button"
                   onClick={() => setAiIsOpen(!aiIsOpen)}
-                  className="px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/15 rounded-xl text-xs font-bold text-white transition flex items-center gap-1 cursor-pointer"
+                  className="px-3 py-1.5 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600 rounded-xl text-xs font-bold text-gray-700 dark:text-gray-200 transition flex items-center gap-1 cursor-pointer"
                 >
                   {aiIsOpen ? "Hide Co-Pilot" : "Open Co-Pilot"}
                 </button>
               </div>
 
               {/* Dynamic Brand Intelligence Badge */}
-              <div className="mb-4 px-3.5 py-2.5 bg-indigo-950/80 border border-indigo-500/40 rounded-2xl flex flex-wrap items-center gap-2.5 text-[11px] text-indigo-200 relative z-10 shadow-inner">
-                <span className="flex items-center gap-1.5 font-bold text-indigo-300">
+              <div className="mb-4 px-3.5 py-2.5 bg-indigo-50/70 dark:bg-slate-900/60 border border-indigo-100 dark:border-slate-700/80 rounded-2xl flex flex-wrap items-center gap-2 text-[11px] text-gray-700 dark:text-gray-300 relative z-10">
+                <span className="flex items-center gap-1 font-black text-indigo-700 dark:text-indigo-300">
                   🧠 Dynamic Brand Guidance:
                 </span>
-                <span className="bg-indigo-500/25 border border-indigo-400/30 px-2.5 py-0.5 rounded-lg font-bold text-white flex items-center gap-1">
+                <span className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-2.5 py-0.5 rounded-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-1 shadow-2xs">
                   🏢 {brandName}
                 </span>
-                <span className="bg-indigo-500/25 border border-indigo-400/30 px-2.5 py-0.5 rounded-lg font-bold text-white flex items-center gap-1">
+                <span className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-2.5 py-0.5 rounded-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-1 shadow-2xs">
                   🌐 {brandDomain}
                 </span>
-                <span className="bg-indigo-500/25 border border-indigo-400/30 px-2.5 py-0.5 rounded-lg font-bold text-white flex items-center gap-1">
+                <span className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-2.5 py-0.5 rounded-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-1 shadow-2xs">
                   📞 {brandPhone}
                 </span>
-                {brandEmail && (
-                  <span className="bg-indigo-500/25 border border-indigo-400/30 px-2.5 py-0.5 rounded-lg font-bold text-white hidden md:flex items-center gap-1">
-                    ✉️ {brandEmail}
+                {inventoryStats.totalProducts > 0 && (
+                  <span className="bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 px-2.5 py-0.5 rounded-lg font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                    🛍️ {inventoryStats.inStockProducts || inventoryProducts.length} In-Stock Products Connected
                   </span>
                 )}
-                {productsCount > 0 && (
-                  <span className="bg-purple-500/20 border border-purple-400/30 px-2 py-0.5 rounded-lg font-semibold text-purple-200 flex items-center gap-1">
-                    🛍️ {productsCount} Products Loaded
-                  </span>
-                )}
-                <span className="bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 px-2.5 py-0.5 rounded-lg font-bold flex items-center gap-1">
+                <span className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 px-2.5 py-0.5 rounded-lg font-bold flex items-center gap-1">
                   ✓ {hasAiKnowledge ? "AI Knowledge Base Connected" : "Standard Rules Active"}
                 </span>
               </div>
 
               {aiIsOpen && (
-                <div className="flex flex-col gap-4 relative z-10 animate-in fade-in duration-150">
+                <div className="flex flex-col gap-3.5 relative z-10 animate-in fade-in duration-150">
                   {/* Quick Starter Inspiration Chips */}
                   <div>
-                    <div className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                      <Zap size={12} className="text-amber-400" />
+                    <div className="text-[11px] font-black text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <Zap size={12} className="text-amber-500" />
                       Quick Campaign Inspiration:
                     </div>
                     <div className="flex flex-wrap gap-1.5">
@@ -1097,7 +1258,7 @@ export default function WhatsAppTemplatesComponent() {
                             setAiPrompt(chip.prompt);
                             handleGenerateWithAI(chip.prompt);
                           }}
-                          className="px-2.5 py-1 bg-white/10 hover:bg-white/20 border border-white/15 rounded-lg text-[11px] text-indigo-100 font-medium transition active:scale-95 cursor-pointer text-left"
+                          className="px-2.5 py-1 bg-white dark:bg-slate-700 hover:bg-indigo-50 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600 hover:border-indigo-300 rounded-lg text-[11px] text-gray-700 dark:text-gray-200 hover:text-indigo-600 font-semibold transition active:scale-95 cursor-pointer text-left shadow-2xs"
                         >
                           {chip.label}
                         </button>
@@ -1113,19 +1274,19 @@ export default function WhatsAppTemplatesComponent() {
                         onChange={(e) => setAiPrompt(e.target.value)}
                         placeholder={`Explain what you want to create (e.g., "Create a Diwali sale template for ${brandName} with a coupon code, image header, shop now button and phone support")...`}
                         rows={3}
-                        className="w-full px-4 py-3 bg-slate-900/90 border border-indigo-400/40 rounded-2xl text-xs text-white placeholder-indigo-300/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition"
+                        className="w-full px-4 py-3 bg-gray-50/90 dark:bg-slate-900/90 border border-gray-200 dark:border-slate-700 rounded-2xl text-xs text-gray-900 dark:text-white placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
                       />
                     </div>
 
                     <div className="flex items-center justify-between gap-3">
-                      <div className="text-[11px] text-indigo-300">
+                      <div className="text-[11px] text-gray-500 dark:text-gray-400">
                         {aiGenerating ? (
-                          <span className="flex items-center gap-1.5 text-amber-300 font-bold animate-pulse">
+                          <span className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-bold animate-pulse">
                             <RefreshCw size={12} className="animate-spin" />
-                            AI is structuring Meta template...
+                            AI is structuring Meta-compliant template draft...
                           </span>
                         ) : (
-                          <span>💡 Be specific about offers, discount codes, or buttons you want included.</span>
+                          <span>💡 Be specific about offers, discount codes, or products you want to feature.</span>
                         )}
                       </div>
 
@@ -1133,7 +1294,7 @@ export default function WhatsAppTemplatesComponent() {
                         type="button"
                         onClick={() => handleGenerateWithAI()}
                         disabled={aiGenerating || !aiPrompt.trim()}
-                        className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white rounded-xl text-xs font-black transition flex items-center gap-2 shadow-lg shadow-emerald-500/25 active:scale-95 disabled:opacity-50 cursor-pointer"
+                        className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-black transition flex items-center gap-2 shadow-md shadow-indigo-500/25 active:scale-95 disabled:opacity-50 cursor-pointer"
                       >
                         {aiGenerating ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
                         <span>{aiGenerating ? "Generating..." : "Generate with AI ✨"}</span>
@@ -1143,44 +1304,54 @@ export default function WhatsAppTemplatesComponent() {
 
                   {/* PROPOSED AI DRAFT CARD & INTERACTIVE APPROVAL */}
                   {aiDraft && aiDraft.template && (
-                    <div className="mt-2 p-4 bg-slate-900/95 border-2 border-emerald-500/60 rounded-2xl flex flex-col gap-3 text-white shadow-2xl animate-in zoom-in-95 duration-200">
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-700/80">
+                    <div className="mt-2 p-4 bg-emerald-50/60 dark:bg-emerald-950/20 border-2 border-emerald-300 dark:border-emerald-800/80 rounded-2xl flex flex-col gap-3 text-gray-900 dark:text-white shadow-md animate-in zoom-in-95 duration-200">
+                      <div className="flex items-center justify-between pb-2 border-b border-emerald-200/80 dark:border-emerald-800/60">
                         <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-                          <h4 className="text-xs font-black text-emerald-300 uppercase tracking-wider">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                          <h4 className="text-xs font-black text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">
                             AI Proposed Template Draft
                           </h4>
-                          <span className="px-2 py-0.5 rounded-md bg-emerald-950 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold">
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 text-[10px] font-bold">
                             {aiDraft.template.category} • {aiDraft.template.templateType}
                           </span>
                         </div>
-                        <span className="text-[11px] font-mono text-indigo-300 bg-indigo-950/80 px-2 py-0.5 rounded-md border border-indigo-700/50">
+                        <span className="text-[11px] font-mono font-bold text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-800 px-2 py-0.5 rounded-md border border-indigo-200 dark:border-slate-700 shadow-2xs">
                           {aiDraft.template.name}
                         </span>
                       </div>
 
                       {/* Header Preview */}
                       {aiDraft.template.headerType !== "NONE" && (
-                        <div className="text-[11px] bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
-                          <span className="font-bold text-indigo-300 block mb-1">Header ({aiDraft.template.headerType}):</span>
+                        <div className="text-[11px] bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-gray-200 dark:border-slate-700 shadow-2xs">
+                          <span className="font-bold text-indigo-700 dark:text-indigo-300 block mb-1">Header ({aiDraft.template.headerType}):</span>
                           {aiDraft.template.headerType === "TEXT" ? (
-                            <span className="text-white font-semibold">{aiDraft.template.headerContent}</span>
+                            <span className="font-semibold">{aiDraft.template.headerContent}</span>
                           ) : (
-                            <span className="text-gray-300 italic">Media Header: {aiDraft.template.headerMediaUrl ? "Image attached ✓" : "Standard Media"}</span>
+                            <div className="flex items-center gap-2">
+                              {aiDraft.template.headerMediaUrl && (
+                                <img
+                                  src={aiDraft.template.headerMediaUrl}
+                                  alt="Header preview"
+                                  className="w-10 h-10 rounded-lg object-cover border border-gray-200"
+                                  onError={(e: any) => { e.target.style.display = 'none'; }}
+                                />
+                              )}
+                              <span className="text-gray-600 dark:text-gray-300 font-semibold">Image Header Attached ✓</span>
+                            </div>
                           )}
                         </div>
                       )}
 
                       {/* Body Copy Preview with Variable Highlights */}
-                      <div className="text-xs bg-slate-800/80 p-3 rounded-xl border border-slate-700 leading-relaxed text-gray-100 whitespace-pre-wrap">
-                        <span className="font-bold text-indigo-300 block mb-1 text-[11px]">Body Message:</span>
+                      <div className="text-xs bg-white dark:bg-slate-800 p-3 rounded-xl border border-gray-200 dark:border-slate-700 leading-relaxed text-gray-800 dark:text-gray-100 whitespace-pre-wrap shadow-2xs">
+                        <span className="font-bold text-indigo-700 dark:text-indigo-300 block mb-1 text-[11px]">Body Message:</span>
                         {aiDraft.template.bodyText}
                       </div>
 
                       {/* Footer Preview */}
                       {aiDraft.template.footerText && (
-                        <div className="text-[10px] text-gray-400 px-1">
-                          <span className="font-bold text-gray-300">Footer:</span> {aiDraft.template.footerText}
+                        <div className="text-[11px] text-gray-500 dark:text-gray-400 px-1">
+                          <span className="font-bold text-gray-700 dark:text-gray-300">Footer:</span> {aiDraft.template.footerText}
                         </div>
                       )}
 
@@ -1190,9 +1361,9 @@ export default function WhatsAppTemplatesComponent() {
                           {aiDraft.template.buttons.map((b: any, bIdx: number) => (
                             <span
                               key={bIdx}
-                              className="px-2.5 py-1 bg-indigo-950/90 border border-indigo-500/40 rounded-lg text-[11px] text-indigo-200 font-bold flex items-center gap-1.5"
+                              className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-[11px] text-gray-800 dark:text-gray-200 font-bold flex items-center gap-1.5 shadow-2xs"
                             >
-                              {b.type === "URL" ? <LinkIcon size={11} /> : b.type === "COPY_CODE" ? <Copy size={11} /> : <Phone size={11} />}
+                              {b.type === "URL" ? <LinkIcon size={11} className="text-indigo-600" /> : b.type === "COPY_CODE" ? <Copy size={11} className="text-emerald-600" /> : <Phone size={11} className="text-purple-600" />}
                               {b.text} {b.type === "COPY_CODE" && `[${b.code || aiDraft.template.couponCode}]`}
                             </span>
                           ))}
@@ -1201,12 +1372,12 @@ export default function WhatsAppTemplatesComponent() {
 
                       {/* Meta Variables Breakdown */}
                       {aiDraft.template.variables && aiDraft.template.variables.length > 0 && (
-                        <div className="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800 text-[11px]">
-                          <span className="font-bold text-indigo-300 block mb-1">Dynamic Variables Mapping:</span>
+                        <div className="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 text-[11px] shadow-2xs">
+                          <span className="font-bold text-indigo-700 dark:text-indigo-300 block mb-1">Dynamic Variables Mapping:</span>
                           <div className="flex flex-wrap gap-2">
                             {aiDraft.template.variables.map((v: any, vIdx: number) => (
-                              <span key={vIdx} className="bg-slate-800 px-2 py-0.5 rounded text-gray-200">
-                                <strong className="text-indigo-400">{v.param}</strong>: {v.name || v.description} (e.g. <em>{v.example}</em>)
+                              <span key={vIdx} className="bg-gray-50 dark:bg-slate-700 px-2 py-0.5 rounded text-gray-700 dark:text-gray-200">
+                                <strong className="text-indigo-600 dark:text-indigo-400">{v.param}</strong>: {v.name || v.description} (e.g. <em>{v.example}</em>)
                               </span>
                             ))}
                           </div>
@@ -1215,7 +1386,7 @@ export default function WhatsAppTemplatesComponent() {
 
                       {/* Compliance Guarantee */}
                       {aiDraft.complianceChecks && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[10px] text-emerald-300 bg-emerald-950/30 p-2 rounded-xl border border-emerald-900/40">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[10px] text-emerald-800 dark:text-emerald-300 bg-emerald-100/50 dark:bg-emerald-950/40 p-2 rounded-xl border border-emerald-200 dark:border-emerald-800">
                           {aiDraft.complianceChecks.map((chk: string, cIdx: number) => (
                             <span key={cIdx}>{chk}</span>
                           ))}
@@ -1224,13 +1395,13 @@ export default function WhatsAppTemplatesComponent() {
 
                       {/* AI Explanation */}
                       {aiDraft.explanation && (
-                        <div className="text-[11px] text-indigo-200 bg-indigo-950/40 px-3 py-1.5 rounded-lg border border-indigo-800/40">
+                        <div className="text-[11px] text-gray-600 dark:text-gray-300 bg-indigo-50/50 dark:bg-indigo-950/30 px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-900/50">
                           💡 <strong>AI Architect Rationale:</strong> {aiDraft.explanation}
                         </div>
                       )}
 
                       {/* Refinement Bar & 1-Click Approval */}
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-slate-700/80">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-emerald-200 dark:border-emerald-800/60">
                         <div className="flex items-center gap-1.5 flex-1">
                           <input
                             type="text"
@@ -1238,13 +1409,13 @@ export default function WhatsAppTemplatesComponent() {
                             onChange={(e) => setAiRefineInput(e.target.value)}
                             onKeyDown={(e) => { if (e.key === "Enter") handleRefineAIDraft(); }}
                             placeholder="Need tweaks? (e.g. 'Make it punchier', 'Add copy coupon', 'Change language')..."
-                            className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-indigo-400"
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-xl text-xs text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                           <button
                             type="button"
                             onClick={handleRefineAIDraft}
                             disabled={!aiRefineInput.trim() || aiGenerating}
-                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-50 cursor-pointer whitespace-nowrap"
+                            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-50 cursor-pointer whitespace-nowrap"
                           >
                             Refine
                           </button>
@@ -1253,12 +1424,201 @@ export default function WhatsAppTemplatesComponent() {
                         <button
                           type="button"
                           onClick={() => handleApplyAIDraft()}
-                          className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-600 hover:to-teal-600 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 active:scale-95 cursor-pointer whitespace-nowrap"
+                          className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-md shadow-emerald-600/25 active:scale-95 cursor-pointer whitespace-nowrap"
                         >
                           <CheckCircle2 size={15} />
                           <span>Approve & Load into Studio Form ✨</span>
                         </button>
                       </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* ========================================================= */}
+            {/* LIVE STORE INVENTORY & PRODUCT INJECTOR PANEL */}
+            {/* ========================================================= */}
+            <div className="bg-white dark:bg-slate-800/90 border border-gray-200 dark:border-slate-700 rounded-3xl p-5 shadow-2xs flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100 dark:border-slate-700">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-300 flex items-center justify-center font-bold">
+                    <ShoppingBag size={18} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">
+                        Store Inventory & Product Injector
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[10px] font-black">
+                        {inventoryStats.inStockProducts || inventoryProducts.length} In-Stock
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                      Click any product to instantly inject its real photo, price, and store link into this template.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAutoFillCarouselWithTopProducts}
+                    className="px-3.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-md shadow-purple-500/20 active:scale-95 cursor-pointer"
+                  >
+                    <Layers size={13} />
+                    <span>Auto-Fill Carousel (Top 3 Items) ✨</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setInventoryDrawerOpen(!inventoryDrawerOpen)}
+                    className="p-1.5 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-xl text-xs font-bold text-gray-600 dark:text-gray-300 transition cursor-pointer"
+                  >
+                    {inventoryDrawerOpen ? <X size={14} /> : <Plus size={14} />}
+                  </button>
+                </div>
+              </div>
+
+              {inventoryDrawerOpen && (
+                <div className="flex flex-col gap-3">
+                  {/* Search & Category Filter Row */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                    <div className="relative flex-1">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        value={inventorySearch}
+                        onChange={(e) => {
+                          setInventorySearch(e.target.value);
+                          fetchInventory(e.target.value, inventoryCategoryFilter, inventoryInStockOnly);
+                        }}
+                        placeholder="Search product name, SKU, or category..."
+                        className="w-full pl-9 pr-3 py-1.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+                      <select
+                        value={inventoryCategoryFilter}
+                        onChange={(e) => setInventoryCategoryFilter(e.target.value)}
+                        className="px-2.5 py-1.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold text-gray-700 dark:text-gray-300 outline-none cursor-pointer"
+                      >
+                        <option value="ALL">All Categories</option>
+                        {inventoryCategories.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+
+                      <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 font-bold whitespace-nowrap cursor-pointer px-2">
+                        <input
+                          type="checkbox"
+                          checked={inventoryInStockOnly}
+                          onChange={(e) => setInventoryInStockOnly(e.target.checked)}
+                          className="w-3.5 h-3.5 accent-indigo-600 rounded"
+                        />
+                        <span>In Stock Only</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Products Horizontal Card List */}
+                  {inventoryLoading ? (
+                    <div className="p-6 flex items-center justify-center gap-2 text-xs text-gray-500 font-bold">
+                      <RefreshCw size={14} className="animate-spin text-indigo-600" />
+                      <span>Loading store inventory catalog...</span>
+                    </div>
+                  ) : inventoryProducts.length === 0 ? (
+                    <div className="p-6 text-center text-xs text-gray-400 bg-gray-50 dark:bg-slate-900/40 rounded-2xl border border-dashed border-gray-200 dark:border-slate-700">
+                      No matching products found in inventory. Try clearing the search filter.
+                    </div>
+                  ) : (
+                    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+                      {inventoryProducts.map((prod) => (
+                        <div
+                          key={prod.id}
+                          className="min-w-[220px] max-w-[220px] p-3 bg-gray-50/70 dark:bg-slate-900/60 hover:bg-white dark:hover:bg-slate-900 border border-gray-200 dark:border-slate-700/80 hover:border-indigo-400 rounded-2xl flex flex-col justify-between gap-2.5 transition shadow-2xs group"
+                        >
+                          {/* Image & Stock Badge */}
+                          <div className="relative w-full h-28 bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-gray-100 dark:border-slate-700 flex items-center justify-center">
+                            <img
+                              src={prod.primaryImage}
+                              alt={prod.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                              onError={(e: any) => {
+                                e.target.src = "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&auto=format&fit=crop&q=80";
+                              }}
+                            />
+                            <div className="absolute top-1.5 left-1.5 px-2 py-0.5 bg-black/70 backdrop-blur-xs text-white text-[9px] font-black rounded-md uppercase">
+                              {prod.category || 'Apparel'}
+                            </div>
+                            <div className={`absolute bottom-1.5 right-1.5 px-2 py-0.5 rounded-md text-[9px] font-black backdrop-blur-xs ${prod.inStock ? 'bg-emerald-600/90 text-white' : 'bg-red-600/90 text-white'}`}>
+                              {prod.inStock ? `${prod.stockQuantity} In Stock` : 'Out of Stock'}
+                            </div>
+                          </div>
+
+                          {/* Product Details */}
+                          <div>
+                            <h5 className="font-bold text-xs text-gray-900 dark:text-white line-clamp-1 group-hover:text-indigo-600 transition" title={prod.name}>
+                              {prod.name}
+                            </h5>
+                            <div className="flex items-center gap-1.5 mt-0.5 text-xs">
+                              <span className="font-black text-gray-900 dark:text-white">₹{prod.sellingPrice}</span>
+                              {prod.mrp > prod.sellingPrice && (
+                                <>
+                                  <span className="text-[10px] text-gray-400 line-through">₹{prod.mrp}</span>
+                                  <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.2 rounded">
+                                    {prod.discountPercent}% OFF
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Inject Action Buttons */}
+                          <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-gray-200 dark:border-slate-800">
+                            <button
+                              type="button"
+                              onClick={() => handleInjectProductAsHeader(prod)}
+                              className="px-2 py-1.5 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-gray-200 dark:border-slate-700 hover:border-indigo-400 text-indigo-700 dark:text-indigo-300 rounded-lg text-[10px] font-black transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs"
+                              title="Set as Header Image and attach product store URL to CTA button"
+                            >
+                              <ImageIcon size={11} />
+                              <span>Set Header</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleInjectProductAsCarouselCard(prod)}
+                              className="px-2 py-1.5 bg-white dark:bg-slate-800 hover:bg-purple-50 dark:hover:bg-purple-950/40 border border-gray-200 dark:border-slate-700 hover:border-purple-400 text-purple-700 dark:text-purple-300 rounded-lg text-[10px] font-black transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs"
+                              title="Add as Carousel Card with image, title, price, and store link"
+                            >
+                              <Plus size={11} />
+                              <span>+ Carousel</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleInjectProductIntoBody(prod)}
+                              className="px-2 py-1 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 text-gray-700 dark:text-gray-300 rounded-lg text-[9px] font-bold transition cursor-pointer flex items-center justify-center gap-1"
+                              title="Insert product title & price into message body text"
+                            >
+                              <FileText size={10} />
+                              <span>In Body</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handlePromptAIForProduct(prod)}
+                              className="px-2 py-1 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg text-[9px] font-extrabold transition cursor-pointer flex items-center justify-center gap-1 active:scale-95 shadow-2xs"
+                              title="Ask AI to write a high-converting promotional template for this product"
+                            >
+                              <Sparkles size={10} />
+                              <span>AI Promo</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
