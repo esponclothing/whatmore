@@ -86,7 +86,7 @@ export async function pushLeadToIntegrationAction(conversationId: string, integr
     const payload = {
       name: conv.customer.contactPerson || conv.customer.businessName || 'Unknown',
       whatsappNumber: conv.customer.whatsappNumber || conv.customer.mobile,
-      shopName: conv.customer.shopName || '',
+      shopName: (conv.customer as any).shopName || '',
       agentEmail: conv.assignedEmployee?.user?.email || ''
     };
 
@@ -111,3 +111,28 @@ export async function pushLeadToIntegrationAction(conversationId: string, integr
     return { success: false, error: e.message };
   }
 }
+
+export async function testMetaCatalogConnectionAction(catalogId: string, accessToken: string) {
+  try {
+    if (!catalogId || !accessToken) {
+      return { success: false, error: "Catalog ID and Access Token are required" };
+    }
+    const cleanId = catalogId.trim();
+    const cleanToken = accessToken.trim();
+    const res = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(cleanId)}?fields=id,name,product_count,vertical&access_token=${encodeURIComponent(cleanToken)}`);
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      return { success: false, error: data.error?.message || "Failed to verify Meta Catalog" };
+    }
+    return {
+      success: true,
+      catalogId: data.id,
+      catalogName: data.name || "Meta Product Catalog",
+      productCount: data.product_count ?? 0,
+      vertical: data.vertical || "commerce"
+    };
+  } catch (e: any) {
+    return { success: false, error: e.message || "Network error connecting to Meta Graph API" };
+  }
+}
+

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store, MessageSquare, Users, Bot, Layers, BookOpen, Edit3, X, Plus, Trash2, UserCheck, UserX, Shield, ExternalLink, Sparkles, HelpCircle, Target, Edit, Zap } from "lucide-react";
+import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store, MessageSquare, Users, Bot, Layers, BookOpen, Edit3, X, Plus, Trash2, UserCheck, UserX, Shield, ExternalLink, Sparkles, HelpCircle, Target, Edit, Zap, ShoppingBag } from "lucide-react";
 import { 
   getWhatsAppApiCredentialsAction, 
   saveWhatsAppApiCredentialsAction, 
@@ -21,8 +21,16 @@ import {
   getAllAgentsAction
 } from "@/app/actions/whatsAppPlatformActions";
 import { getPaymentGatewaySettings, savePaymentGatewaySettings } from "@/app/actions/paymentGatewayActions";
-import { getWhatsAppIntegrationsAction, createWhatsAppIntegrationAction, updateWhatsAppIntegrationAction, deleteWhatsAppIntegrationAction } from "@/app/actions/whatsAppIntegrationActions";
+import { 
+  getWhatsAppIntegrationsAction, 
+  createWhatsAppIntegrationAction, 
+  updateWhatsAppIntegrationAction, 
+  deleteWhatsAppIntegrationAction,
+  testMetaCatalogConnectionAction
+} from "@/app/actions/whatsAppIntegrationActions";
 import WhatsAppAIAutomationComponent from "@/components/whatsapp/WhatsAppAIAutomationComponent";
+
+const DEFAULT_CATALOG_TOKEN = "EAATFY0JDp9MBSTZAsBtd2VSRUuY8ZBOA4To89TOfLEZAQxvsoVQpo5tOBFwL3CcP6Gqdk4OgXtNUjZAvQISKYUJEESPG6gjgfMNBZBZCz0Cd8w7OuM6QJxtJ2bb3e8YdoL45oTggGmSnZADojWeGxFU5CLiLW5mPhc06KzHe9BD1AgskX0iJbyupeZCuWiE4MQZDZD";
 
 
 export default function IntegrationsHubPage() {
@@ -41,6 +49,8 @@ export default function IntegrationsHubPage() {
   const [metaCapiLeadValue, setMetaCapiLeadValue] = useState<number>(10000);
   const [savingCapi, setSavingCapi] = useState(false);
   const [capiResultMsg, setCapiResultMsg] = useState<{ success: boolean; text: string } | null>(null);
+  const [testingCatalogId, setTestingCatalogId] = useState<string | null>(null);
+  const [catalogTestStatus, setCatalogTestStatus] = useState<{ id: string; success: boolean; text: string } | null>(null);
 
   // Payment Gateway State
   const [pgActiveGateway, setPgActiveGateway] = useState<string | null>(null);
@@ -220,6 +230,39 @@ export default function IntegrationsHubPage() {
     }
     setSavingCapi(false);
   };
+
+  const handleTestCatalogConnection = async (integration: any) => {
+    if (!integration.url || !integration.token) {
+      alert("Catalog ID and Access Token are required.");
+      return;
+    }
+    setTestingCatalogId(integration.id);
+    setCatalogTestStatus(null);
+    try {
+      const res = await testMetaCatalogConnectionAction(integration.url, integration.token);
+      if (res.success) {
+        setCatalogTestStatus({
+          id: integration.id,
+          success: true,
+          text: `Connected to "${res.catalogName}"! (${res.productCount ?? 0} items verified in Meta Commerce)`
+        });
+      } else {
+        setCatalogTestStatus({
+          id: integration.id,
+          success: false,
+          text: res.error || "Failed to verify Meta Catalog."
+        });
+      }
+    } catch (e: any) {
+      setCatalogTestStatus({
+        id: integration.id,
+        success: false,
+        text: e.message || "Network error testing catalog."
+      });
+    } finally {
+      setTestingCatalogId(null);
+    }
+  };
   
   const handleOpenModal = (integration?: any) => {
     if (integration) {
@@ -391,48 +434,6 @@ const reloadTeams = async () => {
     }
   };
 
-  const handleSaveSLASettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavingSLA(true);
-    setSlaResultMsg(null);
-    const res = await saveWhatsAppSettingsAction({
-      workingHoursStart,
-      workingHoursEnd,
-      slaWarningMinutes: slaMinutes,
-      autoAssignStrategy
-    });
-    setSavingSLA(false);
-    if (res.success) {
-      setSlaResultMsg({ success: true, text: "Γ£ô SLA and Work hours targets configured!" });
-    } else {
-      setSlaResultMsg({ success: false, text: "Error: " + res.error });
-    }
-  };
-
-  const handleCreateCRMContact = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavingCRM(true);
-    setCrmResultMsg(null);
-    const res = await createCRMCustomerAction({
-      contactPerson: newContactName,
-      mobile: newContactPhone,
-      customerType: newContactType
-    });
-    setSavingCRM(false);
-    if (res.success) {
-      setCrmResultMsg({ success: true, text: `Γ£ô Customer "${newContactName}" registered successfully!` });
-      setNewContactName("");
-      setNewContactPhone("");
-      // reload contacts
-      const resCRM = await getCRMCustomersAction();
-      if (resCRM.success && resCRM.customers) {
-        setCrmContacts(resCRM.customers);
-      }
-    } else {
-      setCrmResultMsg({ success: false, text: "Error: " + res.error });
-    }
-  };
-
   const handleSaveEditAgent = async (agentId: string) => {
     setSavingEdit(true);
     try {
@@ -565,7 +566,7 @@ const reloadTeams = async () => {
           Webhooks
         </button>
         <button onClick={() => handleTabChange("facebook")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "facebook" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
-          <Target size={16} /> Facebook & Meta Ads
+          <Target size={16} /> Meta Ads, CAPI & Catalog
         </button>
       </nav>
 
@@ -973,68 +974,108 @@ const reloadTeams = async () => {
       {activeTab === "facebook" && (
         <div className="flex flex-col gap-8 w-full max-w-7xl">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-slate-100 pb-4">
               <div>
                 <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                  <Target className="text-indigo-600" size={22} /> Facebook & Meta Ads Automation Suite
+                  <Target className="text-indigo-600" size={22} /> Meta Ads, Conversions API & Commerce Catalog
                 </h3>
                 <p className="text-sm text-slate-500 mt-1">
-                  Connect Meta Conversions API (CAPI), sync WhatsApp leads directly to Meta Pixel & Custom Audiences for Click-to-WhatsApp (CTWA) Ad optimization.
+                  Connect Meta Conversions API (CAPI) for Click-to-WhatsApp ads and Meta Commerce Product Catalogs for native WhatsApp in-chat shopping.
                 </p>
               </div>
-              <button
-                onClick={() => {
-                  const existing = webhookIntegrations.find((w: any) => w.type === 'META_CAPI');
-                  if (existing) {
-                    handleOpenModal(existing);
-                  } else {
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={() => {
                     handleOpenModal(null);
-                    setFormData({ name: 'Meta Pixel Espon', type: 'META_CAPI', url: '1386264563245511', token: '' });
-                  }
-                }}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 text-sm shadow-sm transition-all"
-              >
-                <Plus size={16} /> Configure Meta Credentials
-              </button>
+                    setFormData({ name: 'Espon Clothing Catalog', type: 'META_CATALOG', url: '', token: DEFAULT_CATALOG_TOKEN });
+                  }}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 text-sm shadow-sm transition-all"
+                >
+                  <ShoppingBag size={16} /> + Add Catalog API
+                </button>
+                <button
+                  onClick={() => {
+                    const existing = webhookIntegrations.find((w: any) => w.type === 'META_CAPI');
+                    if (existing) {
+                      handleOpenModal(existing);
+                    } else {
+                      handleOpenModal(null);
+                      setFormData({ name: 'Meta Pixel Espon', type: 'META_CAPI', url: '1386264563245511', token: '' });
+                    }
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 text-sm shadow-sm transition-all"
+                >
+                  <Plus size={16} /> Configure CAPI Pixel
+                </button>
+              </div>
             </div>
 
             {/* Quick Live Test & Status Banner */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs">CAPI</div>
-                  <h4 className="font-bold text-emerald-950 text-sm">Conversions API Engine</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs">CAPI</div>
+                    <h4 className="font-bold text-emerald-950 text-sm">Conversions API Engine</h4>
+                  </div>
+                  <p className="text-xs text-emerald-800 leading-relaxed mb-3">
+                    Click-to-WhatsApp (CTWA) campaigns fire conversions via <code className="bg-emerald-100 px-1 rounded text-emerald-950 font-bold">business_messaging</code> action source.
+                  </p>
                 </div>
-                <p className="text-xs text-emerald-800 leading-relaxed mb-3">
-                  Click-to-WhatsApp (CTWA) campaigns fire conversions via <code className="bg-emerald-100 px-1 rounded text-emerald-950 font-bold">business_messaging</code> action source.
-                </p>
-                <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-emerald-700 bg-emerald-100/80 px-2.5 py-1 rounded-full border border-emerald-200">
+                <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-emerald-700 bg-emerald-100/80 px-2.5 py-1 rounded-full border border-emerald-200 w-fit">
                   <CheckCircle2 size={13} /> Active & Syncing
                 </span>
               </div>
 
-              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-5">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">INBOX</div>
-                  <h4 className="font-bold text-indigo-950 text-sm">Inbox Instant Conversion</h4>
+              <div className="bg-purple-50 border border-purple-200 rounded-2xl p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-xs">
+                      <ShoppingBag size={15} />
+                    </div>
+                    <h4 className="font-bold text-purple-950 text-sm">Commerce Catalog API</h4>
+                  </div>
+                  <p className="text-xs text-purple-800 leading-relaxed mb-3">
+                    Sync Espon Clothing Commerce Catalog directly with WhatsApp to send Single/Multi Product Messages and in-chat shopping carts.
+                  </p>
                 </div>
-                <p className="text-xs text-indigo-800 leading-relaxed mb-3">
-                  Agents can click <strong>⚡ Mark Interested (₹10k Lead)</strong> in WhatsApp Agent Inbox to trigger high-value conversion to Meta.
-                </p>
-                <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-indigo-700 bg-indigo-100/80 px-2.5 py-1 rounded-full border border-indigo-200">
-                  <Zap size={13} /> Ready (Default ₹10,000 INR)
+                <button
+                  onClick={() => {
+                    handleOpenModal(null);
+                    setFormData({ name: 'Espon Clothing Catalog', type: 'META_CATALOG', url: '', token: DEFAULT_CATALOG_TOKEN });
+                  }}
+                  className="w-full py-1.5 px-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs"
+                >
+                  <Plus size={13} /> + Add Catalog API
+                </button>
+              </div>
+
+              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">INBOX</div>
+                    <h4 className="font-bold text-indigo-950 text-sm">Inbox Instant Conversion</h4>
+                  </div>
+                  <p className="text-xs text-indigo-800 leading-relaxed mb-3">
+                    Agents can click <strong>⚡ Mark Interested (₹10k Lead)</strong> in WhatsApp Agent Inbox to trigger high-value conversion to Meta.
+                  </p>
+                </div>
+                <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-indigo-700 bg-indigo-100/80 px-2.5 py-1 rounded-full border border-indigo-200 w-fit">
+                  <Zap size={13} /> Ready (Default ₹10k)
                 </span>
               </div>
 
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center font-bold text-xs">AUD</div>
-                  <h4 className="font-bold text-amber-950 text-sm">Dynamic Meta Custom Audiences</h4>
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center font-bold text-xs">AUD</div>
+                    <h4 className="font-bold text-amber-950 text-sm">Meta Custom Audiences</h4>
+                  </div>
+                  <p className="text-xs text-amber-800 leading-relaxed mb-3">
+                    Create & connect dynamic retargeting audiences for any client niche (Ecommerce, B2B, Services).
+                  </p>
                 </div>
-                <p className="text-xs text-amber-800 leading-relaxed mb-3">
-                  Create & connect dynamic retargeting audiences for any client niche (Ecommerce, B2B, Services, Education).
-                </p>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5">
                   <button
                     onClick={async () => {
                       const inputName = window.prompt("Enter Custom Audience Name to Create in Meta Ads Manager:", "WhatsApp_Qualified_Leads");
@@ -1057,7 +1098,7 @@ const reloadTeams = async () => {
                     }}
                     className="w-full py-1.5 px-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs"
                   >
-                    <Plus size={13} /> Create Custom Audience in Meta
+                    <Plus size={13} /> Create Audience
                   </button>
 
                   <button
@@ -1080,7 +1121,7 @@ const reloadTeams = async () => {
                     }}
                     className="w-full py-1.5 px-3 rounded-lg bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
                   >
-                    <Users size={13} /> Scan Chatbots & Auto-Connect All
+                    <Users size={13} /> Auto-Sync Audiences
                   </button>
                 </div>
               </div>
@@ -1093,12 +1134,12 @@ const reloadTeams = async () => {
                 Meta Conversions API Default Lead Value
               </h3>
               <p className="text-xs text-slate-500 mb-4">
-                This is the default monetary value (in INR) that will be passed to Meta Ads Manager when an agent clicks ? Mark Interested in the Inbox.
+                This is the default monetary value (in INR) that will be passed to Meta Ads Manager when an agent clicks ⚡ Mark Interested in the Inbox.
               </p>
               <div className="flex items-center gap-4">
                 <div className="relative w-64">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-slate-500 sm:text-sm">?</span>
+                    <span className="text-slate-500 sm:text-sm">₹</span>
                   </div>
                   <input
                     type="number"
@@ -1126,52 +1167,82 @@ const reloadTeams = async () => {
             {/* Active Meta Integration Table */}
             <div className="border border-slate-200 rounded-xl overflow-hidden mb-8">
               <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 font-bold text-xs text-slate-700 flex justify-between items-center">
-                <span>Active Meta Integrations</span>
-                <span className="text-[11px] text-slate-500 font-normal">Pixel ID & System User Token</span>
+                <span>Active Meta Integrations (CAPI & Commerce Catalog)</span>
+                <span className="text-[11px] text-slate-500 font-normal">Pixel ID / Catalog ID & System User Token</span>
               </div>
               <table className="w-full text-sm text-left">
                 <thead className="bg-slate-100/60 text-slate-500 border-b border-slate-200 text-xs">
                   <tr>
                     <th className="px-4 py-3 font-semibold">Name</th>
-                    <th className="px-4 py-3 font-semibold">Pixel / Dataset ID</th>
+                    <th className="px-4 py-3 font-semibold">Type</th>
+                    <th className="px-4 py-3 font-semibold">Pixel / Catalog ID</th>
                     <th className="px-4 py-3 font-semibold">Access Token</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
                     <th className="px-4 py-3 font-semibold text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {webhookIntegrations.filter((w: any) => w.type === 'META_CAPI').length === 0 ? (
+                  {webhookIntegrations.filter((w: any) => w.type === 'META_CAPI' || w.type === 'META_CATALOG').length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="text-center py-8 text-slate-400 text-sm">
-                        No Meta CAPI credentials configured. Click <strong>Configure Meta Credentials</strong> above to connect.
+                      <td colSpan={6} className="text-center py-8 text-slate-400 text-sm">
+                        No Meta CAPI or Catalog credentials configured. Click <strong>+ Add Catalog API</strong> or <strong>Configure CAPI Pixel</strong> above to connect.
                       </td>
                     </tr>
                   ) : (
-                    webhookIntegrations.filter((w: any) => w.type === 'META_CAPI').map((wh: any) => (
-                      <tr key={wh.id} className="border-b border-slate-100 hover:bg-slate-50/50">
-                        <td className="px-4 py-3 font-bold text-slate-800 flex items-center gap-2">
-                          <Target size={15} className="text-indigo-600" /> {wh.name}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-700">{wh.url}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-500">
-                          {wh.token ? `${wh.token.substring(0, 12)}...${wh.token.slice(-6)}` : 'No token'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-extrabold ${wh.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
-                            {wh.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button onClick={() => handleOpenModal(wh)} className="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-100" title="Edit Integration">
-                              <Edit size={16} />
-                            </button>
-                            <button onClick={() => handleDeleteIntegration(wh.id)} className="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100" title="Delete Integration">
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                    webhookIntegrations.filter((w: any) => w.type === 'META_CAPI' || w.type === 'META_CATALOG').map((wh: any) => (
+                      <React.Fragment key={wh.id}>
+                        <tr className="border-b border-slate-100 hover:bg-slate-50/50">
+                          <td className="px-4 py-3 font-bold text-slate-800 flex items-center gap-2">
+                            {wh.type === 'META_CATALOG' ? <ShoppingBag size={15} className="text-purple-600" /> : <Target size={15} className="text-indigo-600" />}
+                            {wh.name}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${wh.type === 'META_CATALOG' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}>
+                              {wh.type === 'META_CATALOG' ? 'Commerce Catalog' : 'Conversions API'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 font-mono text-xs text-slate-700">{wh.url}</td>
+                          <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                            {wh.token ? `${wh.token.substring(0, 12)}...${wh.token.slice(-6)}` : 'No token'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-extrabold ${wh.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                              {wh.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex justify-end items-center gap-2">
+                              {wh.type === 'META_CATALOG' && (
+                                <button
+                                  onClick={() => handleTestCatalogConnection(wh)}
+                                  disabled={testingCatalogId === wh.id}
+                                  className="px-2.5 py-1 text-xs font-bold rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 flex items-center gap-1 transition-all"
+                                  title="Verify Meta Catalog Connectivity"
+                                >
+                                  {testingCatalogId === wh.id ? <RefreshCw size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                                  {testingCatalogId === wh.id ? "Testing..." : "Test Catalog"}
+                                </button>
+                              )}
+                              <button onClick={() => handleOpenModal(wh)} className="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-100" title="Edit Integration">
+                                <Edit size={16} />
+                              </button>
+                              <button onClick={() => handleDeleteIntegration(wh.id)} className="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100" title="Delete Integration">
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                        {catalogTestStatus && catalogTestStatus.id === wh.id && (
+                          <tr className="bg-slate-50/80">
+                            <td colSpan={6} className="px-4 py-2.5">
+                              <div className={`p-2.5 rounded-lg text-xs font-semibold flex items-center gap-2 ${catalogTestStatus.success ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'}`}>
+                                {catalogTestStatus.success ? <CheckCircle2 size={14} className="text-emerald-600" /> : <AlertTriangle size={14} className="text-rose-600" />}
+                                <span>{catalogTestStatus.text}</span>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))
                   )}
                 </tbody>
@@ -1181,30 +1252,17 @@ const reloadTeams = async () => {
             {/* Step-by-Step Meta Setup Guide */}
             <div className="bg-blue-50/60 border border-blue-200 rounded-2xl p-6 text-sm text-blue-900">
               <h4 className="font-bold text-base text-blue-950 mb-3 flex items-center gap-2">
-                <HelpCircle size={18} className="text-blue-600" /> 4-Step Meta Conversions API & Custom Audience Setup Guide
+                <HelpCircle size={18} className="text-blue-600" /> Meta CAPI & Commerce Catalog Setup Guide
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white/90 p-3.5 rounded-xl border border-blue-100 shadow-2xs">
-                  <strong className="text-blue-950 block mb-1 text-xs">Step 1: Create Meta App (Business):</strong>
-                  Go to <a href="https://developers.facebook.com/apps/creation/" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">developers.facebook.com ↗ <ExternalLink size={11} /></a>
-                  <p className="text-xs text-slate-600 mt-1">Select App Type: <strong>Business</strong> → Enter App Name (e.g. <em>Whatmore Integration</em>).</p>
+                  <strong className="text-blue-950 block mb-1 text-xs">Conversions API (CAPI):</strong>
+                  <p className="text-xs text-slate-600 mt-1">Get your 15-digit Pixel ID from <a href="https://business.facebook.com/events_manager2" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline">Meta Events Manager ↗</a> and generate a System User Token with <code>ads_management</code>.</p>
                 </div>
 
                 <div className="bg-white/90 p-3.5 rounded-xl border border-blue-100 shadow-2xs">
-                  <strong className="text-blue-950 block mb-1 text-xs">Step 2: Get Meta Pixel / Dataset ID:</strong>
-                  Go to <a href="https://business.facebook.com/events_manager2" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Meta Events Manager ↗ <ExternalLink size={11} /></a>
-                  <p className="text-xs text-slate-600 mt-1">Select your Pixel/Dataset and copy the 15-digit ID (e.g. <code>1386264563245511</code>).</p>
-                </div>
-
-                <div className="bg-white/90 p-3.5 rounded-xl border border-blue-100 shadow-2xs">
-                  <strong className="text-blue-950 block mb-1 text-xs">Step 3: Create System User & Assign Assets:</strong>
-                  Go to <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Business Settings → System Users ↗ <ExternalLink size={11} /></a>
-                  <p className="text-xs text-slate-600 mt-1">Add System User (Admin role) → Click <strong>Assign Assets</strong> → Select App & Pixel (Full Control).</p>
-                </div>
-
-                <div className="bg-white/90 p-3.5 rounded-xl border border-blue-100 shadow-2xs">
-                  <strong className="text-blue-950 block mb-1 text-xs">Step 4: Generate Permanent System User Access Token:</strong>
-                  <p className="text-xs text-slate-600 mt-1">Click <strong>Generate New Token</strong> → Select App → Check <code>ads_management</code>, <code>ads_read</code>, <code>business_management</code> → Copy <code>EAA...</code> Token.</p>
+                  <strong className="text-blue-950 block mb-1 text-xs">Commerce Product Catalog API:</strong>
+                  <p className="text-xs text-slate-600 mt-1">Get your Catalog ID from <a href="https://business.facebook.com/commerce" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline">Meta Commerce Manager ↗</a> under <em>Settings → Catalog</em>. Use the generated permanent token with <code>catalog_management</code>.</p>
                 </div>
               </div>
             </div>
@@ -1222,6 +1280,22 @@ const reloadTeams = async () => {
               <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
             </div>
             <form onSubmit={handleSubmitIntegration} className="p-4 flex flex-col gap-4">
+              {formData.type === 'META_CATALOG' && (
+                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-3.5 text-xs text-slate-700 flex flex-col gap-2 shadow-sm">
+                  <div className="flex items-center gap-1.5 font-bold text-purple-900 text-sm">
+                    <ShoppingBag size={16} className="text-purple-600" />
+                    <span>Meta Commerce Catalog API Setup</span>
+                  </div>
+                  <p className="text-[11.5px] text-purple-800 leading-relaxed m-0">
+                    Connect your Espon Clothing product catalog to send product messages and in-chat shopping carts on WhatsApp.
+                  </p>
+                  <div className="text-[11px] text-slate-600 space-y-1">
+                    <div><strong>Catalog ID:</strong> Find in Meta Commerce Manager (<a href="https://business.facebook.com/commerce" target="_blank" rel="noreferrer" className="underline font-bold text-purple-700">business.facebook.com/commerce ↗</a>) under <em>Settings → Catalog</em>.</div>
+                    <div><strong>Permanent Token:</strong> Pre-filled with your System User Token with <code>catalog_management</code> access.</div>
+                  </div>
+                </div>
+              )}
+
               {formData.type === 'META_CAPI' && (
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-3.5 text-xs text-slate-700 flex flex-col gap-2.5 shadow-sm max-h-[300px] overflow-y-auto">
                   <div className="flex items-center gap-1.5 font-bold text-blue-900 text-sm">
@@ -1232,61 +1306,73 @@ const reloadTeams = async () => {
                     <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 shadow-2xs">
                       <strong className="text-blue-950 block mb-1">Step 1: Create a Meta App for CAPI:</strong>
                       Go to <a href="https://developers.facebook.com/apps/creation/" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Meta App Creation ↗ <ExternalLink size={11} /></a>
-                      <ol className="list-decimal list-inside text-slate-600 mt-1 space-y-0.5 text-[11px]">
-                        <li>Enter <strong>App Name</strong> & <strong>Contact Email</strong> → Click Next.</li>
-                        <li>Filter by <strong>Ads and monetization</strong>.</li>
-                        <li>Check <strong>Measure ad performance data with Marketing API</strong>.</li>
-                        <li>Select your Business Portfolio & Create App.</li>
-                      </ol>
                     </div>
-
                     <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 shadow-2xs">
                       <strong className="text-blue-950 block mb-1">Step 2: Get Meta Pixel / Dataset ID:</strong>
                       Open <a href="https://business.facebook.com/events_manager2" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Meta Events Manager ↗ <ExternalLink size={11} /></a>, select your Pixel/Dataset and copy the 15-digit ID.
                     </div>
-
-                    <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 shadow-2xs">
-                      <strong className="text-blue-950 block mb-1">Step 3: Create System User & Assign Assets:</strong>
-                      Go to <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline hover:text-blue-800 inline-flex items-center gap-0.5">Business Settings → System Users ↗ <ExternalLink size={11} /></a>
-                      <ol className="list-decimal list-inside text-slate-600 mt-1 space-y-0.5 text-[11px]">
-                        <li>Click <strong>Add</strong> → Name: <em>CAPI Bot Admin</em> (Role: Admin).</li>
-                        <li>Click <strong>Assign Assets</strong> → Assign your <strong>Meta App</strong> (Full Control) and <strong>Pixel</strong> (Full Control).</li>
-                      </ol>
-                    </div>
-
-                    <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 shadow-2xs">
-                      <strong className="text-blue-950 block mb-1">Step 4: Generate Permanent Access Token:</strong>
-                      <ol className="list-decimal list-inside text-slate-600 space-y-0.5 text-[11px]">
-                        <li>Under System User, click <strong>Generate New Token</strong>.</li>
-                        <li>Select your <strong>Meta App</strong> from Step 1.</li>
-                        <li>Select permissions: <code>ads_management</code>, <code>ads_read</code>, <code>business_management</code>.</li>
-                        <li>Copy the permanent token starting with <code>EAAI...</code> or <code>EAA...</code>.</li>
-                      </ol>
-                    </div>
                   </div>
                 </div>
               )}
+
               <div>
                 <label className="block text-xs font-bold text-slate-600 mb-1">Category</label>
-                <select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500">
+                <select 
+                  value={formData.type} 
+                  onChange={e => {
+                    const nextType = e.target.value;
+                    if (nextType === 'META_CATALOG' && !formData.token) {
+                      setFormData({...formData, type: nextType, token: DEFAULT_CATALOG_TOKEN});
+                    } else {
+                      setFormData({...formData, type: nextType});
+                    }
+                  }} 
+                  className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500"
+                >
                   <option value="CRM_LEAD">CRM (Lead Webhook)</option>
                   <option value="ERP">ERP</option>
                   <option value="PAYMENT">Payment</option>
                   <option value="ZAPIER">Zapier / Webhook</option>
-                  <option value="META_CAPI">Meta Conversions API</option>
+                  <option value="META_CAPI">Meta Conversions API (Pixel)</option>
+                  <option value="META_CATALOG">Meta Product Catalog (Commerce API)</option>
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-600 mb-1">Name</label>
-                <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500" placeholder="e.g. ERP Push / Pixel 1" />
+                <input 
+                  type="text" 
+                  value={formData.name} 
+                  onChange={e => setFormData({...formData, name: e.target.value})} 
+                  required 
+                  className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500" 
+                  placeholder={formData.type === 'META_CATALOG' ? 'e.g. Espon Clothing Catalog' : 'e.g. ERP Push / Pixel 1'} 
+                />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">{formData.type === 'META_CAPI' ? 'Meta Pixel ID' : 'Webhook URL'}</label>
-                <input type={formData.type === 'META_CAPI' ? 'text' : 'url'} value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} required className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" placeholder={formData.type === 'META_CAPI' ? 'e.g. 1234567890' : 'https://...'} />
+                <label className="block text-xs font-bold text-slate-600 mb-1">
+                  {formData.type === 'META_CAPI' ? 'Meta Pixel ID' : formData.type === 'META_CATALOG' ? 'Meta Commerce Catalog ID' : 'Webhook URL'}
+                </label>
+                <input 
+                  type={formData.type === 'META_CAPI' || formData.type === 'META_CATALOG' ? 'text' : 'url'} 
+                  value={formData.url} 
+                  onChange={e => setFormData({...formData, url: e.target.value})} 
+                  required 
+                  className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" 
+                  placeholder={formData.type === 'META_CAPI' ? 'e.g. 1386264563245511' : formData.type === 'META_CATALOG' ? 'e.g. 1320250379153598' : 'https://...'} 
+                />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">{formData.type === 'META_CAPI' ? 'Access Token' : 'Auth Token (Optional)'}</label>
-                <input type="text" value={formData.token} onChange={e => setFormData({...formData, token: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" placeholder={formData.type === 'META_CAPI' ? 'EAAI...' : 'Bearer ...'} required={formData.type === 'META_CAPI'} />
+                <label className="block text-xs font-bold text-slate-600 mb-1">
+                  {formData.type === 'META_CAPI' ? 'Meta CAPI Access Token' : formData.type === 'META_CATALOG' ? 'Permanent Catalog Access Token' : 'Auth Token (Optional)'}
+                </label>
+                <input 
+                  type="text" 
+                  value={formData.token} 
+                  onChange={e => setFormData({...formData, token: e.target.value})} 
+                  className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" 
+                  placeholder={formData.type === 'META_CAPI' ? 'EAAI...' : formData.type === 'META_CATALOG' ? 'EAAT...' : 'Bearer ...'} 
+                  required={formData.type === 'META_CAPI' || formData.type === 'META_CATALOG'} 
+                />
               </div>
               <div className="flex justify-end gap-2 mt-2">
                 <button type="button" onClick={handleCloseModal} className="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 text-slate-600">Cancel</button>
