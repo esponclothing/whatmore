@@ -2067,7 +2067,7 @@ interface BrandIntelligenceContext {
   cannedFaqs?: string;
 }
 
-export function normalizeApparelName(raw: string): string {
+function normalizeApparelName(raw: string): string {
   let s = (raw || '').trim()
     .replace(/^(and\s+|also\s+|with\s+|for\s+|include\s+|featuring\s+)/i, '')
     .trim();
@@ -2094,7 +2094,7 @@ export function normalizeApparelName(raw: string): string {
     .join(' ');
 }
 
-export function extractProductsFromPrompt(prompt: string, activeProducts: any[] = []): any[] {
+function extractProductsFromPrompt(prompt: string, activeProducts: any[] = []): any[] {
   const p = (prompt || '').trim();
   if (!p) return [];
   
