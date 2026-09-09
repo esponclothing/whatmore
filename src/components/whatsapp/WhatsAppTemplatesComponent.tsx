@@ -99,11 +99,12 @@ interface CarouselCardItem {
   title: string;
   bodyText: string;
   buttons: {
-    type: "URL" | "QUICK_REPLY";
+    type: "URL" | "QUICK_REPLY" | "PHONE_NUMBER";
     text: string;
     url?: string;
     urlType?: "STATIC" | "DYNAMIC";
     urlExample?: string;
+    phone_number?: string;
   }[];
 }
 
@@ -167,8 +168,8 @@ export default function WhatsAppTemplatesComponent() {
             title: `${res.brandName} Performance Tee`,
             bodyText: "₹899 • Breathable 4-way stretch fabric",
             buttons: [
-              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "www.espon.in"}/products/tee`, urlType: "STATIC" },
-              { type: "QUICK_REPLY", text: "View Sizes" }
+              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "esponsports.com"}/products/tee`, urlType: "STATIC" },
+              { type: "URL", text: "Explore More", url: `https://${res.brandDomain || "esponsports.com"}/collections/all`, urlType: "STATIC" }
             ]
           },
           {
@@ -178,8 +179,8 @@ export default function WhatsAppTemplatesComponent() {
             title: `${res.brandName} Pro Shorts`,
             bodyText: "₹1,199 • Zipper pockets & sweat-wicking",
             buttons: [
-              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "www.espon.in"}/products/shorts`, urlType: "STATIC" },
-              { type: "QUICK_REPLY", text: "More Colors" }
+              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "esponsports.com"}/products/shorts`, urlType: "STATIC" },
+              { type: "PHONE_NUMBER", text: "Call Us", phone_number: res.phoneNumber || res.brandPhone || "+917206066878" }
             ]
           }
         ]);
@@ -234,8 +235,8 @@ export default function WhatsAppTemplatesComponent() {
       title: "Espon Performance Tee",
       bodyText: "₹899 • Breathable 4-way stretch fabric",
       buttons: [
-        { type: "URL", text: "Buy Now", url: "https://esponsports.com/products/tee" },
-        { type: "QUICK_REPLY", text: "View Sizes" }
+        { type: "URL", text: "Buy Now", url: "https://esponsports.com/products/tee", urlType: "STATIC" },
+        { type: "URL", text: "Explore More", url: "https://esponsports.com/collections/all", urlType: "STATIC" }
       ]
     },
     {
@@ -245,8 +246,8 @@ export default function WhatsAppTemplatesComponent() {
       title: "Espon Pro Shorts",
       bodyText: "₹1,199 • Zipper pockets & sweat-wicking",
       buttons: [
-        { type: "URL", text: "Buy Now", url: "https://esponsports.com/products/shorts" },
-        { type: "QUICK_REPLY", text: "More Colors" }
+        { type: "URL", text: "Buy Now", url: "https://esponsports.com/products/shorts", urlType: "STATIC" },
+        { type: "PHONE_NUMBER", text: "Call Us", phone_number: "+917206066878" }
       ]
     }
   ]);
@@ -431,12 +432,14 @@ export default function WhatsAppTemplatesComponent() {
         {
           type: "URL",
           text: "Buy Now",
-          url: p.productUrl || `https://${brandDomain}/products/${p.sku || 'item'}`,
+          url: p.productUrl || `https://${brandDomain}/products/${p.handle || p.sku || 'item'}`,
           urlType: "STATIC"
         },
         {
-          type: "QUICK_REPLY",
-          text: "Check Sizes"
+          type: "URL",
+          text: "Explore More",
+          url: `https://${brandDomain}/collections/all`,
+          urlType: "STATIC"
         }
       ]
     };
@@ -469,13 +472,21 @@ export default function WhatsAppTemplatesComponent() {
         {
           type: "URL",
           text: "Buy Now",
-          url: p.productUrl || `https://${brandDomain}/products/${p.sku || 'item'}`,
+          url: p.productUrl || `https://${brandDomain}/products/${p.handle || p.sku || 'item'}`,
           urlType: "STATIC"
         },
-        {
-          type: "QUICK_REPLY",
-          text: "View Details"
-        }
+        idx % 2 === 0
+          ? {
+              type: "URL",
+              text: "Explore More",
+              url: `https://${brandDomain}/collections/all`,
+              urlType: "STATIC"
+            }
+          : {
+              type: "PHONE_NUMBER",
+              text: "Call Us",
+              phone_number: brandPhone
+            }
       ]
     }));
 
@@ -687,8 +698,8 @@ export default function WhatsAppTemplatesComponent() {
       title: `${brandName} Collection ${carouselCards.length + 1}`,
       bodyText: "₹999 • Premium quality",
       buttons: [
-        { type: "URL", text: "Buy Now", url: `https://${brandDomain}/products/{{1}}`, urlType: "DYNAMIC", urlExample: "product" },
-        { type: "QUICK_REPLY", text: "View Details" }
+        { type: "URL", text: "Buy Now", url: `https://${brandDomain}/products/item`, urlType: "STATIC" },
+        { type: "URL", text: "Explore More", url: `https://${brandDomain}/collections/all`, urlType: "STATIC" }
       ]
     };
     setCarouselCards((prev) => [...prev, newCard]);
@@ -719,15 +730,23 @@ export default function WhatsAppTemplatesComponent() {
       showToast("Meta Carousel cards support up to 2 CTA buttons per card.", "error");
       return;
     }
+    const isSecondBtn = card.buttons.length === 1;
+    const defaultBtn = isSecondBtn
+      ? {
+          type: "URL" as const,
+          text: "Explore More",
+          url: `https://${brandDomain}/collections/all`,
+          urlType: "STATIC" as const
+        }
+      : {
+          type: "URL" as const,
+          text: "Buy Now",
+          url: `https://${brandDomain}/products/item`,
+          urlType: "STATIC" as const
+        };
     const updatedButtons = [
       ...card.buttons,
-      {
-        type: "URL" as const,
-        text: "Buy Now",
-        url: `https://${brandDomain}/products/{{1}}`,
-        urlType: "DYNAMIC" as const,
-        urlExample: "tee"
-      }
+      defaultBtn
     ];
     updateActiveCard("buttons", updatedButtons);
   };
@@ -2429,10 +2448,25 @@ export default function WhatsAppTemplatesComponent() {
                               <div className="flex items-center gap-1.5">
                                 <select
                                   value={b.type}
-                                  onChange={(e) => updateCardButton(bIdx, "type", e.target.value)}
+                                  onChange={(e) => {
+                                    const nextType = e.target.value;
+                                    updateCardButton(bIdx, "type", nextType);
+                                    if (nextType === "PHONE_NUMBER" && !b.phone_number) {
+                                      updateCardButton(bIdx, "phone_number", brandPhone || "+917206066878");
+                                      if (!b.text || b.text === "Buy Now" || b.text === "Explore More") {
+                                        updateCardButton(bIdx, "text", "Call Us");
+                                      }
+                                    } else if (nextType === "URL" && (!b.url || !b.url.startsWith("http"))) {
+                                      updateCardButton(bIdx, "url", `https://${brandDomain}/collections/all`);
+                                      if (!b.text || b.text === "Call Us") {
+                                        updateCardButton(bIdx, "text", "Explore More");
+                                      }
+                                    }
+                                  }}
                                   className="px-2 py-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-bold cursor-pointer"
                                 >
-                                  <option value="URL">🔗 URL</option>
+                                  <option value="URL">🔗 URL (Website Link)</option>
+                                  <option value="PHONE_NUMBER">📞 Phone (Call Us)</option>
                                   <option value="QUICK_REPLY">↩️ Quick Reply</option>
                                 </select>
                                 <span className="text-[10px] font-bold text-gray-400">Button #{bIdx + 1}</span>
@@ -2449,10 +2483,24 @@ export default function WhatsAppTemplatesComponent() {
                             <input
                               value={b.text}
                               onChange={(e) => updateCardButton(bIdx, "text", e.target.value)}
-                              placeholder="Button Label (e.g. Buy Now)"
+                              placeholder="Button Label (e.g. Buy Now or Explore More)"
                               maxLength={25}
                               className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-bold"
                             />
+
+                            {b.type === "PHONE_NUMBER" && (
+                              <div className="flex flex-col gap-1 pt-1 border-t border-gray-200/60 dark:border-slate-700/60">
+                                <span className="text-[10px] font-bold text-gray-500 uppercase">
+                                  Phone Number (with country code):
+                                </span>
+                                <input
+                                  value={b.phone_number || ""}
+                                  onChange={(e) => updateCardButton(bIdx, "phone_number", e.target.value)}
+                                  placeholder="e.g. +917206066878"
+                                  className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-mono"
+                                />
+                              </div>
+                            )}
 
                             {b.type === "URL" && (
                               <div className="flex flex-col gap-2 pt-1 border-t border-gray-200/60 dark:border-slate-700/60">

@@ -2166,7 +2166,7 @@ function generateContextualTemplateFallback(
           bodyText: `${p1Price} • Breathable 4-Way Stretch Cotton`,
           buttons: [
             { type: "URL", text: "Buy Now", url: p1Url, urlType: "STATIC" },
-            { type: "QUICK_REPLY", text: "Check Sizes" }
+            { type: "URL", text: "Explore More", url: `https://${brandDomain}/collections/all`, urlType: "STATIC" }
           ]
         },
         {
@@ -2177,7 +2177,7 @@ function generateContextualTemplateFallback(
           bodyText: `${p2Price} • Zipper Pockets & Ultra Comfort`,
           buttons: [
             { type: "URL", text: "Buy Now", url: p2Url, urlType: "STATIC" },
-            { type: "QUICK_REPLY", text: "More Colors" }
+            { type: "PHONE_NUMBER", text: "Call Us", phone_number: brandPhone }
           ]
         },
         {
@@ -2188,16 +2188,16 @@ function generateContextualTemplateFallback(
           bodyText: `${p3Price} • Tapered Fit & Premium Fabric`,
           buttons: [
             { type: "URL", text: "Buy Now", url: p3Url, urlType: "STATIC" },
-            { type: "QUICK_REPLY", text: "View Details" }
+            { type: "URL", text: "Explore More", url: `https://${brandDomain}`, urlType: "STATIC" }
           ]
         }
       ],
-      explanation: `Multi-card WhatsApp Product Carousel showcasing live inventory items (${p1}, ${p2}, ${p3}) with high-res product photos, Buy Now links, and coupon code *${defaultCombo}*.`,
+      explanation: `Multi-card WhatsApp Product Carousel showcasing live inventory items (${p1}, ${p2}, ${p3}) with high-res product photos, direct product Buy Now deep links, Explore More website links, and Call Us support (${brandPhone}).`,
       complianceChecks: [
         "✅ Meta Multi-Card Carousel layout with 3 interactive product cards",
         "✅ Real high-resolution product inventory photos attached to each card",
         "✅ Individual Buy Now CTA buttons on every product card",
-        "✅ Sequential body text greeting parameters {{1}} and {{2}}"
+        "✅ Direct website links and call hotline buttons without non-converting quick replies"
       ]
     };
   }
@@ -5785,9 +5785,16 @@ export async function getWhatsAppBrandDetailsAction() {
     ]);
 
     const brandName = company?.companyName || org?.name || account?.name || "Espon Clothing";
-    const brandDomain = company?.shopifyStoreDomain 
-      ? company.shopifyStoreDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '') 
-      : (company?.website ? company.website.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : "www.espon.in");
+    
+    // Resolve public storefront domain (never fallback to raw internal myshopify admin domain)
+    let brandDomain = "esponsports.com";
+    if (company?.website) {
+      brandDomain = company.website.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    } else if (company?.shopifyStoreDomain) {
+      const rawDomain = company.shopifyStoreDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+      brandDomain = rawDomain.includes("esponsports") ? "esponsports.com" : rawDomain;
+    }
+
     const phoneNumber = company?.mobile || company?.phone || account?.phoneNumber || "+91 7206066678";
     const brandEmail = company?.email || org?.email || `support@${brandDomain}`;
     const brandAddress = company?.address 
@@ -5816,7 +5823,7 @@ export async function getWhatsAppBrandDetailsAction() {
     return { 
       success: false, 
       brandName: "Espon Clothing", 
-      brandDomain: "www.espon.in", 
+      brandDomain: "esponsports.com", 
       phoneNumber: "+91 7206066678", 
       brandPhone: "+91 7206066678",
       brandEmail: "clothingespon@gmail.com",
@@ -5828,6 +5835,7 @@ export async function getWhatsAppBrandDetailsAction() {
 
 // ---------------------------------------------------------
 // 24. WHATSAPP INVENTORY CATALOG & DIRECT PRODUCT INJECTION
+// (DEDUPLICATES VARIANTS INTO SINGLE MASTER PRODUCTS WITH REAL URLS)
 // ---------------------------------------------------------
 export async function getWhatsAppInventoryCatalogAction(params?: {
   search?: string;
@@ -5839,7 +5847,7 @@ export async function getWhatsAppInventoryCatalogAction(params?: {
     const search = params?.search?.trim() || "";
     const categoryFilter = params?.category?.trim() || "";
     const inStockOnly = params?.inStockOnly ?? false;
-    const limit = params?.limit || 60;
+    const limit = params?.limit || 100;
 
     const [company, org, account] = await Promise.all([
       prisma.companySettings.findFirst().catch(() => null),
@@ -5847,9 +5855,14 @@ export async function getWhatsAppInventoryCatalogAction(params?: {
       prisma.whatsAppAccount.findFirst().catch(() => null)
     ]);
 
-    const brandDomain = company?.shopifyStoreDomain 
-      ? company.shopifyStoreDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '') 
-      : (company?.website ? company.website.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : "www.espon.in");
+    // Resolve customer-facing website domain (e.g. esponsports.com)
+    let brandDomain = "esponsports.com";
+    if (company?.website) {
+      brandDomain = company.website.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    } else if (company?.shopifyStoreDomain) {
+      const rawDomain = company.shopifyStoreDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+      brandDomain = rawDomain.includes("esponsports") ? "esponsports.com" : rawDomain;
+    }
 
     const where: any = {
       status: 'Active'
@@ -5877,7 +5890,7 @@ export async function getWhatsAppInventoryCatalogAction(params?: {
       prisma.product.findMany({
         where,
         orderBy: [{ stockQuantity: 'desc' }, { createdAt: 'desc' }],
-        take: limit
+        take: limit * 2 // Take extra to allow grouping of variants
       }).catch(() => []),
       prisma.productCategory.findMany({ orderBy: { name: 'asc' } }).catch(() => []),
       prisma.shopifyCombo.findMany({ where: { is_active: true }, take: 10 }).catch(() => []),
@@ -5894,33 +5907,108 @@ export async function getWhatsAppInventoryCatalogAction(params?: {
       "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&auto=format&fit=crop&q=80"
     ];
 
-    const formattedProducts = dbProducts.map((p, idx) => {
-      const mrp = p.mrp || p.sellingPrice || 999;
+    // GROUP / DEDUPLICATE VARIANTS BY BASE PRODUCT (handle or clean name)
+    const masterProductMap = new Map<string, any>();
+
+    for (let i = 0; i < dbProducts.length; i++) {
+      const p = dbProducts[i];
+      const rawName = p.name || "";
+      
+      // Clean base title by removing variant suffixes like "- M", " - Black / XL", "/ 7 Styles", etc.
+      const baseName = rawName
+        .replace(/\s*-\s*(S|M|L|XL|XXL|2XL|3XL|4XL|5XL|Free Size|[0-9]+(\s*cm|\s*inch)?|[A-Za-z]+\s*\/\s*[A-Za-z0-9]+)$/i, '')
+        .replace(/\s*\|\s*(Size\s*:[^|]+)$/i, '')
+        .trim() || rawName;
+
+      // Master product handle from subCategory (Shopify sync handle) or slug of base name
+      let handle = "";
+      if (p.subCategory && /^[a-z0-9-_]+$/i.test(p.subCategory.trim())) {
+        handle = p.subCategory.trim().toLowerCase();
+      } else {
+        handle = baseName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+      }
+
+      const groupKey = handle || baseName.toLowerCase();
       const sellingPrice = p.sellingPrice || 899;
-      const discountPercent = mrp > sellingPrice ? Math.round(((mrp - sellingPrice) / mrp) * 100) : 0;
-      
+      const mrp = p.mrp || p.sellingPrice || 999;
       const rawImages = Array.isArray(p.images) ? p.images.filter(Boolean) : [];
-      const primaryImage = rawImages.length > 0 ? rawImages[0] : fallbackImagesPool[idx % fallbackImagesPool.length];
-      const allImages = rawImages.length > 0 ? rawImages : [primaryImage];
-      
-      const slug = (p.name || `product-${p.id}`).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-      const productUrl = `https://${brandDomain}/products/${slug}`;
+      const stock = Math.max(0, p.stockQuantity ?? 0);
+
+      if (!masterProductMap.has(groupKey)) {
+        masterProductMap.set(groupKey, {
+          id: p.id,
+          name: baseName,
+          handle,
+          sku: p.sku || `ESP-${p.id.slice(0, 6).toUpperCase()}`,
+          category: p.category || "Apparel",
+          subCategory: handle,
+          fabric: p.fabric || "Cotton Blend",
+          color: p.color || "",
+          size: p.size || "",
+          variantsCount: 1,
+          sizes: p.size ? [p.size] : [],
+          colors: p.color ? [p.color] : [],
+          sellingPrice,
+          mrp,
+          stockQuantity: stock,
+          description: p.description || `${baseName} crafted with premium fabrics for active everyday comfort.`,
+          images: [...rawImages],
+          fallbackIndex: i
+        });
+      } else {
+        const existing = masterProductMap.get(groupKey);
+        existing.variantsCount += 1;
+        existing.stockQuantity += stock;
+        
+        if (sellingPrice > 0 && (existing.sellingPrice === 0 || sellingPrice < existing.sellingPrice)) {
+          existing.sellingPrice = sellingPrice;
+        }
+        if (mrp > existing.mrp) {
+          existing.mrp = mrp;
+        }
+        if (p.size && !existing.sizes.includes(p.size)) {
+          existing.sizes.push(p.size);
+        }
+        if (p.color && !existing.colors.includes(p.color)) {
+          existing.colors.push(p.color);
+        }
+        for (const img of rawImages) {
+          if (!existing.images.includes(img)) {
+            existing.images.push(img);
+          }
+        }
+      }
+    }
+
+    const uniqueProducts = Array.from(masterProductMap.values()).slice(0, limit);
+
+    const formattedProducts = uniqueProducts.map((p) => {
+      const discountPercent = p.mrp > p.sellingPrice ? Math.round(((p.mrp - p.sellingPrice) / p.mrp) * 100) : 0;
+      const primaryImage = p.images.length > 0 ? p.images[0] : fallbackImagesPool[p.fallbackIndex % fallbackImagesPool.length];
+      const allImages = p.images.length > 0 ? p.images : [primaryImage];
+      const productUrl = `https://${brandDomain}/products/${p.handle}`;
+      const sizeList = p.sizes.length > 0 ? p.sizes.join(", ") : p.size || "Standard";
 
       return {
         id: p.id,
         name: p.name,
-        sku: p.sku || `ESP-${p.id.slice(0, 6).toUpperCase()}`,
-        category: p.category || "Apparel",
-        subCategory: p.subCategory || "",
-        fabric: p.fabric || "Cotton Blend",
-        color: p.color || "",
-        size: p.size || "M, L, XL",
-        sellingPrice,
-        mrp,
+        handle: p.handle,
+        sku: p.sku,
+        category: p.category,
+        subCategory: p.handle,
+        fabric: p.fabric,
+        color: p.color,
+        size: sizeList,
+        variantsCount: p.variantsCount,
+        sellingPrice: p.sellingPrice,
+        mrp: p.mrp,
         discountPercent,
-        stockQuantity: p.stockQuantity ?? 0,
-        inStock: (p.stockQuantity ?? 0) > 0,
-        description: p.description || `${p.name} designed with premium fabrics for active everyday comfort.`,
+        stockQuantity: p.stockQuantity,
+        inStock: p.stockQuantity > 0,
+        description: p.description,
         primaryImage,
         images: allImages,
         productUrl
@@ -5940,8 +6028,8 @@ export async function getWhatsAppInventoryCatalogAction(params?: {
       })),
       brandDomain,
       stats: {
-        totalProducts: totalCount,
-        inStockProducts: inStockCount,
+        totalProducts: formattedProducts.length,
+        inStockProducts: formattedProducts.filter(p => p.inStock).length,
         categoriesCount: categories.length
       }
     };
@@ -5953,7 +6041,7 @@ export async function getWhatsAppInventoryCatalogAction(params?: {
       products: [],
       categories: [],
       combos: [],
-      brandDomain: "www.espon.in",
+      brandDomain: "esponsports.com",
       stats: { totalProducts: 0, inStockProducts: 0, categoriesCount: 0 }
     };
   }
