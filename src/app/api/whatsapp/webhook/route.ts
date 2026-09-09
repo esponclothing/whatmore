@@ -15,16 +15,11 @@ export async function GET(req: NextRequest) {
   const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
 
-  const validTokens = [
-    process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
-    "espon_whatsapp_secure_webhook_token_2026",
-    "espon_instagram_secure_token_2026",
-    "espon_facebook_secure_token_2026"
-  ].filter(Boolean);
+  const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "espon_whatsapp_secure_webhook_token_2026";
 
   if (mode && token) {
-    if (mode === "subscribe" && validTokens.includes(token)) {
-      console.log("[Webhook] Challenge verification successful for token:", token);
+    if (mode === "subscribe" && token === VERIFY_TOKEN) {
+      console.log("[WhatsApp Webhook] Verification successful!");
       return new NextResponse(challenge, { status: 200 });
     }
   }

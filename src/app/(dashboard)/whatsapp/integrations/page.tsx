@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store, MessageSquare, Users, Bot, Layers, BookOpen, Edit3, X, Plus, Trash2, UserCheck, UserX, Shield, ExternalLink, Sparkles, HelpCircle, Target, Edit, Zap, Copy, Check, Globe } from "lucide-react";
+import { Key, ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, Eye, EyeOff, Send, Save, ArrowRight, Store, MessageSquare, Users, Bot, Layers, BookOpen, Edit3, X, Plus, Trash2, UserCheck, UserX, Shield, ExternalLink, Sparkles, HelpCircle, Target, Edit, Zap } from "lucide-react";
 import { 
   getWhatsAppApiCredentialsAction, 
   saveWhatsAppApiCredentialsAction, 
@@ -21,32 +21,8 @@ import {
   getAllAgentsAction
 } from "@/app/actions/whatsAppPlatformActions";
 import { getPaymentGatewaySettings, savePaymentGatewaySettings } from "@/app/actions/paymentGatewayActions";
-import { 
-  getWhatsAppIntegrationsAction, 
-  createWhatsAppIntegrationAction, 
-  updateWhatsAppIntegrationAction, 
-  deleteWhatsAppIntegrationAction,
-  getSocialChannelCredentialsAction,
-  saveSocialChannelCredentialsAction,
-  testSocialChannelConnectionAction
-} from "@/app/actions/whatsAppIntegrationActions";
+import { getWhatsAppIntegrationsAction, createWhatsAppIntegrationAction, updateWhatsAppIntegrationAction, deleteWhatsAppIntegrationAction } from "@/app/actions/whatsAppIntegrationActions";
 import WhatsAppAIAutomationComponent from "@/components/whatsapp/WhatsAppAIAutomationComponent";
-
-function InstagramBrandIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-    </svg>
-  );
-}
-
-function FacebookBrandIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-    </svg>
-  );
-}
 
 
 export default function IntegrationsHubPage() {
@@ -91,33 +67,6 @@ export default function IntegrationsHubPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resultMsg, setResultMsg] = useState<{ success: boolean; text: string } | null>(null);
-
-  // Instagram State
-  const [instaAccountId, setInstaAccountId] = useState("");
-  const [instaToken, setInstaToken] = useState("");
-  const [instaName, setInstaName] = useState("");
-  const [instaIsConnected, setInstaIsConnected] = useState(false);
-  const [showInstaToken, setShowInstaToken] = useState(false);
-  const [savingInsta, setSavingInsta] = useState(false);
-  const [testingInsta, setTestingInsta] = useState(false);
-  const [instaResultMsg, setInstaResultMsg] = useState<{ success: boolean; text: string } | null>(null);
-  const [copiedInstaUrl, setCopiedInstaUrl] = useState(false);
-  const [copiedInstaToken, setCopiedInstaToken] = useState(false);
-  const [copiedInstaRedirectUrl, setCopiedInstaRedirectUrl] = useState(false);
-
-  // Facebook Messenger State
-  const [fbPageId, setFbPageId] = useState("");
-  const [fbToken, setFbToken] = useState("");
-  const [fbName, setFbName] = useState("");
-  const [fbIsConnected, setFbIsConnected] = useState(false);
-  const [showFbToken, setShowFbToken] = useState(false);
-  const [savingFb, setSavingFb] = useState(false);
-  const [testingFb, setTestingFb] = useState(false);
-  const [fbResultMsg, setFbResultMsg] = useState<{ success: boolean; text: string } | null>(null);
-  const [copiedFbUrl, setCopiedFbUrl] = useState(false);
-  const [copiedFbToken, setCopiedFbToken] = useState(false);
-  const [copiedWaUrl, setCopiedWaUrl] = useState(false);
-  const [copiedWaToken, setCopiedWaToken] = useState(false);
 
   // Shopify State
   
@@ -186,7 +135,7 @@ export default function IntegrationsHubPage() {
       }
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get("tab");
-      if (tabParam && ["whatsapp", "instagram", "facebook-messenger", "ai-automation", "shopify", "payment", "webhooks", "facebook"].includes(tabParam)) {
+      if (tabParam && ["whatsapp", "ai-automation", "shopify", "payment", "webhooks", "facebook"].includes(tabParam)) {
         setActiveTab(tabParam);
       }
     } catch {}
@@ -200,10 +149,8 @@ export default function IntegrationsHubPage() {
       getWhatsAppSettingsAction(),
       getTeamsWithMembersAction(),
       getAllAgentsAction(),
-      getWhatsAppIntegrationsAction(),
-      getSocialChannelCredentialsAction("INSTAGRAM"),
-      getSocialChannelCredentialsAction("FACEBOOK_MESSENGER")
-    ]).then(([resWA, resShopify, resSettings, resTeams, resAgents, resWebhooks, resInsta, resFb]) => {
+      getWhatsAppIntegrationsAction()
+    ]).then(([resWA, resShopify, resSettings, resTeams, resAgents, resWebhooks]) => {
       if (resWA.success && resWA.credentials) {
         setWabaId(resWA.credentials.businessAccountId || "");
         setPhoneId(resWA.credentials.phoneId || "");
@@ -236,21 +183,6 @@ export default function IntegrationsHubPage() {
       if (resWebhooks && resWebhooks.success) {
         setWebhookIntegrations(resWebhooks.integrations || []);
       }
-
-      if (resInsta?.success && resInsta.data) {
-        setInstaAccountId(resInsta.data.accountId || "");
-        setInstaToken(resInsta.data.token || "");
-        setInstaName(resInsta.data.name || "");
-        setInstaIsConnected(Boolean(resInsta.data.token && resInsta.data.isActive));
-      }
-
-      if (resFb?.success && resFb.data) {
-        setFbPageId(resFb.data.accountId || "");
-        setFbToken(resFb.data.token || "");
-        setFbName(resFb.data.name || "");
-        setFbIsConnected(Boolean(resFb.data.token && resFb.data.isActive));
-      }
-
       setLoadingWebhooks(false);
       setLoading(false);
     });
@@ -265,121 +197,6 @@ export default function IntegrationsHubPage() {
       setMerchantUpiId(pg.merchantUpiId);
       setMerchantUpiName(pg.merchantUpiName);
     }).catch(() => {});
-  };
-
-  const copyToClipboard = (text: string, type: "insta-url" | "insta-token" | "insta-redirect" | "fb-url" | "fb-token" | "wa-url" | "wa-token") => {
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(text);
-      if (type === "insta-url") { setCopiedInstaUrl(true); setTimeout(() => setCopiedInstaUrl(false), 2000); }
-      if (type === "insta-token") { setCopiedInstaToken(true); setTimeout(() => setCopiedInstaToken(false), 2000); }
-      if (type === "insta-redirect") { setCopiedInstaRedirectUrl(true); setTimeout(() => setCopiedInstaRedirectUrl(false), 2000); }
-      if (type === "fb-url") { setCopiedFbUrl(true); setTimeout(() => setCopiedFbUrl(false), 2000); }
-      if (type === "fb-token") { setCopiedFbToken(true); setTimeout(() => setCopiedFbToken(false), 2000); }
-      if (type === "wa-url") { setCopiedWaUrl(true); setTimeout(() => setCopiedWaUrl(false), 2000); }
-      if (type === "wa-token") { setCopiedWaToken(true); setTimeout(() => setCopiedWaToken(false), 2000); }
-    }
-  };
-
-  const handleSaveInstagram = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!instaAccountId || !instaToken) {
-      setInstaResultMsg({ success: false, text: "Instagram Business Account ID and Access Token are required." });
-      return;
-    }
-    setSavingInsta(true);
-    setInstaResultMsg(null);
-    try {
-      const res = await saveSocialChannelCredentialsAction({
-        channel: "INSTAGRAM",
-        accountId: instaAccountId,
-        name: instaName || "Instagram Business",
-        token: instaToken
-      });
-      if (res.success) {
-        setInstaIsConnected(Boolean(instaToken.trim()));
-        setInstaResultMsg({ success: true, text: "✓ Instagram API credentials saved successfully!" });
-      } else {
-        setInstaResultMsg({ success: false, text: res.error || "Failed to save Instagram credentials." });
-      }
-    } catch (err: any) {
-      setInstaResultMsg({ success: false, text: err.message || "An unexpected error occurred." });
-    }
-    setSavingInsta(false);
-  };
-
-  const handleTestInstagram = async () => {
-    setTestingInsta(true);
-    setInstaResultMsg(null);
-    try {
-      const res = await testSocialChannelConnectionAction("INSTAGRAM");
-      if (res.success) {
-        setInstaIsConnected(true);
-        setInstaResultMsg({
-          success: true,
-          text: `✓ Connected to Instagram Account "${res.name}" (ID: ${res.id})!`
-        });
-      } else {
-        setInstaIsConnected(false);
-        setInstaResultMsg({
-          success: false,
-          text: `Connection failed: ${res.error}`
-        });
-      }
-    } catch (err: any) {
-      setInstaResultMsg({ success: false, text: err.message || "Failed to test Instagram connection." });
-    }
-    setTestingInsta(false);
-  };
-
-  const handleSaveFacebook = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fbPageId || !fbToken) {
-      setFbResultMsg({ success: false, text: "Facebook Page ID and Page Access Token are required." });
-      return;
-    }
-    setSavingFb(true);
-    setFbResultMsg(null);
-    try {
-      const res = await saveSocialChannelCredentialsAction({
-        channel: "FACEBOOK_MESSENGER",
-        accountId: fbPageId,
-        name: fbName || "Facebook Page",
-        token: fbToken
-      });
-      if (res.success) {
-        setFbIsConnected(Boolean(fbToken.trim()));
-        setFbResultMsg({ success: true, text: "✓ Facebook Messenger credentials saved successfully!" });
-      } else {
-        setFbResultMsg({ success: false, text: res.error || "Failed to save Facebook Messenger credentials." });
-      }
-    } catch (err: any) {
-      setFbResultMsg({ success: false, text: err.message || "An unexpected error occurred." });
-    }
-    setSavingFb(false);
-  };
-
-  const handleTestFacebook = async () => {
-    setTestingFb(true);
-    setFbResultMsg(null);
-    try {
-      const res = await testSocialChannelConnectionAction("FACEBOOK_MESSENGER");
-      if (res.success) {
-        setFbIsConnected(true);
-        setFbResultMsg({
-          success: true,
-          text: `✓ Connected to Facebook Page "${res.name}" (ID: ${res.id})!`
-        });
-      } else {
-        setFbIsConnected(false);
-        setFbResultMsg({
-          success: false,
-          text: `Connection failed: ${res.error}`
-        });
-      }
-    } catch (err: any) {
-      setFbResultMsg({ success: false, text: err.message || "Failed to test Facebook Messenger connection." });
-    }
-    setTestingFb(false);
   };
 
   const handleSaveMetaCapi = async () => {
@@ -731,638 +548,135 @@ const reloadTeams = async () => {
       </div>
 
       {/* Tabs list bar */}
-      <nav className="-mb-px flex space-x-6 overflow-x-auto border-b border-gray-200 dark:border-slate-700">
-        <button onClick={() => handleTabChange("whatsapp")} className={`px-4 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 whitespace-nowrap ${activeTab === "whatsapp" ? "border-emerald-600 text-emerald-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
-          <MessageSquare size={16} /> WhatsApp API
+      <nav className="-mb-px flex space-x-8 overflow-x-auto border-b border-gray-200 dark:border-slate-700">
+        <button onClick={() => handleTabChange("whatsapp")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "whatsapp" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
+          WhatsApp API
         </button>
-        <button onClick={() => handleTabChange("instagram")} className={`px-4 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 whitespace-nowrap ${activeTab === "instagram" ? "border-pink-600 text-pink-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
-          <InstagramBrandIcon className="w-4 h-4 text-pink-500" /> Instagram API
-        </button>
-        <button onClick={() => handleTabChange("facebook-messenger")} className={`px-4 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 whitespace-nowrap ${activeTab === "facebook-messenger" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
-          <FacebookBrandIcon className="w-4 h-4 text-[#1877F2]" /> Facebook Messenger
-        </button>
-        <button onClick={() => handleTabChange("ai-automation")} className={`px-4 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 whitespace-nowrap ${activeTab === "ai-automation" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
+        <button onClick={() => handleTabChange("ai-automation")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "ai-automation" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
           <Bot size={16} /> AI Automation
         </button>
-        <button onClick={() => handleTabChange("shopify")} className={`px-4 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 whitespace-nowrap ${activeTab === "shopify" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
+        <button onClick={() => handleTabChange("shopify")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "shopify" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
           Shopify
         </button>
-        <button onClick={() => handleTabChange("payment")} className={`px-4 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 whitespace-nowrap ${activeTab === "payment" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
+        <button onClick={() => handleTabChange("payment")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "payment" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
           Payment Gateways
         </button>
-        <button onClick={() => handleTabChange("webhooks")} className={`px-4 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 whitespace-nowrap ${activeTab === "webhooks" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
+        <button onClick={() => handleTabChange("webhooks")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "webhooks" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
           Webhooks
         </button>
-        <button onClick={() => handleTabChange("facebook")} className={`px-4 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 whitespace-nowrap ${activeTab === "facebook" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
+        <button onClick={() => handleTabChange("facebook")} className={`px-5 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === "facebook" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
           <Target size={16} /> Facebook & Meta Ads
         </button>
       </nav>
 
-      {/* Dynamic Client-Specific Webhook & Token Resolvers */}
-      {(() => {
-        const clientWebhookPrefix = clientInfo?.webhookClientId;
-        const origin = typeof window !== "undefined" ? window.location.origin : "https://whatsapp.esponsports.com";
-
-        // WhatsApp dedicated or default
-        const currentWaWebhookUrl = clientWebhookPrefix
-          ? `${origin}/api/whatsapp/webhook/${clientWebhookPrefix}`
-          : `${origin}/api/whatsapp/webhook`;
-        const currentWaVerifyToken = clientWebhookPrefix
-          ? `wm_${clientWebhookPrefix.slice(0, 8)}`
-          : webhookToken;
-
-        // Instagram dedicated or default
-        const currentInstaWebhookUrl = clientWebhookPrefix
-          ? `${origin}/api/instagram/webhook/${clientWebhookPrefix}`
-          : `${origin}/api/instagram/webhook`;
-        const currentInstaVerifyToken = clientWebhookPrefix
-          ? `espon_ig_${clientWebhookPrefix.slice(0, 8)}`
-          : "espon_instagram_secure_token_2026";
-
-        // Facebook Messenger dedicated or default
-        const currentFbWebhookUrl = clientWebhookPrefix
-          ? `${origin}/api/facebook/webhook/${clientWebhookPrefix}`
-          : `${origin}/api/facebook/webhook`;
-        const currentFbVerifyToken = clientWebhookPrefix
-          ? `espon_fb_${clientWebhookPrefix.slice(0, 8)}`
-          : "espon_facebook_secure_token_2026";
-
-        return (
-          <>
-            {/* 1. WhatsApp API Tab */}
-            {activeTab === "whatsapp" && (
-              <div className="flex flex-col gap-8 w-full max-w-7xl">
-                {!isConnected && (
-                  <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-5 rounded-2xl flex items-center gap-4 shadow-sm">
-                    <div className="p-3 bg-amber-100 dark:bg-amber-500/20 rounded-full"><AlertTriangle size={24} className="text-amber-600 dark:text-amber-400" /></div>
-                    <div>
-                      <h4 className="text-base font-bold text-amber-900 dark:text-amber-300 mb-0.5">WhatsApp API Not Connected</h4>
-                      <p className="text-sm text-amber-700 dark:text-amber-500/80 m-0">Please enter your Meta WABA Account ID, Phone Number ID, and Access Token below to enable live messaging.</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Meta WhatsApp Integration Card */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
-                  <div className="border-b border-gray-100 dark:border-slate-700 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-50/50 dark:bg-slate-800/50">
-                    <div>
-                      <h2 className="text-lg font-bold text-gray-900 dark:text-white m-0">WhatsApp Business API</h2>
-                      <p className="text-sm text-gray-500 m-0 mt-1">Manage Meta Cloud API tokens and Webhook configuration.</p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3">
-                       <button onClick={handleFacebookLogin} className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#1877F2] hover:bg-[#166FE5] text-white rounded-lg text-sm font-bold shadow-sm transition-all">
-                          {registering ? <RefreshCw size={16} className="animate-spin" /> : <MessageSquare size={16} />} {registering ? "Registering..." : "Register New Number"}
-                       </button>
-                      <span className={`px-3 py-2 text-xs font-bold rounded-lg flex items-center gap-1 ${isConnected ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
-                        {isConnected ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {isConnected ? "CONNECTED" : "NOT CONNECTED"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="p-6 border-b border-gray-100 dark:border-slate-700">
-                    {resultMsg && (
-                      <div className={`mb-6 p-4 rounded-xl text-sm font-semibold flex items-center gap-2 ${resultMsg.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                        {resultMsg.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-                        <span>{resultMsg.text}</span>
-                      </div>
-                    )}
-
-                    <form onSubmit={handleSaveCredentials} className="flex flex-col gap-5">
-                      <div className="grid grid-cols-2 gap-5">
-                        <div>
-                          <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">WhatsApp Phone Number <span className="text-red-500">*</span></label>
-                          <input type="text" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="+91 9876543210" required className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                        </div>
-                        <div>
-                          <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Meta Phone Number ID <span className="text-red-500">*</span></label>
-                          <input type="text" value={phoneId} onChange={(e) => setPhoneId(e.target.value)} placeholder="e.g. 10928374659201" required className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-5">
-                        <div>
-                          <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">WABA ID <span className="text-red-500">*</span></label>
-                          <input type="text" value={wabaId} onChange={(e) => setWabaId(e.target.value)} placeholder="e.g. 991827364501" required className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                        </div>
-                        <div>
-                          <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Permanent Access Token <span className="text-red-500">*</span></label>
-                          <div className="relative">
-                            <input type={showToken ? "text" : "password"} value={token} onChange={(e) => setToken(e.target.value)} placeholder="EAAG..." required className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                            <button type="button" onClick={() => setShowToken(!showToken)} className="absolute right-3 top-3 text-gray-400 hover:text-gray-600">
-                              {showToken ? <EyeOff size={18} /> : <Eye size={18} />}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Webhook Configuration Box with Copy Buttons */}
-                      <div className="bg-indigo-50/60 dark:bg-indigo-500/5 p-4 rounded-xl border border-indigo-100 dark:border-indigo-500/20">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="text-sm font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
-                            <Globe size={15} /> WhatsApp Webhook Configuration
-                          </h4>
-                          {clientWebhookPrefix && (
-                            <span className="text-[11px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-700">
-                              Client Dedicated Endpoint
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-indigo-700 dark:text-indigo-400/80 mb-2">Configure this callback URL in your Meta App Dashboard under WhatsApp API Configuration:</p>
-                        <div className="flex items-center gap-2 mb-3">
-                          <code className="flex-1 p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-indigo-200 dark:border-indigo-500/30 text-xs font-mono font-semibold text-gray-800 dark:text-gray-200 truncate">
-                            {currentWaWebhookUrl}
-                          </code>
-                          <button type="button" onClick={() => copyToClipboard(currentWaWebhookUrl, "wa-url")} className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 transition-all">
-                            {copiedWaUrl ? <Check size={13} /> : <Copy size={13} />} {copiedWaUrl ? "Copied!" : "Copy URL"}
-                          </button>
-                        </div>
-                        <div className="flex items-center justify-between pt-2 border-t border-indigo-100 dark:border-indigo-500/20">
-                          <p className="text-xs text-indigo-700 dark:text-indigo-400/80 m-0">Verify Token: <strong className="text-indigo-900 dark:text-indigo-300 font-mono">{currentWaVerifyToken}</strong></p>
-                          <button type="button" onClick={() => copyToClipboard(currentWaVerifyToken, "wa-token")} className="px-2.5 py-1 bg-white hover:bg-indigo-50 dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-slate-600 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all">
-                            {copiedWaToken ? <Check size={12} /> : <Copy size={12} />} {copiedWaToken ? "Copied" : "Copy Token"}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div>
-                        <button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-xl text-sm font-bold shadow-md transition-all">
-                          {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
-                          {saving ? "Saving..." : "Save Meta Credentials"}
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-
-                  {/* Test Message Section */}
-                  <div className="p-6 bg-slate-50 dark:bg-slate-900/50">
-                    <h3 className="text-md font-bold text-gray-900 dark:text-white mb-3">Test Connection</h3>
-                    <p className="text-sm text-gray-500 mb-4">Send a "espon_test_message" test template to verify your Meta API connection is working properly.</p>
-                    
-                    {testResultMsg && (
-                      <div className={`mb-4 p-4 rounded-xl text-sm font-semibold flex items-center gap-2 ${testResultMsg.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                        {testResultMsg.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-                        <span>{testResultMsg.text}</span>
-                      </div>
-                    )}
-
-                    <form onSubmit={handleSendTestMessage} className="flex gap-3">
-                       <input type="text" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="Recipient Phone (e.g. 919876543210)" required className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                       <button type="submit" disabled={sendingTest || !isConnected} className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 disabled:bg-gray-400 disabled:dark:bg-gray-700 rounded-xl text-sm font-bold shadow-sm transition-all">
-                          {sendingTest ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />}
-                          {sendingTest ? "Sending..." : "Send Test Message"}
-                       </button>
-                    </form>
-                  </div>
-                </div>
+      {/* 1. Integrations tab */}
+      {activeTab === "whatsapp" && (
+        <div className="flex flex-col gap-8 w-full max-w-7xl">
+          {!isConnected && (
+            <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-5 rounded-2xl flex items-center gap-4 shadow-sm">
+              <div className="p-3 bg-amber-100 dark:bg-amber-500/20 rounded-full"><AlertTriangle size={24} className="text-amber-600 dark:text-amber-400" /></div>
+              <div>
+                <h4 className="text-base font-bold text-amber-900 dark:text-amber-300 mb-0.5">WhatsApp API Not Connected</h4>
+                <p className="text-sm text-amber-700 dark:text-amber-500/80 m-0">Please enter your Meta WABA Account ID, Phone Number ID, and Access Token below to enable live messaging.</p>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* 2. Instagram API Tab */}
-            {activeTab === "instagram" && (
-              <div className="flex flex-col gap-8 w-full max-w-7xl">
-                {!instaIsConnected && (
-                  <div className="bg-gradient-to-r from-pink-50 to-rose-50 dark:from-pink-950/20 dark:to-rose-950/20 border border-pink-200 dark:border-pink-800/40 p-5 rounded-2xl flex items-center gap-4 shadow-sm">
-                    <div className="p-3 bg-pink-100 dark:bg-pink-900/40 rounded-full text-pink-600 dark:text-pink-400">
-                      <InstagramBrandIcon className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h4 className="text-base font-bold text-pink-950 dark:text-pink-200 mb-0.5">Instagram Messaging API Not Connected</h4>
-                      <p className="text-sm text-pink-800 dark:text-pink-300/80 m-0">Enter your Instagram Business Account ID and Permanent Access Token below to enable automated replies and 2-way inbox messaging.</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Main Instagram Integration Card */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
-                  <div className="border-b border-gray-100 dark:border-slate-700 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-pink-50/40 via-rose-50/20 to-transparent dark:from-slate-800">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 flex items-center justify-center text-white shadow-md">
-                        <InstagramBrandIcon className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white m-0">Instagram Messaging API</h2>
-                        <p className="text-sm text-gray-500 m-0 mt-0.5">Direct API integration for Instagram Direct Messages (DMs), Story Mentions, and Postbacks.</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {clientWebhookPrefix && (
-                        <span className="px-3 py-1 text-xs font-bold rounded-lg bg-pink-50 text-pink-700 border border-pink-200">
-                          Tenant: {clientInfo?.businessName || "Client Dedicated"}
-                        </span>
-                      )}
-                      <span className={`px-3 py-2 text-xs font-bold rounded-lg flex items-center gap-1.5 ${instaIsConnected ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
-                        {instaIsConnected ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {instaIsConnected ? "CONNECTED" : "NOT CONNECTED"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="p-6 border-b border-gray-100 dark:border-slate-700">
-                    {instaResultMsg && (
-                      <div className={`mb-6 p-4 rounded-xl text-sm font-semibold flex items-center gap-2 ${instaResultMsg.success ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
-                        {instaResultMsg.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-                        <span>{instaResultMsg.text}</span>
-                      </div>
-                    )}
-
-                    {/* Instagram Webhook Configuration & Dedicated Secret */}
-                    <div className="bg-gradient-to-br from-pink-50/60 to-purple-50/40 dark:from-pink-950/20 dark:to-purple-950/20 p-5 rounded-2xl border border-pink-100 dark:border-pink-900/30 mb-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-bold text-pink-950 dark:text-pink-200 flex items-center gap-2">
-                          <Globe size={16} className="text-pink-600" /> Instagram Webhook Configuration
-                        </h4>
-                        <span className="text-[11px] font-bold bg-pink-100 text-pink-800 dark:bg-pink-900/50 dark:text-pink-300 px-2.5 py-0.5 rounded-full border border-pink-200">
-                          {clientWebhookPrefix ? "Client Dedicated Secret & URL" : "Universal Webhook"}
-                        </span>
-                      </div>
-                      <p className="text-xs text-pink-800 dark:text-pink-300/80 mb-3">
-                        Enter this Callback URL and Verification Secret in your Meta App Dashboard under <strong>Use cases → Instagram → 3. Configure webhooks</strong>. Each client gets their own secret so incoming messages are routed accurately:
-                      </p>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                        <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-pink-200/70 dark:border-slate-700 shadow-2xs">
-                          <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Instagram Callback URL</label>
-                          <div className="flex items-center gap-2">
-                            <code className="flex-1 text-xs font-mono font-semibold text-gray-900 dark:text-white truncate">
-                              {currentInstaWebhookUrl}
-                            </code>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(currentInstaWebhookUrl, "insta-url")}
-                              className="px-2.5 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 transition-all shadow-2xs"
-                            >
-                              {copiedInstaUrl ? <Check size={12} /> : <Copy size={12} />} {copiedInstaUrl ? "Copied!" : "Copy"}
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-pink-200/70 dark:border-slate-700 shadow-2xs">
-                          <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Instagram Verify Token (Secret)</label>
-                          <div className="flex items-center gap-2">
-                            <code className="flex-1 text-xs font-mono font-bold text-pink-600 dark:text-pink-400 truncate">
-                              {currentInstaVerifyToken}
-                            </code>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(currentInstaVerifyToken, "insta-token")}
-                              className="px-2.5 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 transition-all shadow-2xs"
-                            >
-                              {copiedInstaToken ? <Check size={12} /> : <Copy size={12} />} {copiedInstaToken ? "Copied!" : "Copy"}
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Instagram Business Login OAuth Redirect URL */}
-                        <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-pink-200/70 dark:border-slate-700 shadow-2xs md:col-span-2">
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Instagram Business Login Redirect URL (Meta Step 4)</label>
-                            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">OAuth Callback</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <code className="flex-1 text-xs font-mono font-semibold text-gray-900 dark:text-white truncate">
-                              {`${origin}/api/instagram/callback`}
-                            </code>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(`${origin}/api/instagram/callback`, "insta-redirect")}
-                              className="px-2.5 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 transition-all shadow-2xs"
-                            >
-                              {copiedInstaRedirectUrl ? <Check size={12} /> : <Copy size={12} />} {copiedInstaRedirectUrl ? "Copied!" : "Copy Redirect URL"}
-                            </button>
-                          </div>
-                          <p className="text-[11px] text-gray-400 mt-1 mb-0">Paste this into Meta's &quot;Set up Instagram business login&quot; modal (Step 4 of API setup).</p>
-                        </div>
-                      </div>
-
-                      <div className="pt-2 border-t border-pink-200/50 dark:border-pink-900/30 flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-bold text-pink-950 dark:text-pink-300">Required Subscribed Fields in Meta:</span>
-                        {["messages", "messaging_postbacks", "message_deliveries", "message_reads", "message_reactions"].map((field) => (
-                          <span key={field} className="text-[11px] font-mono font-semibold bg-white/90 dark:bg-slate-800 text-pink-700 dark:text-pink-300 px-2 py-0.5 rounded-md border border-pink-200 dark:border-pink-800">
-                            ✓ {field}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Instagram Credentials Form */}
-                    <form onSubmit={handleSaveInstagram} className="flex flex-col gap-5">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div>
-                          <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">
-                            Instagram Business Account ID <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={instaAccountId}
-                            onChange={(e) => setInstaAccountId(e.target.value)}
-                            placeholder="e.g. 1784140012345678"
-                            required
-                            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-pink-500 outline-none font-mono"
-                          />
-                          <p className="text-xs text-gray-400 mt-1">Found in Meta Business Suite or via Graph API <code>/me/accounts → instagram_business_account.id</code>.</p>
-                        </div>
-
-                        <div>
-                          <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">
-                            Permanent Access Token <span className="text-red-500">*</span>
-                          </label>
-                          <div className="relative">
-                            <input
-                              type={showInstaToken ? "text" : "password"}
-                              value={instaToken}
-                              onChange={(e) => setInstaToken(e.target.value)}
-                              placeholder="EAA..."
-                              required
-                              className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-pink-500 outline-none font-mono"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowInstaToken(!showInstaToken)}
-                              className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
-                            >
-                              {showInstaToken ? <EyeOff size={18} /> : <Eye size={18} />}
-                            </button>
-                          </div>
-                          <p className="text-xs text-gray-400 mt-1">Permanent System User Token with <code>instagram_basic</code> & <code>instagram_manage_messages</code> permissions.</p>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-3 pt-2">
-                        <button
-                          type="submit"
-                          disabled={savingInsta}
-                          className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold shadow-md transition-all"
-                        >
-                          {savingInsta ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
-                          {savingInsta ? "Saving..." : "Save Instagram Credentials"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={handleTestInstagram}
-                          disabled={testingInsta || !instaToken}
-                          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-sm font-bold shadow-sm transition-all"
-                        >
-                          {testingInsta ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-                          {testingInsta ? "Verifying..." : "Test Connection"}
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-
-                {/* 5-Step Instagram Setup Guide Card */}
-                <div className="bg-pink-50/40 dark:bg-pink-950/10 border border-pink-200 dark:border-pink-900/40 rounded-2xl p-6 text-sm text-pink-950 dark:text-pink-200">
-                  <h4 className="font-bold text-base text-pink-950 dark:text-pink-200 mb-3 flex items-center gap-2">
-                    <Sparkles size={18} className="text-pink-600" /> 5-Step Instagram Messaging API Setup Guide
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-white/95 dark:bg-slate-900 p-4 rounded-xl border border-pink-100 dark:border-slate-700 shadow-2xs">
-                      <strong className="text-pink-950 dark:text-pink-200 block mb-1 text-xs font-bold">Step 1: Convert Instagram to Professional & Link Page</strong>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-                        In Instagram mobile app: <strong>Settings → Account type → Switch to Professional (Business or Creator)</strong>.
-                        Then link it to your Facebook Page in <strong>Meta Business Suite → Settings → Linked Accounts → Instagram</strong>.
-                      </p>
-                    </div>
-
-                    <div className="bg-white/95 dark:bg-slate-900 p-4 rounded-xl border border-pink-100 dark:border-slate-700 shadow-2xs">
-                      <strong className="text-pink-950 dark:text-pink-200 block mb-1 text-xs font-bold">Step 2: Enable Messages Access in Instagram App</strong>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-                        In the Instagram mobile app: Go to <strong>Settings → Messages and story replies → Message controls → Connected tools → Toggle "Allow access to messages" ON</strong>.
-                      </p>
-                    </div>
-
-                    <div className="bg-white/95 dark:bg-slate-900 p-4 rounded-xl border border-pink-100 dark:border-slate-700 shadow-2xs">
-                      <strong className="text-pink-950 dark:text-pink-200 block mb-1 text-xs font-bold">Step 3: Configure Webhooks in Meta Developer Portal</strong>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-                        Open your Meta App (<a href="https://developers.facebook.com" target="_blank" rel="noreferrer" className="text-pink-600 font-bold underline inline-flex items-center gap-0.5">developers.facebook.com ↗ <ExternalLink size={11} /></a>).
-                        Under <strong>Instagram API setup → 3. Configure webhooks</strong>, paste your Callback URL and Verify Token from above and subscribe to <code>messages</code>.
-                      </p>
-                    </div>
-
-                    <div className="bg-white/95 dark:bg-slate-900 p-4 rounded-xl border border-pink-100 dark:border-slate-700 shadow-2xs">
-                      <strong className="text-pink-950 dark:text-pink-200 block mb-1 text-xs font-bold">Step 4: Generate Permanent System User Access Token</strong>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-                        Go to <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noreferrer" className="text-pink-600 font-bold underline inline-flex items-center gap-0.5">Business Settings → System Users ↗ <ExternalLink size={11} /></a>.
-                        Click <strong>Generate New Token</strong> → Select permissions: <code>instagram_basic</code>, <code>instagram_manage_messages</code>, <code>pages_show_list</code>.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+          {/* Meta WhatsApp Integration Card */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div className="border-b border-gray-100 dark:border-slate-700 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-50/50 dark:bg-slate-800/50">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white m-0">WhatsApp Business API</h2>
+                <p className="text-sm text-gray-500 m-0 mt-1">Manage Meta Cloud API tokens and Webhook configuration.</p>
               </div>
-            )}
-
-            {/* 3. Facebook Messenger Tab */}
-            {activeTab === "facebook-messenger" && (
-              <div className="flex flex-col gap-8 w-full max-w-7xl">
-                {!fbIsConnected && (
-                  <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/40 p-5 rounded-2xl flex items-center gap-4 shadow-sm">
-                    <div className="p-3 bg-blue-100 dark:bg-blue-900/40 rounded-full text-[#1877F2]">
-                      <FacebookBrandIcon className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h4 className="text-base font-bold text-blue-950 dark:text-blue-200 mb-0.5">Facebook Messenger API Not Connected</h4>
-                      <p className="text-sm text-blue-800 dark:text-blue-300/80 m-0">Enter your Facebook Page ID and Permanent Page Access Token below to enable customer Messenger chat support.</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Main Facebook Messenger Integration Card */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
-                  <div className="border-b border-gray-100 dark:border-slate-700 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-blue-50/40 to-transparent dark:from-slate-800">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-[#1877F2] flex items-center justify-center text-white shadow-md">
-                        <FacebookBrandIcon className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white m-0">Facebook Messenger API</h2>
-                        <p className="text-sm text-gray-500 m-0 mt-0.5">Direct API integration for Facebook Business Page customer chats and postbacks.</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {clientWebhookPrefix && (
-                        <span className="px-3 py-1 text-xs font-bold rounded-lg bg-blue-50 text-blue-700 border border-blue-200">
-                          Tenant: {clientInfo?.businessName || "Client Dedicated"}
-                        </span>
-                      )}
-                      <span className={`px-3 py-2 text-xs font-bold rounded-lg flex items-center gap-1.5 ${fbIsConnected ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
-                        {fbIsConnected ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {fbIsConnected ? "CONNECTED" : "NOT CONNECTED"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="p-6 border-b border-gray-100 dark:border-slate-700">
-                    {fbResultMsg && (
-                      <div className={`mb-6 p-4 rounded-xl text-sm font-semibold flex items-center gap-2 ${fbResultMsg.success ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
-                        {fbResultMsg.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-                        <span>{fbResultMsg.text}</span>
-                      </div>
-                    )}
-
-                    {/* Facebook Webhook Configuration & Dedicated Secret */}
-                    <div className="bg-gradient-to-br from-blue-50/60 to-indigo-50/40 dark:from-blue-950/20 dark:to-indigo-950/20 p-5 rounded-2xl border border-blue-100 dark:border-blue-900/30 mb-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-bold text-blue-950 dark:text-blue-200 flex items-center gap-2">
-                          <Globe size={16} className="text-[#1877F2]" /> Facebook Messenger Webhook Configuration
-                        </h4>
-                        <span className="text-[11px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 px-2.5 py-0.5 rounded-full border border-blue-200">
-                          {clientWebhookPrefix ? "Client Dedicated Secret & URL" : "Universal Webhook"}
-                        </span>
-                      </div>
-                      <p className="text-xs text-blue-800 dark:text-blue-300/80 mb-3">
-                        Enter this Callback URL and Verification Secret in your Meta App Dashboard under <strong>Use Cases → Engage with customers on Messenger → Webhooks</strong>:
-                      </p>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                        <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-blue-200/70 dark:border-slate-700 shadow-2xs">
-                          <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Facebook Callback URL</label>
-                          <div className="flex items-center gap-2">
-                            <code className="flex-1 text-xs font-mono font-semibold text-gray-900 dark:text-white truncate">
-                              {currentFbWebhookUrl}
-                            </code>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(currentFbWebhookUrl, "fb-url")}
-                              className="px-2.5 py-1.5 bg-[#1877F2] hover:bg-[#166FE5] text-white rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 transition-all shadow-2xs"
-                            >
-                              {copiedFbUrl ? <Check size={12} /> : <Copy size={12} />} {copiedFbUrl ? "Copied!" : "Copy"}
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-blue-200/70 dark:border-slate-700 shadow-2xs">
-                          <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Facebook Verify Token (Secret)</label>
-                          <div className="flex items-center gap-2">
-                            <code className="flex-1 text-xs font-mono font-bold text-blue-600 dark:text-blue-400 truncate">
-                              {currentFbVerifyToken}
-                            </code>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(currentFbVerifyToken, "fb-token")}
-                              className="px-2.5 py-1.5 bg-[#1877F2] hover:bg-[#166FE5] text-white rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 transition-all shadow-2xs"
-                            >
-                              {copiedFbToken ? <Check size={12} /> : <Copy size={12} />} {copiedFbToken ? "Copied!" : "Copy"}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="pt-2 border-t border-blue-200/50 dark:border-blue-900/30 flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-bold text-blue-950 dark:text-blue-300">Required Subscribed Fields in Meta:</span>
-                        {["messages", "messaging_postbacks", "message_deliveries", "message_reads"].map((field) => (
-                          <span key={field} className="text-[11px] font-mono font-semibold bg-white/90 dark:bg-slate-800 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800">
-                            ✓ {field}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Facebook Credentials Form */}
-                    <form onSubmit={handleSaveFacebook} className="flex flex-col gap-5">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div>
-                          <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">
-                            Facebook Page ID <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={fbPageId}
-                            onChange={(e) => setFbPageId(e.target.value)}
-                            placeholder="e.g. 102938475610293"
-                            required
-                            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono"
-                          />
-                          <p className="text-xs text-gray-400 mt-1">Found in your Facebook Page <strong>About → Page Transparency</strong> or Meta Business Suite.</p>
-                        </div>
-
-                        <div>
-                          <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">
-                            Permanent Page Access Token <span className="text-red-500">*</span>
-                          </label>
-                          <div className="relative">
-                            <input
-                              type={showFbToken ? "text" : "password"}
-                              value={fbToken}
-                              onChange={(e) => setFbToken(e.target.value)}
-                              placeholder="EAA..."
-                              required
-                              className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowFbToken(!showFbToken)}
-                              className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
-                            >
-                              {showFbToken ? <EyeOff size={18} /> : <Eye size={18} />}
-                            </button>
-                          </div>
-                          <p className="text-xs text-gray-400 mt-1">Permanent Page Token with <code>pages_messaging</code> & <code>pages_manage_metadata</code> permissions.</p>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-3 pt-2">
-                        <button
-                          type="submit"
-                          disabled={savingFb}
-                          className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#1877F2] hover:bg-[#166FE5] disabled:opacity-50 text-white rounded-xl text-sm font-bold shadow-md transition-all"
-                        >
-                          {savingFb ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
-                          {savingFb ? "Saving..." : "Save Messenger Credentials"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={handleTestFacebook}
-                          disabled={testingFb || !fbToken}
-                          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-sm font-bold shadow-sm transition-all"
-                        >
-                          {testingFb ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-                          {testingFb ? "Verifying..." : "Test Connection"}
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-
-                {/* 5-Step Facebook Messenger Setup Guide Card */}
-                <div className="bg-blue-50/40 dark:bg-blue-950/10 border border-blue-200 dark:border-blue-900/40 rounded-2xl p-6 text-sm text-blue-950 dark:text-blue-200">
-                  <h4 className="font-bold text-base text-blue-950 dark:text-blue-200 mb-3 flex items-center gap-2">
-                    <Sparkles size={18} className="text-[#1877F2]" /> 5-Step Facebook Messenger API Setup Guide
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-white/95 dark:bg-slate-900 p-4 rounded-xl border border-blue-100 dark:border-slate-700 shadow-2xs">
-                      <strong className="text-blue-950 dark:text-blue-200 block mb-1 text-xs font-bold">Step 1: In Meta Developer Portal, Add Messenger</strong>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-                        Go to <a href="https://developers.facebook.com" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline inline-flex items-center gap-0.5">developers.facebook.com ↗ <ExternalLink size={11} /></a> → Select your App → Click <strong>Add Product / Use Cases</strong> → Select <strong>Messenger</strong>.
-                      </p>
-                    </div>
-
-                    <div className="bg-white/95 dark:bg-slate-900 p-4 rounded-xl border border-blue-100 dark:border-slate-700 shadow-2xs">
-                      <strong className="text-blue-950 dark:text-blue-200 block mb-1 text-xs font-bold">Step 2: Configure Messenger Webhook</strong>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-                        Under Messenger Settings, click <strong>Add Callback URL</strong>. Paste your Facebook Callback URL and Verify Token from above, then click <strong>Verify and Save</strong>.
-                      </p>
-                    </div>
-
-                    <div className="bg-white/95 dark:bg-slate-900 p-4 rounded-xl border border-blue-100 dark:border-slate-700 shadow-2xs">
-                      <strong className="text-blue-950 dark:text-blue-200 block mb-1 text-xs font-bold">Step 3: Subscribe Facebook Page to Webhook</strong>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-                        In the Webhook section under Messenger, select your Page from the dropdown and click <strong>Subscribe</strong> for <code>messages</code> and <code>messaging_postbacks</code>.
-                      </p>
-                    </div>
-
-                    <div className="bg-white/95 dark:bg-slate-900 p-4 rounded-xl border border-blue-100 dark:border-slate-700 shadow-2xs">
-                      <strong className="text-blue-950 dark:text-blue-200 block mb-1 text-xs font-bold">Step 4: Generate Permanent Page Access Token</strong>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-                        Under <strong>Access Tokens</strong> or via System Users, select your Facebook Page, ensure <code>pages_messaging</code> permission is selected, and generate a permanent token.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+              <div className="flex flex-wrap items-center gap-3">
+                 <button onClick={handleFacebookLogin} className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#1877F2] hover:bg-[#166FE5] text-white rounded-lg text-sm font-bold shadow-sm transition-all">
+                    {registering ? <RefreshCw size={16} className="animate-spin" /> : <MessageSquare size={16} />} {registering ? "Registering..." : "Register New Number"}
+                 </button>
+                <span className={`px-3 py-2 text-xs font-bold rounded-lg flex items-center gap-1 ${isConnected ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                  {isConnected ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {isConnected ? "CONNECTED" : "NOT CONNECTED"}
+                </span>
               </div>
-            )}
-          </>
-        );
-      })()}
+            </div>
+
+            <div className="p-6 border-b border-gray-100 dark:border-slate-700">
+              {resultMsg && (
+                <div className={`mb-6 p-4 rounded-xl text-sm font-semibold flex items-center gap-2 ${resultMsg.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                  {resultMsg.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+                  <span>{resultMsg.text}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveCredentials} className="flex flex-col gap-5">
+                <div className="grid grid-cols-2 gap-5">
+                  <div>
+                    <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">WhatsApp Phone Number <span className="text-red-500">*</span></label>
+                    <input type="text" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="+91 9876543210" required className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Meta Phone Number ID <span className="text-red-500">*</span></label>
+                    <input type="text" value={phoneId} onChange={(e) => setPhoneId(e.target.value)} placeholder="e.g. 10928374659201" required className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-5">
+                  <div>
+                    <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">WABA ID <span className="text-red-500">*</span></label>
+                    <input type="text" value={wabaId} onChange={(e) => setWabaId(e.target.value)} placeholder="e.g. 991827364501" required className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-bold text-gray-700 dark:text-gray-300 block mb-2">Permanent Access Token <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <input type={showToken ? "text" : "password"} value={token} onChange={(e) => setToken(e.target.value)} placeholder="EAAG..." required className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900/50 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <button type="button" onClick={() => setShowToken(!showToken)} className="absolute right-3 top-3 text-gray-400 hover:text-gray-600">
+                        {showToken ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-indigo-50/50 dark:bg-indigo-500/5 p-4 rounded-xl border border-indigo-100 dark:border-indigo-500/20">
+                  <h4 className="text-sm font-bold text-indigo-900 dark:text-indigo-300 mb-2">Webhook Configuration</h4>
+                  <p className="text-xs text-indigo-700 dark:text-indigo-400/80 mb-3">Set this callback URL in your Meta App Dashboard:</p>
+                  <code className="block w-full p-3 bg-white dark:bg-slate-900 rounded-lg border border-indigo-200 dark:border-indigo-500/30 text-xs font-mono font-semibold text-gray-800 dark:text-gray-200 mb-2">
+                    {typeof window !== "undefined" ? `${window.location.origin}/api/whatsapp/webhook` : "https://your-domain.com/api/whatsapp/webhook"}
+                  </code>
+                  <p className="text-xs text-indigo-700 dark:text-indigo-400/80">Verify Token: <strong className="text-indigo-900 dark:text-indigo-300">{webhookToken}</strong></p>
+                </div>
+
+                <div>
+                  <button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-xl text-sm font-bold shadow-md transition-all">
+                    {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
+                    {saving ? "Saving..." : "Save Meta Credentials"}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Test Message Section */}
+            <div className="p-6 bg-slate-50 dark:bg-slate-900/50">
+              <h3 className="text-md font-bold text-gray-900 dark:text-white mb-3">Test Connection</h3>
+              <p className="text-sm text-gray-500 mb-4">Send a "espon_test_message" test template to verify your Meta API connection is working properly.</p>
+              
+              {testResultMsg && (
+                <div className={`mb-4 p-4 rounded-xl text-sm font-semibold flex items-center gap-2 ${testResultMsg.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                  {testResultMsg.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+                  <span>{testResultMsg.text}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSendTestMessage} className="flex gap-3">
+                 <input type="text" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="Recipient Phone (e.g. 919876543210)" required className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                 <button type="submit" disabled={sendingTest || !isConnected} className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 disabled:bg-gray-400 disabled:dark:bg-gray-700 rounded-xl text-sm font-bold shadow-sm transition-all">
+                    {sendingTest ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />}
+                    {sendingTest ? "Sending..." : "Send Test Message"}
+                 </button>
+              </form>
+            </div>
+          </div>
+
+                  </div>
+      )}
 
       {/* 2. AI Automation Tab */}
       {activeTab === "ai-automation" && (
