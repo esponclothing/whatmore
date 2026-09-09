@@ -44,9 +44,10 @@ import {
   importWhatsAppContactsBatchAction,
   exportAllWhatsAppContactsAction,
   assignImportedContactsBatchAction,
-  getAllEmployeesAndTeams
+  getAllEmployeesAndTeams,
+  cleanExistingDuplicateContactsAction
 } from "@/app/actions/whatsAppPlatformActions";
-import { formatWhatsAppPhone, parseDynamicPhone } from "@/lib/phoneUtils";
+import { formatWhatsAppPhone, parseDynamicPhone, normalizePhoneKey } from "@/lib/phoneUtils";
 
 export default function WhatsAppContactsComponent() {
   const router = useRouter();
@@ -93,6 +94,8 @@ export default function WhatsAppContactsComponent() {
   });
   const [importError, setImportError] = useState("");
   const [importing, setImporting] = useState(false);
+  const [mergedInSheetCount, setMergedInSheetCount] = useState(0);
+  const [cleaningDupes, setCleaningDupes] = useState(false);
   const [importDefaultCc, setImportDefaultCc] = useState("+91");
   const [importBatchTag, setImportBatchTag] = useState("");
   const [importAppendTags, setImportAppendTags] = useState(true);
@@ -283,7 +286,11 @@ export default function WhatsAppContactsComponent() {
     setSavingContact(false);
 
     if (res.success) {
-      showToast(`Contact "${newName}" created successfully!`);
+      if ((res as any).isExisting) {
+        showToast(`✓ Contact "${newName}" already exists — updated details & merged tags (no duplicate created)!`);
+      } else {
+        showToast(`Contact "${newName}" created successfully!`);
+      }
       setShowAddModal(false);
       setNewName("");
       setNewMobile("");
@@ -530,7 +537,7 @@ export default function WhatsAppContactsComponent() {
     }
   };
 
-  // Helper to re-map raw sheet rows according to user's column mappings
+  // Helper to re-map raw sheet rows according to user's column mappings with strict deduplication
   const applyMappingToRows = (
     rawRows: any[],
     mapping: {
@@ -556,7 +563,37 @@ export default function WhatsAppContactsComponent() {
       return digits.length >= 7 || r.fullName.trim().length > 0;
     });
 
-    return validRows;
+    // In-File Deduplication: ensure no repeated contacts enter from the uploaded sheet
+    const uniqueMap = new Map<string, any>();
+    let duplicateCount = 0;
+
+    for (const row of validRows) {
+      const phoneKey = normalizePhoneKey(row.phoneNumber);
+      const dedupeKey = phoneKey || (row.fullName ? `name:${row.fullName.toLowerCase()}` : `row:${Math.random()}`);
+
+      if (uniqueMap.has(dedupeKey)) {
+        duplicateCount++;
+        const existing = uniqueMap.get(dedupeKey);
+        // Merge tags cleanly without duplicates
+        const existingTags = existing.tags ? String(existing.tags).split(",").map((t: string) => t.trim()).filter(Boolean) : [];
+        const newTags = row.tags ? String(row.tags).split(",").map((t: string) => t.trim()).filter(Boolean) : [];
+        const combinedTags = Array.from(new Set([...existingTags, ...newTags])).join(", ");
+
+        uniqueMap.set(dedupeKey, {
+          ...existing,
+          fullName: existing.fullName || row.fullName,
+          businessName: existing.businessName || row.businessName,
+          countryCode: existing.countryCode || row.countryCode,
+          customerType: existing.customerType || row.customerType,
+          tags: combinedTags
+        });
+      } else {
+        uniqueMap.set(dedupeKey, { ...row });
+      }
+    }
+
+    setMergedInSheetCount(duplicateCount);
+    return Array.from(uniqueMap.values());
   };
 
   // User manually changes a matched column dropdown
@@ -588,6 +625,7 @@ export default function WhatsAppContactsComponent() {
     setSheetHeaders([]);
     setImportError("");
     setImportFileName("");
+    setMergedInSheetCount(0);
     setFieldMappings({
       phoneNumber: "",
       countryCode: "",
@@ -608,6 +646,7 @@ export default function WhatsAppContactsComponent() {
     setImportFileName(file.name);
     setParsingFile(true);
     setImportError("");
+    setMergedInSheetCount(0);
     setParsedRows([]);
     setRawSheetRows([]);
     setSheetHeaders([]);
@@ -708,6 +747,7 @@ export default function WhatsAppContactsComponent() {
           customerType: ""
         });
         setImportFileName("");
+        setMergedInSheetCount(0);
         fetchContacts();
 
         if (res.importedCustomerIds && res.importedCustomerIds.length > 0) {
@@ -804,6 +844,30 @@ export default function WhatsAppContactsComponent() {
     showToast(`✓ Contacts saved without assignment (Unassigned).`);
   };
 
+  const handleCleanDuplicates = async () => {
+    const confirmed = window.confirm(
+      "Scan database and merge all existing duplicate contacts (same mobile / phone number) into single primary contacts?\n\nAll chat conversations, orders, quotations, and tags will be safely merged and redundant duplicate records removed."
+    );
+    if (!confirmed) return;
+
+    setCleaningDupes(true);
+    try {
+      const res = await cleanExistingDuplicateContactsAction();
+      if (res.success) {
+        showToast(
+          `✓ Cleaned up! Found ${res.deletedRecordsCount} duplicate records, merged into ${res.mergedGroupsCount} unique contacts.`
+        );
+        fetchContacts();
+      } else {
+        showToast(res.error || "Failed to clean duplicates.", "error");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Failed to clean duplicate contacts.", "error");
+    } finally {
+      setCleaningDupes(false);
+    }
+  };
+
   return (
     <div className="w-full flex flex-col gap-6">
       {/* Toast Notification */}
@@ -852,6 +916,16 @@ export default function WhatsAppContactsComponent() {
             title="Refresh Contacts"
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Sync
+          </button>
+
+          <button
+            onClick={handleCleanDuplicates}
+            disabled={cleaningDupes || loading}
+            className="px-3.5 py-2 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/80 text-amber-800 dark:text-amber-300 hover:bg-amber-100 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+            title="Scan database to merge any existing duplicate contacts by phone number"
+          >
+            <ShieldCheck size={14} className={cleaningDupes ? "animate-spin" : ""} />
+            {cleaningDupes ? "Cleaning..." : "Clean Duplicates"}
           </button>
 
           <button
@@ -1706,10 +1780,15 @@ export default function WhatsAppContactsComponent() {
               {/* 2. Live Data Preview with Matched Fields */}
               {parsedRows.length > 0 && (
                 <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5 flex-wrap">
                       <CheckCircle2 size={14} className="text-emerald-600" />
-                      <span>Data Preview ({parsedRows.length} Contacts Ready to Import)</span>
+                      <span>Data Preview ({parsedRows.length} Unique Contacts Ready to Import)</span>
+                      {mergedInSheetCount > 0 && (
+                        <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 rounded-full text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
+                          ⚡ {mergedInSheetCount} duplicate rows merged in file
+                        </span>
+                      )}
                     </span>
                     <span className="text-[11px] text-gray-400">Showing first 4 rows with matched fields</span>
                   </div>

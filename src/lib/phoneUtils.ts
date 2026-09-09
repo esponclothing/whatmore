@@ -343,3 +343,59 @@ export function resolveWhatsAppDispatchPhone(phone: string | null | undefined): 
   const parsed = parseDynamicPhone(phone);
   return parsed.rawDigits || String(phone).replace(/\D/g, "");
 }
+
+/**
+ * Returns a canonical phone key for deduplication (last 10 digits if available).
+ */
+export function normalizePhoneKey(input: string | null | undefined): string {
+  if (!input) return "";
+  const digits = String(input).replace(/\D/g, "");
+  if (!digits) return "";
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}
+
+/**
+ * Returns all possible lookup keys for a phone number across various international & local formats.
+ * E.g. "+91 98765 43210", "919876543210", "09876543210", "9876543210"
+ * All map to overlapping keys: ["9876543210", "919876543210", "+919876543210"]
+ */
+export function getPhoneLookupKeys(input: string | null | undefined): string[] {
+  if (!input) return [];
+  const rawStr = String(input).trim();
+  const digits = rawStr.replace(/\D/g, "");
+  if (!digits || digits.length < 7) return [];
+
+  const keys = new Set<string>();
+
+  // Full digits
+  keys.add(digits);
+  keys.add(`+${digits}`);
+
+  // Last 10 digits
+  if (digits.length >= 10) {
+    const last10 = digits.slice(-10);
+    keys.add(last10);
+    keys.add(`+91${last10}`);
+    keys.add(`91${last10}`);
+  }
+
+  // If starts with 91 (India) and length 12
+  if (digits.startsWith("91") && digits.length === 12) {
+    keys.add(digits.slice(2));
+  }
+
+  // If starts with 0 (trunk prefix) and length 11
+  if (digits.startsWith("0") && digits.length === 11) {
+    keys.add(digits.slice(1));
+  }
+
+  // If 10 digits (Standard Indian national mobile)
+  if (digits.length === 10) {
+    keys.add(`91${digits}`);
+    keys.add(`+91${digits}`);
+    keys.add(`0${digits}`);
+  }
+
+  return Array.from(keys);
+}
+

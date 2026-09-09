@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { seedWhatsAppPlatformData } from "@/lib/seedWhatsApp";
 import { revalidatePath } from "next/cache";
-import { formatWhatsAppPhone } from "@/lib/phoneUtils";
+import { formatWhatsAppPhone, getPhoneLookupKeys, normalizePhoneKey } from "@/lib/phoneUtils";
 import { notifyAdminsOfTemplateStatusChange } from "@/lib/pushNotifications";
 
 export async function getWhatsAppChatbotLogsAction(phone: string) {
@@ -290,14 +290,21 @@ export async function getWhatsAppConversationById(id: string) {
 export async function sendDirectWhatsAppDispatchAction(phone: string, content: string) {
   try {
     const cleanPhone = phone.replace(/\D/g, "");
+    const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+    const lookupKeys = getPhoneLookupKeys(phone);
     
-    let customer = await prisma.customer.findFirst({
+    const candidates = await prisma.customer.findMany({
       where: {
         OR: [
-          { mobile: { contains: cleanPhone } },
-          { whatsappNumber: { contains: cleanPhone } }
+          { mobile: { contains: last10 } },
+          { whatsappNumber: { contains: last10 } }
         ]
       }
+    });
+
+    let customer = candidates.find(c => {
+      const cKeys = [...getPhoneLookupKeys(c.mobile || ""), ...getPhoneLookupKeys(c.whatsappNumber || "")];
+      return lookupKeys.some(k => cKeys.includes(k));
     });
 
     if (!customer) {
@@ -4743,21 +4750,49 @@ export async function createCRMCustomerAction(data: {
   contactPerson: string;
   mobile: string;
   businessName?: string;
-  email?: string;
-  city?: string;
-  state?: string;
   customerType?: string;
 }) {
   try {
-    const customer = await prisma.customer.create({
+    const cleanDigits = data.mobile.replace(/\D/g, "");
+    const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+    const lookupKeys = getPhoneLookupKeys(data.mobile);
+
+    const candidates = await prisma.customer.findMany({
+      where: {
+        OR: [
+          { mobile: { contains: last10 } },
+          { whatsappNumber: { contains: last10 } }
+        ]
+      }
+    });
+
+    let customer = candidates.find(c => {
+      const cKeys = [...getPhoneLookupKeys(c.mobile || ""), ...getPhoneLookupKeys(c.whatsappNumber || "")];
+      return lookupKeys.some(k => cKeys.includes(k));
+    });
+
+    if (customer) {
+      customer = await prisma.customer.update({
+        where: { id: customer.id },
+        data: {
+          contactPerson: data.contactPerson || customer.contactPerson,
+          businessName: data.businessName || customer.businessName,
+          customerType: data.customerType || customer.customerType
+        }
+      });
+      return { success: true, customer, isExisting: true };
+    }
+
+    customer = await prisma.customer.create({
       data: {
         contactPerson: data.contactPerson,
         mobile: data.mobile,
+        whatsappNumber: data.mobile,
         businessName: data.businessName || data.contactPerson,
         customerType: data.customerType || "Retailer"
       }
     });
-    return { success: true, customer };
+    return { success: true, customer, isExisting: false };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -6289,46 +6324,58 @@ export async function createWhatsAppContactAction(data: {
   try {
     const cleanPhone = data.mobile.replace(/\D/g, "");
     if (!cleanPhone || cleanPhone.length < 7) {
-      return { success: false, error: "Valid mobile number is required." };
+      return { success: false, error: "Valid mobile number is required (min 7 digits)." };
     }
 
     const cleanTags = (data.tags || []).map(t => t.trim()).filter(Boolean);
     const tagsStr = cleanTags.join(", ");
 
-    // Check if customer already exists by phone
-    let customer = await prisma.customer.findFirst({
+    const last10 = cleanPhone.slice(-10);
+    const lookupKeys = getPhoneLookupKeys(data.mobile);
+
+    // Search candidates using last10 or clean digits
+    const candidates = await prisma.customer.findMany({
       where: {
         OR: [
-          { mobile: { contains: cleanPhone } },
-          { whatsappNumber: { contains: cleanPhone } }
+          { mobile: { contains: last10 } },
+          { whatsappNumber: { contains: last10 } }
         ]
       }
     });
 
+    let customer = candidates.find(c => {
+      const cKeys = [...getPhoneLookupKeys(c.mobile || ""), ...getPhoneLookupKeys(c.whatsappNumber || "")];
+      return lookupKeys.some(k => cKeys.includes(k));
+    });
+
+    let isExisting = false;
+
     if (customer) {
-      // Update existing
+      isExisting = true;
+      // Existing contact matched -> Update in place, DO NOT CREATE DUPLICATE!
+      const oldTags = customer.tags ? customer.tags.split(",").map(t => t.trim()).filter(Boolean) : [];
+      const mergedTags = Array.from(new Set([...oldTags, ...cleanTags])).join(", ");
+
       customer = await prisma.customer.update({
         where: { id: customer.id },
         data: {
           contactPerson: data.name || customer.contactPerson,
-          tags: tagsStr || customer.tags,
-          leadStage: data.pushToCrm ? "CRM Synced" : customer.leadStage,
-          notes: data.pushToCrm && !customer.notes?.includes("PUSHED_TO_CRM")
-            ? (customer.notes ? `${customer.notes} | PUSHED_TO_CRM` : "PUSHED_TO_CRM")
-            : customer.notes
+          tags: mergedTags || customer.tags,
+          leadStage: data.pushToCrm ? "CRM Synced" : customer.leadStage
         }
       });
     } else {
+      // Brand new contact
+      const formattedPhone = cleanPhone.length === 10 ? `+91${cleanPhone}` : (cleanPhone.startsWith("+") ? cleanPhone : `+${cleanPhone}`);
       customer = await prisma.customer.create({
         data: {
           contactPerson: data.name,
           businessName: data.name,
-          mobile: cleanPhone,
-          whatsappNumber: cleanPhone,
+          mobile: formattedPhone,
+          whatsappNumber: formattedPhone,
           tags: tagsStr || null,
           status: "New Lead",
-          leadStage: data.pushToCrm ? "CRM Synced" : "Contacted",
-          notes: data.pushToCrm ? "PUSHED_TO_CRM" : null
+          leadStage: data.pushToCrm ? "CRM Synced" : "Contacted"
         }
       });
     }
@@ -6344,7 +6391,7 @@ export async function createWhatsAppContactAction(data: {
           data: {
             accountId: account.id,
             customerId: customer.id,
-            tags: tagsStr || null,
+            tags: customer.tags || null,
             status: "OPEN"
           }
         });
@@ -6357,7 +6404,14 @@ export async function createWhatsAppContactAction(data: {
 
     revalidatePath("/whatsapp/templates");
     revalidatePath("/whatsapp/contacts");
-    return { success: true, customer };
+    return {
+      success: true,
+      customer,
+      isExisting,
+      message: isExisting
+        ? `Contact with phone ${data.mobile} already exists (${customer.contactPerson || customer.businessName}). Updated details without creating duplicate.`
+        : `Created new contact.`
+    };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -6410,16 +6464,21 @@ export async function importWhatsAppContactsBatchAction(
 
     // Pre-fetch existing customers to optimize lookups
     const existingCustomers = await prisma.customer.findMany({
-      select: { id: true, mobile: true, whatsappNumber: true, tags: true, notes: true, contactPerson: true, businessName: true }
+      select: { id: true, mobile: true, whatsappNumber: true, tags: true, contactPerson: true, businessName: true }
     });
 
-    // Map by last 10 digits for fast deduplication and lookups
+    // Multi-key indexing for ironclad deduplication across all phone formats
     const phoneMap = new Map<string, typeof existingCustomers[0]>();
     for (const c of existingCustomers) {
-      const p1 = (c.mobile || "").replace(/\D/g, "");
-      const p2 = (c.whatsappNumber || "").replace(/\D/g, "");
-      if (p1.length >= 7) phoneMap.set(p1.slice(-10), c);
-      if (p2.length >= 7) phoneMap.set(p2.slice(-10), c);
+      const keys = [
+        ...getPhoneLookupKeys(c.mobile || ""),
+        ...getPhoneLookupKeys(c.whatsappNumber || "")
+      ];
+      for (const k of keys) {
+        if (!phoneMap.has(k)) {
+          phoneMap.set(k, c);
+        }
+      }
     }
 
     const tagsToCreate = new Set<string>();
@@ -6454,6 +6513,15 @@ export async function importWhatsAppContactsBatchAction(
       const formattedPhone = `+${finalDigits}`;
       const searchKey = finalDigits.slice(-10);
 
+      // Multi-key resolution for this contact
+      const lookupKeys = new Set<string>();
+      getPhoneLookupKeys(rawPhoneVal).forEach(k => lookupKeys.add(k));
+      getPhoneLookupKeys(formattedPhone).forEach(k => lookupKeys.add(k));
+      getPhoneLookupKeys(finalDigits).forEach(k => lookupKeys.add(k));
+      if (rowCc) {
+        getPhoneLookupKeys(rowCc + rawDigits).forEach(k => lookupKeys.add(k));
+      }
+
       // Name & details resolution (Clean: Only Name, Shop, Tags, Type)
       const rawName = String(row.fullName || row.contactPerson || row.name || row.businessName || row.shopName || "").trim();
       const contactPerson = rawName || `Customer ${searchKey}`;
@@ -6467,27 +6535,36 @@ export async function importWhatsAppContactsBatchAction(
       }
       rowTagsRaw.forEach(t => tagsToCreate.add(t));
 
-      // Check if existing customer matches
-      const existing = phoneMap.get(searchKey);
+      // Check if existing customer matches ANY variation of this phone number
+      let existing: typeof existingCustomers[0] | undefined = undefined;
+      for (const k of Array.from(lookupKeys)) {
+        if (phoneMap.has(k)) {
+          existing = phoneMap.get(k);
+          break;
+        }
+      }
 
       if (existing) {
-        // Merge tags
+        // Contact ALREADY EXISTS -> Update in place, DO NOT CREATE A DUPLICATE!
         let mergedTags = rowTagsRaw;
         if (appendTags && existing.tags) {
           const oldTags = existing.tags.split(",").map(t => t.trim()).filter(Boolean);
           mergedTags = Array.from(new Set([...oldTags, ...rowTagsRaw]));
         }
 
-        await prisma.customer.update({
+        const updatedCust = await prisma.customer.update({
           where: { id: existing.id },
           data: {
-            contactPerson: contactPerson !== `Customer ${searchKey}` ? contactPerson : existing.contactPerson,
-            businessName: businessName || undefined,
+            contactPerson: (contactPerson && !contactPerson.startsWith("Customer ")) ? contactPerson : existing.contactPerson,
+            businessName: businessName || existing.businessName,
             customerType: customerType || undefined,
             tags: mergedTags.join(", "),
             leadStage: pushToCrm ? "CRM Synced" : undefined
           }
         });
+
+        // Register all keys to point to the updated customer
+        lookupKeys.forEach(k => phoneMap.set(k, updatedCust as any));
 
         // Also update tags on WhatsApp conversation if exists
         await prisma.whatsAppConversation.updateMany({
@@ -6498,7 +6575,7 @@ export async function importWhatsAppContactsBatchAction(
         importedCustomerIds.push(existing.id);
         updatedCount++;
       } else {
-        // Create new customer
+        // Create brand-new customer
         const newCust = await prisma.customer.create({
           data: {
             contactPerson,
@@ -6512,7 +6589,10 @@ export async function importWhatsAppContactsBatchAction(
           }
         });
 
-        phoneMap.set(searchKey, newCust as any);
+        // Register ALL lookup keys for this new customer immediately so subsequent rows in same file will match
+        lookupKeys.forEach(k => phoneMap.set(k, newCust as any));
+        getPhoneLookupKeys(formattedPhone).forEach(k => phoneMap.set(k, newCust as any));
+
         importedCustomerIds.push(newCust.id);
         createdCount++;
       }
@@ -6544,6 +6624,118 @@ export async function importWhatsAppContactsBatchAction(
     };
   } catch (error: any) {
     console.error("[importWhatsAppContactsBatchAction] Error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ---------------------------------------------------------
+// MERGE & PURGE EXISTING DUPLICATE CONTACTS IN DATABASE
+// ---------------------------------------------------------
+export async function cleanExistingDuplicateContactsAction() {
+  try {
+    const allCustomers = await prisma.customer.findMany({
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        mobile: true,
+        whatsappNumber: true,
+        contactPerson: true,
+        businessName: true,
+        tags: true,
+        customerType: true
+      }
+    });
+
+    const groups = new Map<string, typeof allCustomers>();
+
+    for (const c of allCustomers) {
+      const key = normalizePhoneKey(c.mobile || c.whatsappNumber || "");
+      if (!key || key.length < 7) continue;
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key)!.push(c);
+    }
+
+    let mergedGroupsCount = 0;
+    let deletedRecordsCount = 0;
+
+    for (const [_, custList] of Array.from(groups.entries())) {
+      if (custList.length <= 1) continue;
+
+      // Keep the primary customer (first/oldest)
+      const primary = custList[0];
+      const duplicates = custList.slice(1);
+
+      // Collect unique tags
+      const allTags = new Set<string>();
+      if (primary.tags) {
+        primary.tags.split(",").map(t => t.trim()).filter(Boolean).forEach(t => allTags.add(t));
+      }
+
+      for (const dupe of duplicates) {
+        if (dupe.tags) {
+          dupe.tags.split(",").map(t => t.trim()).filter(Boolean).forEach(t => allTags.add(t));
+        }
+
+        // Reassign conversations to primary
+        await prisma.whatsAppConversation.updateMany({
+          where: { customerId: dupe.id },
+          data: { customerId: primary.id }
+        });
+
+        // Reassign relations to primary
+        await prisma.order.updateMany({
+          where: { customerId: dupe.id },
+          data: { customerId: primary.id }
+        }).catch(() => {});
+
+        await prisma.quotation.updateMany({
+          where: { customerId: dupe.id },
+          data: { customerId: primary.id }
+        }).catch(() => {});
+
+        await prisma.invoice.updateMany({
+          where: { customerId: dupe.id },
+          data: { customerId: primary.id }
+        }).catch(() => {});
+
+        await prisma.payment.updateMany({
+          where: { customerId: dupe.id },
+          data: { customerId: primary.id }
+        }).catch(() => {});
+
+        // Safely delete duplicate record
+        await prisma.customer.delete({
+          where: { id: dupe.id }
+        }).catch(() => {});
+
+        deletedRecordsCount++;
+      }
+
+      // Update primary with combined tags & best name
+      await prisma.customer.update({
+        where: { id: primary.id },
+        data: {
+          tags: Array.from(allTags).join(", ") || primary.tags,
+          businessName: primary.businessName && !primary.businessName.startsWith("Customer ")
+            ? primary.businessName
+            : (duplicates.find(d => d.businessName && !d.businessName.startsWith("Customer "))?.businessName || primary.businessName)
+        }
+      });
+
+      mergedGroupsCount++;
+    }
+
+    revalidatePath("/whatsapp/contacts");
+    return {
+      success: true,
+      mergedGroupsCount,
+      deletedRecordsCount,
+      message: `Database cleaned: merged ${deletedRecordsCount} duplicate records across ${mergedGroupsCount} contacts.`
+    };
+  } catch (error: any) {
+    console.error("[cleanExistingDuplicateContactsAction] Error:", error);
     return { success: false, error: error.message };
   }
 }
