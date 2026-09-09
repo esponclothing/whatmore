@@ -5962,8 +5962,26 @@ export async function getWhatsAppContactsListAction(params?: {
       where,
       orderBy: { createdAt: "desc" },
       include: {
+        assignedSalesperson: {
+          select: {
+            id: true,
+            user: { select: { name: true } },
+            team: { select: { id: true, name: true } }
+          }
+        },
         whatsAppConversations: {
-          select: { id: true, tags: true, lastMessageAt: true },
+          select: {
+            id: true,
+            tags: true,
+            lastMessageAt: true,
+            team: { select: { id: true, name: true } },
+            assignedEmployee: {
+              select: {
+                id: true,
+                user: { select: { name: true } }
+              }
+            }
+          },
           take: 1,
           orderBy: { updatedAt: "desc" }
         },
@@ -6038,6 +6056,15 @@ export async function getWhatsAppContactsListAction(params?: {
       const convTags = (c.whatsAppConversations?.[0]?.tags || "").split(",").map(t => t.trim()).filter(Boolean);
       const allTags = Array.from(new Set([...custTags, ...convTags]));
 
+      const assignedAgentName =
+        c.assignedSalesperson?.user?.name ||
+        c.whatsAppConversations?.[0]?.assignedEmployee?.user?.name ||
+        null;
+      const assignedTeamName =
+        c.assignedSalesperson?.team?.name ||
+        c.whatsAppConversations?.[0]?.team?.name ||
+        null;
+
       return {
         id: c.id,
         name: c.contactPerson || c.businessName || "Unknown Customer",
@@ -6050,7 +6077,9 @@ export async function getWhatsAppContactsListAction(params?: {
         leadStage: c.leadStage,
         status: c.status,
         city: c.city || "",
-        conversationId: c.whatsAppConversations?.[0]?.id || null
+        conversationId: c.whatsAppConversations?.[0]?.id || null,
+        assignedAgent: assignedAgentName,
+        assignedTeam: assignedTeamName
       };
     });
 
@@ -6338,6 +6367,549 @@ export async function createWhatsAppContactAction(data: {
     return { success: true, customer };
   } catch (error: any) {
     return { success: false, error: error.message };
+  }
+}
+
+// ---------------------------------------------------------
+// BATCH IMPORT WHATSAPP CONTACTS FROM EXCEL / CSV
+// ---------------------------------------------------------
+export interface RawImportContactRow {
+  name?: string;
+  fullName?: string;
+  contactPerson?: string;
+  mobile?: string | number;
+  phone?: string | number;
+  phoneNumber?: string | number;
+  countryCode?: string | number;
+  businessName?: string;
+  shopName?: string;
+  companyName?: string;
+  email?: string;
+  tags?: string;
+  city?: string;
+  state?: string;
+  pincode?: string | number;
+  customerType?: string;
+  notes?: string;
+}
+
+export interface ImportContactsBatchOptions {
+  defaultCountryCode?: string; // e.g. "+91"
+  appendTags?: boolean; // default true (merges tags instead of replacing)
+  pushToCrm?: boolean;
+  batchTag?: string; // e.g. "ExcelImport_Sep2026"
+}
+
+export async function importWhatsAppContactsBatchAction(
+  rows: RawImportContactRow[],
+  options?: ImportContactsBatchOptions
+) {
+  try {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return { success: false, error: "No contact rows provided for import." };
+    }
+
+    const defaultCc = (options?.defaultCountryCode || "+91").replace(/\D/g, "") || "91";
+    const appendTags = options?.appendTags !== false;
+    const batchTag = options?.batchTag?.trim();
+    const pushToCrm = Boolean(options?.pushToCrm);
+
+    let createdCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
+    const errors: string[] = [];
+    const importedCustomerIds: string[] = [];
+
+    // Pre-fetch existing customers to optimize lookups
+    const existingCustomers = await prisma.customer.findMany({
+      select: { id: true, mobile: true, whatsappNumber: true, tags: true, notes: true, contactPerson: true, businessName: true }
+    });
+
+    // Map by last 10 digits for fast deduplication and lookups
+    const phoneMap = new Map<string, typeof existingCustomers[0]>();
+    for (const c of existingCustomers) {
+      const p1 = (c.mobile || "").replace(/\D/g, "");
+      const p2 = (c.whatsappNumber || "").replace(/\D/g, "");
+      if (p1.length >= 7) phoneMap.set(p1.slice(-10), c);
+      if (p2.length >= 7) phoneMap.set(p2.slice(-10), c);
+    }
+
+    const tagsToCreate = new Set<string>();
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rawPhoneVal = String(row.phoneNumber || row.phone || row.mobile || "").trim();
+      const rawDigits = rawPhoneVal.replace(/\D/g, "");
+
+      if (!rawDigits || rawDigits.length < 7) {
+        skippedCount++;
+        if (errors.length < 10) {
+          errors.push(`Row ${i + 1}: Invalid or missing phone number ("${rawPhoneVal}").`);
+        }
+        continue;
+      }
+
+      // Determine Country Code & Final Digits
+      let rowCc = String(row.countryCode || "").replace(/\D/g, "");
+      let finalDigits = rawDigits;
+
+      if (rawDigits.length === 10) {
+        finalDigits = (rowCc || defaultCc) + rawDigits;
+      } else if (rawDigits.length === 11 && rawDigits.startsWith("0")) {
+        finalDigits = (rowCc || defaultCc) + rawDigits.slice(1);
+      } else if (rawDigits.length > 10) {
+        finalDigits = rawDigits;
+      } else {
+        finalDigits = (rowCc || defaultCc) + rawDigits;
+      }
+
+      const formattedPhone = `+${finalDigits}`;
+      const searchKey = finalDigits.slice(-10);
+
+      // Name & details resolution
+      const rawName = String(row.fullName || row.contactPerson || row.name || row.businessName || row.shopName || "").trim();
+      const contactPerson = rawName || `Customer ${searchKey}`;
+      const businessName = String(row.businessName || row.shopName || row.companyName || contactPerson).trim();
+      const email = String(row.email || "").trim() || null;
+      const city = String(row.city || "").trim() || null;
+      const state = String(row.state || "").trim() || null;
+      const pincode = String(row.pincode || "").trim() || null;
+      const customerType = String(row.customerType || "Retailer").trim();
+      const notes = String(row.notes || "").trim() || null;
+
+      // Tag parsing
+      const rowTagsRaw = String(row.tags || "").split(/[,;\n•]+/).map(t => t.trim()).filter(Boolean);
+      if (batchTag && !rowTagsRaw.includes(batchTag)) {
+        rowTagsRaw.push(batchTag);
+      }
+      rowTagsRaw.forEach(t => tagsToCreate.add(t));
+
+      // Check if existing customer matches
+      const existing = phoneMap.get(searchKey);
+
+      if (existing) {
+        // Merge tags
+        let mergedTags = rowTagsRaw;
+        if (appendTags && existing.tags) {
+          const oldTags = existing.tags.split(",").map(t => t.trim()).filter(Boolean);
+          mergedTags = Array.from(new Set([...oldTags, ...rowTagsRaw]));
+        }
+
+        const updatedNotes = pushToCrm && !existing.notes?.includes("PUSHED_TO_CRM")
+          ? (existing.notes ? `${existing.notes} | PUSHED_TO_CRM` : "PUSHED_TO_CRM")
+          : (notes || existing.notes);
+
+        await prisma.customer.update({
+          where: { id: existing.id },
+          data: {
+            contactPerson: contactPerson !== `Customer ${searchKey}` ? contactPerson : existing.contactPerson,
+            businessName: businessName || undefined,
+            email: email || undefined,
+            city: city || undefined,
+            state: state || undefined,
+            pincode: pincode || undefined,
+            tags: mergedTags.join(", "),
+            notes: updatedNotes || undefined,
+            leadStage: pushToCrm ? "CRM Synced" : undefined
+          }
+        });
+
+        // Also update tags on WhatsApp conversation if exists
+        await prisma.whatsAppConversation.updateMany({
+          where: { customerId: existing.id },
+          data: { tags: mergedTags.join(", ") }
+        });
+
+        importedCustomerIds.push(existing.id);
+        updatedCount++;
+      } else {
+        // Create new customer
+        const newCust = await prisma.customer.create({
+          data: {
+            contactPerson,
+            businessName,
+            mobile: formattedPhone,
+            whatsappNumber: formattedPhone,
+            email,
+            city,
+            state,
+            pincode,
+            customerType,
+            tags: rowTagsRaw.join(", "),
+            status: "New Lead",
+            leadStage: pushToCrm ? "CRM Synced" : "Contacted",
+            notes: pushToCrm ? (notes ? `${notes} | PUSHED_TO_CRM` : "PUSHED_TO_CRM") : notes
+          }
+        });
+
+        phoneMap.set(searchKey, newCust as any);
+        importedCustomerIds.push(newCust.id);
+        createdCount++;
+      }
+    }
+
+    // Ensure all unique tags are saved in WhatsAppTag table for dropdown visibility
+    for (const tagName of Array.from(tagsToCreate)) {
+      const exists = await prisma.whatsAppTag.findFirst({
+        where: { name: { equals: tagName, mode: 'insensitive' } }
+      });
+      if (!exists) {
+        await prisma.whatsAppTag.create({
+          data: { name: tagName, color: '#e0e7ff' }
+        }).catch(() => {});
+      }
+    }
+
+    revalidatePath("/whatsapp/contacts");
+    revalidatePath("/whatsapp/templates");
+
+    return {
+      success: true,
+      totalProcessed: rows.length,
+      createdCount,
+      updatedCount,
+      skippedCount,
+      importedCustomerIds,
+      errors: errors.slice(0, 10)
+    };
+  } catch (error: any) {
+    console.error("[importWhatsAppContactsBatchAction] Error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ---------------------------------------------------------
+// POST-IMPORT ASSIGNMENT: AGENT, TEAM, OR ROUND-ROBIN
+// ---------------------------------------------------------
+export interface BatchAssignmentParams {
+  customerIds: string[];
+  mode: "NONE" | "DIRECT_AGENT" | "TEAM" | "ROUND_ROBIN";
+  agentId?: string;
+  teamId?: string;
+  roundRobinBasis?: "TEAM" | "AGENTS" | "ALL_ACTIVE";
+  agentIds?: string[];
+}
+
+export async function assignImportedContactsBatchAction(params: BatchAssignmentParams) {
+  try {
+    const { customerIds, mode, agentId, teamId, roundRobinBasis, agentIds } = params;
+
+    if (!Array.isArray(customerIds) || customerIds.length === 0) {
+      return { success: false, error: "No contacts provided for assignment." };
+    }
+
+    if (mode === "NONE") {
+      return { success: true, assignedCount: 0, message: "Contacts kept unassigned." };
+    }
+
+    let account = await prisma.whatsAppAccount.findFirst();
+    if (!account) {
+      account = await prisma.whatsAppAccount.create({
+        data: {
+          name: "Main Sales",
+          phoneNumber: "+91 9876543210",
+          status: "CONNECTED"
+        }
+      });
+    }
+
+    // MODE 1: DIRECT AGENT ASSIGNMENT
+    if (mode === "DIRECT_AGENT") {
+      if (!agentId) {
+        return { success: false, error: "Please select an agent to assign contacts to." };
+      }
+
+      const emp = await prisma.employee.findUnique({
+        where: { id: agentId },
+        include: { user: true, team: true }
+      });
+
+      if (!emp) {
+        return { success: false, error: "Selected agent not found." };
+      }
+
+      const agentName = emp.user?.name || "Assigned Agent";
+
+      // 1. Update customer records
+      await prisma.customer.updateMany({
+        where: { id: { in: customerIds } },
+        data: { assignedSalespersonId: emp.id }
+      });
+
+      // 2. Update or create WhatsApp conversations
+      for (const cid of customerIds) {
+        let conv = await prisma.whatsAppConversation.findFirst({
+          where: { customerId: cid },
+          orderBy: { updatedAt: 'desc' }
+        });
+
+        if (conv) {
+          await prisma.whatsAppConversation.update({
+            where: { id: conv.id },
+            data: {
+              assignedEmployeeId: emp.id,
+              teamId: emp.teamId || conv.teamId,
+              status: "OPEN"
+            }
+          });
+        } else {
+          conv = await prisma.whatsAppConversation.create({
+            data: {
+              accountId: account.id,
+              customerId: cid,
+              assignedEmployeeId: emp.id,
+              teamId: emp.teamId || undefined,
+              status: "OPEN"
+            }
+          });
+        }
+
+        await prisma.whatsAppMessage.create({
+          data: {
+            conversationId: conv.id,
+            senderType: "SYSTEM",
+            senderName: "System Assignment",
+            messageType: "TEXT",
+            content: `Internal Note: Contact assigned to ${agentName} via batch import.`,
+            isInternalNote: true,
+            status: "SENT",
+            sentAt: new Date()
+          }
+        }).catch(() => {});
+      }
+
+      revalidatePath("/whatsapp/contacts");
+      revalidatePath("/whatsapp/inbox");
+      revalidatePath("/whatsapp/team-inbox");
+
+      return {
+        success: true,
+        assignedCount: customerIds.length,
+        mode: "DIRECT_AGENT",
+        targetName: agentName,
+        message: `Successfully assigned ${customerIds.length} contacts to ${agentName}.`
+      };
+    }
+
+    // MODE 2: TEAM ASSIGNMENT
+    if (mode === "TEAM") {
+      if (!teamId) {
+        return { success: false, error: "Please select a team to assign contacts to." };
+      }
+
+      const team = await prisma.team.findUnique({
+        where: { id: teamId },
+        include: { members: { include: { user: true } } }
+      });
+
+      if (!team) {
+        return { success: false, error: "Selected team not found." };
+      }
+
+      for (const cid of customerIds) {
+        let conv = await prisma.whatsAppConversation.findFirst({
+          where: { customerId: cid },
+          orderBy: { updatedAt: 'desc' }
+        });
+
+        if (conv) {
+          await prisma.whatsAppConversation.update({
+            where: { id: conv.id },
+            data: { teamId: team.id, status: "OPEN" }
+          });
+        } else {
+          conv = await prisma.whatsAppConversation.create({
+            data: {
+              accountId: account.id,
+              customerId: cid,
+              teamId: team.id,
+              status: "OPEN"
+            }
+          });
+        }
+
+        await prisma.whatsAppMessage.create({
+          data: {
+            conversationId: conv.id,
+            senderType: "SYSTEM",
+            senderName: "System Assignment",
+            messageType: "TEXT",
+            content: `Internal Note: Contact assigned to Team ${team.name} via batch import.`,
+            isInternalNote: true,
+            status: "SENT",
+            sentAt: new Date()
+          }
+        }).catch(() => {});
+      }
+
+      revalidatePath("/whatsapp/contacts");
+      revalidatePath("/whatsapp/inbox");
+      revalidatePath("/whatsapp/team-inbox");
+
+      return {
+        success: true,
+        assignedCount: customerIds.length,
+        mode: "TEAM",
+        targetName: team.name,
+        message: `Successfully assigned ${customerIds.length} contacts to Team "${team.name}".`
+      };
+    }
+
+    // MODE 3: ROUND-ROBIN DISTRIBUTION (ON SELECTABLE BASIS: TEAM OR SELECTED AGENTS)
+    if (mode === "ROUND_ROBIN") {
+      let candidateAgents: any[] = [];
+      let basisLabel = "";
+
+      if (roundRobinBasis === "TEAM") {
+        if (!teamId) {
+          return { success: false, error: "Please select a team for team-based round-robin distribution." };
+        }
+        const team = await prisma.team.findUnique({ where: { id: teamId } });
+        basisLabel = team?.name ? `Team ${team.name}` : "Team";
+
+        candidateAgents = await prisma.employee.findMany({
+          where: { teamId, chatAvailable: { not: false } },
+          include: { user: true }
+        });
+        // Fallback to all team members if none marked active
+        if (candidateAgents.length === 0) {
+          candidateAgents = await prisma.employee.findMany({
+            where: { teamId },
+            include: { user: true }
+          });
+        }
+      } else if (roundRobinBasis === "AGENTS") {
+        if (!Array.isArray(agentIds) || agentIds.length === 0) {
+          return { success: false, error: "Please select at least 1 agent for round-robin distribution." };
+        }
+        basisLabel = `${agentIds.length} Selected Agents`;
+        candidateAgents = await prisma.employee.findMany({
+          where: { id: { in: agentIds } },
+          include: { user: true }
+        });
+      } else {
+        // ALL ACTIVE AGENTS
+        basisLabel = "All Active Agents";
+        candidateAgents = await prisma.employee.findMany({
+          where: { chatAvailable: { not: false } },
+          include: { user: true }
+        });
+        if (candidateAgents.length === 0) {
+          candidateAgents = await prisma.employee.findMany({
+            include: { user: true }
+          });
+        }
+      }
+
+      if (candidateAgents.length === 0) {
+        return {
+          success: false,
+          error: "No agents found in the selected round-robin pool. Please check team membership or agent availability."
+        };
+      }
+
+      // Distribute evenly / cyclically across the candidate agent pool
+      for (let i = 0; i < customerIds.length; i++) {
+        const cid = customerIds[i];
+        const assignedEmp = candidateAgents[i % candidateAgents.length];
+        const empName = assignedEmp.user?.name || "Agent";
+
+        await prisma.customer.update({
+          where: { id: cid },
+          data: { assignedSalespersonId: assignedEmp.id }
+        });
+
+        let conv = await prisma.whatsAppConversation.findFirst({
+          where: { customerId: cid },
+          orderBy: { updatedAt: 'desc' }
+        });
+
+        if (conv) {
+          await prisma.whatsAppConversation.update({
+            where: { id: conv.id },
+            data: {
+              assignedEmployeeId: assignedEmp.id,
+              teamId: assignedEmp.teamId || conv.teamId,
+              status: "OPEN"
+            }
+          });
+        } else {
+          conv = await prisma.whatsAppConversation.create({
+            data: {
+              accountId: account.id,
+              customerId: cid,
+              assignedEmployeeId: assignedEmp.id,
+              teamId: assignedEmp.teamId || undefined,
+              status: "OPEN"
+            }
+          });
+        }
+
+        await prisma.whatsAppMessage.create({
+          data: {
+            conversationId: conv.id,
+            senderType: "SYSTEM",
+            senderName: "Round-Robin Assignment",
+            messageType: "TEXT",
+            content: `Internal Note: Contact assigned to ${empName} via Round-Robin (${basisLabel}).`,
+            isInternalNote: true,
+            status: "SENT",
+            sentAt: new Date()
+          }
+        }).catch(() => {});
+      }
+
+      revalidatePath("/whatsapp/contacts");
+      revalidatePath("/whatsapp/inbox");
+      revalidatePath("/whatsapp/team-inbox");
+
+      return {
+        success: true,
+        assignedCount: customerIds.length,
+        mode: "ROUND_ROBIN",
+        agentCount: candidateAgents.length,
+        basis: roundRobinBasis,
+        message: `Distributed ${customerIds.length} contacts across ${candidateAgents.length} agents via Round-Robin (${basisLabel}).`
+      };
+    }
+
+    return { success: false, error: "Invalid assignment mode specified." };
+  } catch (error: any) {
+    console.error("[assignImportedContactsBatchAction] Error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ---------------------------------------------------------
+// EXPORT ALL WHATSAPP CONTACTS
+// ---------------------------------------------------------
+export async function exportAllWhatsAppContactsAction() {
+  try {
+    const customers = await prisma.customer.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        contactPerson: true,
+        businessName: true,
+        mobile: true,
+        whatsappNumber: true,
+        email: true,
+        city: true,
+        state: true,
+        pincode: true,
+        customerType: true,
+        tags: true,
+        notes: true,
+        status: true,
+        leadStage: true,
+        createdAt: true
+      },
+      take: 10000
+    });
+
+    return { success: true, contacts: customers };
+  } catch (error: any) {
+    return { success: false, error: error.message, contacts: [] };
   }
 }
 

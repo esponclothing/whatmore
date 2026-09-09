@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import * as XLSX from "xlsx";
 import {
   Users,
   Search,
@@ -21,19 +22,35 @@ import {
   Check,
   AlertCircle,
   Sparkles,
-  ArrowUpRight
+  ArrowUpRight,
+  Download,
+  Upload,
+  FileSpreadsheet,
+  FileText,
+  Info,
+  CheckCheck,
+  Shuffle,
+  UserCheck,
+  UserX,
+  Layers,
+  Briefcase
 } from "lucide-react";
 import {
   getWhatsAppContactsListAction,
   toggleContactCrmStatusAction,
   updateContactTagsAction,
   createWhatsAppContactAction,
-  getOrCreateWhatsAppConversationForContactAction
+  getOrCreateWhatsAppConversationForContactAction,
+  importWhatsAppContactsBatchAction,
+  exportAllWhatsAppContactsAction,
+  assignImportedContactsBatchAction,
+  getAllEmployeesAndTeams
 } from "@/app/actions/whatsAppPlatformActions";
-import { formatWhatsAppPhone } from "@/lib/phoneUtils";
+import { formatWhatsAppPhone, parseDynamicPhone } from "@/lib/phoneUtils";
 
 export default function WhatsAppContactsComponent() {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [contacts, setContacts] = useState<any[]>([]);
   const [stats, setStats] = useState({ total: 0, done: 0, notDone: 0 });
   const [isCrmConnected, setIsCrmConnected] = useState<boolean>(false);
@@ -50,6 +67,33 @@ export default function WhatsAppContactsComponent() {
   const [toastMsg, setToastMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [openingChatId, setOpeningChatId] = useState<string | null>(null);
+
+  // Export & Import states
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFileName, setImportFileName] = useState("");
+  const [parsingFile, setParsingFile] = useState(false);
+  const [parsedRows, setParsedRows] = useState<any[]>([]);
+  const [importError, setImportError] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importDefaultCc, setImportDefaultCc] = useState("+91");
+  const [importBatchTag, setImportBatchTag] = useState("");
+  const [importAppendTags, setImportAppendTags] = useState(true);
+  const [importPushToCrm, setImportPushToCrm] = useState(false);
+
+  // Post-Import Assignment States
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [importedCustomerIds, setImportedCustomerIds] = useState<string[]>([]);
+  const [importedCount, setImportedCount] = useState(0);
+  const [teamsList, setTeamsList] = useState<any[]>([]);
+  const [employeesList, setEmployeesList] = useState<any[]>([]);
+  const [assignMode, setAssignMode] = useState<"NONE" | "DIRECT_AGENT" | "TEAM" | "ROUND_ROBIN">("NONE");
+  const [assignAgentId, setAssignAgentId] = useState("");
+  const [assignTeamId, setAssignTeamId] = useState("");
+  const [roundRobinBasis, setRoundRobinBasis] = useState<"TEAM" | "AGENTS" | "ALL_ACTIVE">("TEAM");
+  const [assignRoundRobinTeamId, setAssignRoundRobinTeamId] = useState("");
+  const [assignSelectedAgentIds, setAssignSelectedAgentIds] = useState<string[]>([]);
+  const [assigningLoading, setAssigningLoading] = useState(false);
 
   // Add Contact Modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -82,6 +126,31 @@ export default function WhatsAppContactsComponent() {
         }
       })
       .catch(() => {});
+  }, []);
+
+  // Load Teams and Employees for Assignment
+  const loadEmployeesAndTeams = async () => {
+    try {
+      const res = await getAllEmployeesAndTeams();
+      if (res.success) {
+        const teams = res.teams || [];
+        const employees = res.employees || [];
+        setTeamsList(teams);
+        setEmployeesList(employees);
+        if (teams.length > 0) {
+          setAssignTeamId(teams[0].id);
+          setAssignRoundRobinTeamId(teams[0].id);
+        }
+        if (employees.length > 0) {
+          setAssignAgentId(employees[0].id);
+          setAssignSelectedAgentIds(employees.slice(0, 4).map((e: any) => e.id));
+        }
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    loadEmployeesAndTeams();
   }, []);
 
   const fetchContacts = async () => {
@@ -270,6 +339,444 @@ export default function WhatsAppContactsComponent() {
     return name.slice(0, 2).toUpperCase();
   };
 
+  // ---------------------------------------------------------
+  // EXCEL DUMMY TEMPLATE DOWNLOAD (WITH EXACT REQUIRED FIELDS)
+  // ---------------------------------------------------------
+  const handleDownloadDummyTemplate = () => {
+    try {
+      const headers = [
+        "Phone Number (Required)",
+        "Country Code",
+        "Full Name (Required)",
+        "Business / Shop Name",
+        "Email",
+        "Tags (Comma-Separated)",
+        "City",
+        "State",
+        "Pincode",
+        "Customer Type",
+        "Notes"
+      ];
+
+      const sampleRows = [
+        [
+          "9876543210",
+          "+91",
+          "Rahul Sharma",
+          "Sharma Activewear & Sports",
+          "rahul@sharmasports.in",
+          "Wholesale, VIP Buyer, Trackpants",
+          "New Delhi",
+          "Delhi",
+          "110001",
+          "Wholesaler",
+          "Regular bulk buyer for gym activewear & trackpants"
+        ],
+        [
+          "9123456780",
+          "+91",
+          "Priya Verma",
+          "FitZone Studios",
+          "priya@fitzone.com",
+          "Retail, High Spender, Gym Co-Ords",
+          "Mumbai",
+          "Maharashtra",
+          "400050",
+          "Retailer",
+          "Interested in women gym wear, co-ords, and sports shorts"
+        ],
+        [
+          "7206066678",
+          "+91",
+          "Amit Patel",
+          "Patel Fitness Hub",
+          "amit@patelfitness.com",
+          "Summer 2026, Bulk Buyer, Polyester Tees",
+          "Ahmedabad",
+          "Gujarat",
+          "380009",
+          "Wholesaler",
+          "Inquired for factory wholesale catalog & GST invoice"
+        ],
+        [
+          "9988776655",
+          "+91",
+          "Karan Singh",
+          "Singh Uniforms & Apparel",
+          "karan@singhapparel.com",
+          "Sublimation Tees, Dealer, B2B",
+          "Ludhiana",
+          "Punjab",
+          "141001",
+          "Distributor",
+          "Requires 500+ pcs minimum order quantity per batch"
+        ],
+        [
+          "9811223344",
+          "+91",
+          "Sneha Kapoor",
+          "Kapoor Fashion Boutique",
+          "sneha@kapoorfashion.in",
+          "Festive Sale, Repeat Customer",
+          "Jaipur",
+          "Rajasthan",
+          "302001",
+          "Retailer",
+          "VIP festive buyer for activewear dry-fit t-shirts"
+        ]
+      ];
+
+      const wb = XLSX.utils.book_new();
+
+      // Sheet 1: Template with Ready-to-Use Dummy Data
+      const wsData = [headers, ...sampleRows];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Set clean column widths
+      ws["!cols"] = [
+        { wch: 24 }, // Phone Number
+        { wch: 14 }, // Country Code
+        { wch: 22 }, // Full Name
+        { wch: 30 }, // Business Name
+        { wch: 26 }, // Email
+        { wch: 38 }, // Tags
+        { wch: 16 }, // City
+        { wch: 16 }, // State
+        { wch: 12 }, // Pincode
+        { wch: 16 }, // Customer Type
+        { wch: 45 }  // Notes
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, "Contacts Import Template");
+
+      // Sheet 2: Field Rules & Instructions
+      const instructions = [
+        ["Field / Column Name", "Required?", "Example Format", "Detailed Explanation & Formatting Rules"],
+        ["Phone Number", "YES (Mandatory)", "9876543210 or +919876543210", "10-digit mobile number or full international phone number. Spaces, hyphens, and brackets are automatically stripped."],
+        ["Country Code", "Optional", "+91 (or +1, +44, +971)", "Country dial code. If omitted or left empty, default +91 (India) is automatically applied."],
+        ["Full Name", "YES (Mandatory)", "Rahul Sharma", "Name of the customer, shop owner, or contact person."],
+        ["Business / Shop Name", "Optional", "Sharma Activewear & Sports", "Name of store, retail business, gym brand, or firm."],
+        ["Email", "Optional", "rahul@sharmasports.in", "Customer email address for updates and invoices."],
+        ["Tags", "Optional", "Wholesale, VIP Buyer, Delhi", "Multiple tags separated by commas. These will be added as searchable tags in WhatsApp campaigns & broadcast audience pickers."],
+        ["City", "Optional", "New Delhi", "Customer delivery or store city."],
+        ["State", "Optional", "Delhi", "Customer state."],
+        ["Pincode", "Optional", "110001", "6-digit postal code."],
+        ["Customer Type", "Optional", "Wholesaler / Retailer", "Account type (Wholesaler, Retailer, Distributor, Direct Buyer)."],
+        ["Notes", "Optional", "Interested in gym trackpants", "Any custom notes, conversation history, or order requirements."],
+        [],
+        ["IMPORTANT MERGING & IMPORT RULES", "", "", ""],
+        ["1. Duplicate Handling", "", "", "If a contact with the same phone number already exists, their details will be updated and new tags will be safely merged."],
+        ["2. Safe Tag Merging", "", "", "You can safely add new tags without losing existing tags already assigned to the customer."],
+        ["3. CRM Sync", "", "", "Check 'Mark as Pushed to CRM' during import if you want the imported contacts marked as DONE for your sales team."]
+      ];
+
+      const wsInstructions = XLSX.utils.aoa_to_sheet(instructions);
+      wsInstructions["!cols"] = [
+        { wch: 24 },
+        { wch: 18 },
+        { wch: 30 },
+        { wch: 65 }
+      ];
+
+      XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions & Guide");
+
+      // Trigger download
+      XLSX.writeFile(wb, "espon_contacts_import_template.xlsx");
+      showToast("📥 Sample Excel template downloaded with exact format & dummy data!");
+    } catch (err: any) {
+      showToast("Failed to download template: " + err.message, "error");
+    }
+  };
+
+  // ---------------------------------------------------------
+  // EXCEL EXPORT (DOWNLOAD ALL CONTACTS TO SPREADSHEET)
+  // ---------------------------------------------------------
+  const handleExportExcel = async () => {
+    try {
+      setExportingExcel(true);
+      showToast("Preparing contacts for Excel export...");
+
+      const res = await exportAllWhatsAppContactsAction();
+      const exportList = (res.success && res.contacts && res.contacts.length > 0)
+        ? res.contacts
+        : contacts;
+
+      if (!exportList || exportList.length === 0) {
+        showToast("No contacts available to export.", "error");
+        setExportingExcel(false);
+        return;
+      }
+
+      const headers = [
+        "Phone Number",
+        "Country Code",
+        "Full Name",
+        "Business / Shop Name",
+        "Email",
+        "Tags",
+        "City",
+        "State",
+        "Pincode",
+        "Customer Type",
+        "Notes",
+        "Lead Stage",
+        "Created At"
+      ];
+
+      const rows = exportList.map((c: any) => {
+        const rawPhone = c.mobile || c.whatsappNumber || "";
+        const parsed = parseDynamicPhone(rawPhone);
+        const tagsStr = Array.isArray(c.tags) ? c.tags.join(", ") : (c.tags || "");
+
+        return [
+          parsed.nationalNumber || rawPhone,
+          parsed.countryCode || "+91",
+          c.contactPerson || c.name || "",
+          c.businessName || "",
+          c.email || "",
+          tagsStr,
+          c.city || "",
+          c.state || "",
+          c.pincode || "",
+          c.customerType || "Retailer",
+          c.notes || "",
+          c.leadStage || "Contacted",
+          c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-IN") : ""
+        ];
+      });
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      ws["!cols"] = [
+        { wch: 20 },
+        { wch: 14 },
+        { wch: 24 },
+        { wch: 30 },
+        { wch: 26 },
+        { wch: 35 },
+        { wch: 16 },
+        { wch: 16 },
+        { wch: 12 },
+        { wch: 16 },
+        { wch: 35 },
+        { wch: 16 },
+        { wch: 14 }
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, "WhatsApp Contacts");
+      const dateStr = new Date().toISOString().split("T")[0];
+      XLSX.writeFile(wb, `espon_whatsapp_contacts_${dateStr}.xlsx`);
+      showToast(`✓ Exported ${exportList.length} contacts to Excel!`);
+    } catch (err: any) {
+      showToast(err.message || "Failed to export contacts.", "error");
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
+  // ---------------------------------------------------------
+  // PARSE UPLOADED EXCEL / CSV FILE
+  // ---------------------------------------------------------
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportFileName(file.name);
+    setParsingFile(true);
+    setImportError("");
+    setParsedRows([]);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const rawJson = XLSX.utils.sheet_to_json<any>(worksheet, { defval: "" });
+
+        if (!rawJson || rawJson.length === 0) {
+          setImportError("The uploaded file is empty. Please check the sheet or download our dummy template.");
+          setParsingFile(false);
+          return;
+        }
+
+        // Map dynamic header columns to standard keys
+        const normalized = rawJson.map((row: any) => {
+          const phoneKey = Object.keys(row).find((k) =>
+            /phone|mobile|contact\s*no|contact\s*number|number|whatsapp/i.test(k)
+          );
+          const nameKey = Object.keys(row).find((k) =>
+            /full\s*name|contact\s*person|customer\s*name|name|buyer/i.test(k)
+          );
+          const ccKey = Object.keys(row).find((k) =>
+            /country\s*code|country|dial\s*code|cc/i.test(k)
+          );
+          const shopKey = Object.keys(row).find((k) =>
+            /shop|business|company|store|firm/i.test(k)
+          );
+          const tagsKey = Object.keys(row).find((k) =>
+            /tag|category|labels|group/i.test(k)
+          );
+          const emailKey = Object.keys(row).find((k) => /email|mail/i.test(k));
+          const cityKey = Object.keys(row).find((k) => /city|location/i.test(k));
+          const stateKey = Object.keys(row).find((k) => /state|province/i.test(k));
+          const pinKey = Object.keys(row).find((k) => /pincode|pin|postal|zip/i.test(k));
+          const typeKey = Object.keys(row).find((k) => /type|customer\s*type|tier/i.test(k));
+          const notesKey = Object.keys(row).find((k) => /note|remark|comment/i.test(k));
+
+          return {
+            phoneNumber: phoneKey ? row[phoneKey] : "",
+            countryCode: ccKey ? row[ccKey] : "",
+            fullName: nameKey ? row[nameKey] : "",
+            businessName: shopKey ? row[shopKey] : "",
+            email: emailKey ? row[emailKey] : "",
+            tags: tagsKey ? row[tagsKey] : "",
+            city: cityKey ? row[cityKey] : "",
+            state: stateKey ? row[stateKey] : "",
+            pincode: pinKey ? row[pinKey] : "",
+            customerType: typeKey ? row[typeKey] : "",
+            notes: notesKey ? row[notesKey] : ""
+          };
+        });
+
+        const validRows = normalized.filter((r: any) => {
+          const digits = String(r.phoneNumber).replace(/\D/g, "");
+          return digits.length >= 7 || r.fullName.trim().length > 0;
+        });
+
+        if (validRows.length === 0) {
+          setImportError("No valid contact rows with phone numbers were found in the file. Check the format.");
+        }
+
+        setParsedRows(validRows);
+      } catch (err: any) {
+        setImportError("Failed to parse file: " + err.message);
+      } finally {
+        setParsingFile(false);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  // ---------------------------------------------------------
+  // EXECUTE BATCH IMPORT TO DATABASE
+  // ---------------------------------------------------------
+  const handleExecuteImport = async () => {
+    if (parsedRows.length === 0) {
+      showToast("No valid contacts to import.", "error");
+      return;
+    }
+
+    setImporting(true);
+    try {
+      const res = await importWhatsAppContactsBatchAction(parsedRows, {
+        defaultCountryCode: importDefaultCc,
+        appendTags: importAppendTags,
+        pushToCrm: isCrmConnected ? importPushToCrm : false,
+        batchTag: importBatchTag.trim() || undefined
+      });
+
+      if (res.success) {
+        setShowImportModal(false);
+        setParsedRows([]);
+        setImportFileName("");
+        fetchContacts();
+
+        if (res.importedCustomerIds && res.importedCustomerIds.length > 0) {
+          setImportedCustomerIds(res.importedCustomerIds);
+          setImportedCount(res.totalProcessed || res.importedCustomerIds.length);
+          setAssignMode("NONE");
+          setShowAssignModal(true);
+        } else {
+          showToast(
+            `🎉 Processed ${res.totalProcessed} contacts (${res.createdCount} new created, ${res.updatedCount} updated)!`
+          );
+        }
+      } else {
+        showToast(res.error || "Failed to import contacts.", "error");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Import failed.", "error");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  // ---------------------------------------------------------
+  // POST-IMPORT ASSIGNMENT HANDLERS
+  // ---------------------------------------------------------
+  const handleExecuteAssignment = async () => {
+    if (!importedCustomerIds || importedCustomerIds.length === 0) {
+      setShowAssignModal(false);
+      return;
+    }
+
+    if (assignMode === "NONE") {
+      setShowAssignModal(false);
+      showToast(`✓ Contacts saved as Unassigned in general lead pool.`);
+      return;
+    }
+
+    if (assignMode === "DIRECT_AGENT" && !assignAgentId) {
+      showToast("Please select an agent to assign contacts to.", "error");
+      return;
+    }
+
+    if (assignMode === "TEAM" && !assignTeamId) {
+      showToast("Please select a team to assign contacts to.", "error");
+      return;
+    }
+
+    if (assignMode === "ROUND_ROBIN") {
+      if (roundRobinBasis === "TEAM" && !assignRoundRobinTeamId) {
+        showToast("Please select a team for team-based round-robin.", "error");
+        return;
+      }
+      if (roundRobinBasis === "AGENTS" && (!assignSelectedAgentIds || assignSelectedAgentIds.length === 0)) {
+        showToast("Please select at least 1 agent for round-robin distribution.", "error");
+        return;
+      }
+    }
+
+    setAssigningLoading(true);
+    try {
+      const res = await assignImportedContactsBatchAction({
+        customerIds: importedCustomerIds,
+        mode: assignMode,
+        agentId: assignMode === "DIRECT_AGENT" ? assignAgentId : undefined,
+        teamId:
+          assignMode === "TEAM"
+            ? assignTeamId
+            : assignMode === "ROUND_ROBIN" && roundRobinBasis === "TEAM"
+            ? assignRoundRobinTeamId
+            : undefined,
+        roundRobinBasis: assignMode === "ROUND_ROBIN" ? roundRobinBasis : undefined,
+        agentIds:
+          assignMode === "ROUND_ROBIN" && roundRobinBasis === "AGENTS"
+            ? assignSelectedAgentIds
+            : undefined
+      });
+
+      if (res.success) {
+        showToast(`✓ ${res.message || "Contacts assigned successfully!"}`);
+        setShowAssignModal(false);
+        fetchContacts();
+      } else {
+        showToast(res.error || "Assignment failed.", "error");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Assignment failed.", "error");
+    } finally {
+      setAssigningLoading(false);
+    }
+  };
+
+  const handleSkipAssignment = () => {
+    setShowAssignModal(false);
+    showToast(`✓ Contacts saved without assignment (Unassigned).`);
+  };
+
   return (
     <div className="w-full flex flex-col gap-6">
       {/* Toast Notification */}
@@ -310,17 +817,42 @@ export default function WhatsAppContactsComponent() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <button
             onClick={fetchContacts}
             disabled={loading}
-            className="px-4 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg text-sm font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 transition flex items-center gap-2 shadow-sm"
+            className="px-3.5 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg text-sm font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            title="Refresh Contacts"
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Sync
           </button>
+
+          <button
+            onClick={handleExportExcel}
+            disabled={exportingExcel || contacts.length === 0}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+            title="Export contacts directory to Excel (.xlsx)"
+          >
+            {exportingExcel ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
+            Export Excel
+          </button>
+
+          <button
+            onClick={() => {
+              setParsedRows([]);
+              setImportError("");
+              setImportFileName("");
+              setShowImportModal(true);
+            }}
+            className="px-3.5 py-2 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            title="Import contacts from Excel or CSV"
+          >
+            <Upload size={14} /> Import Excel
+          </button>
+
           <button
             onClick={openAddModal}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-sm"
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
             <Plus size={16} /> Add Contact
           </button>
@@ -487,8 +1019,24 @@ export default function WhatsAppContactsComponent() {
                           {getInitials(c.name)}
                         </div>
                         <div>
-                          <div className="font-bold text-gray-900 dark:text-white leading-tight">
-                            {c.name}
+                          <div className="font-bold text-gray-900 dark:text-white leading-tight flex items-center gap-2 flex-wrap">
+                            <span>{c.name}</span>
+                            {c.assignedAgent && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[10px] font-bold border border-blue-200 dark:border-blue-900/50"
+                                title={`Assigned Salesperson: ${c.assignedAgent}`}
+                              >
+                                👤 {c.assignedAgent}
+                              </span>
+                            )}
+                            {c.assignedTeam && !c.assignedAgent && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 text-[10px] font-bold border border-purple-200 dark:border-purple-900/50"
+                                title={`Assigned Team: ${c.assignedTeam}`}
+                              >
+                                👥 {c.assignedTeam}
+                              </span>
+                            )}
                           </div>
                           {c.businessName && c.businessName !== c.name && (
                             <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -928,6 +1476,741 @@ export default function WhatsAppContactsComponent() {
                 >
                   {savingTags ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
                   {savingTags ? "Saving..." : "Save Tags"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --------------------------------------------------------- */}
+      {/* EXCEL IMPORT MODAL (WITH SAMPLE TEMPLATE DOWNLOAD)        */}
+      {/* --------------------------------------------------------- */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-gray-100 dark:border-slate-700 flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-slate-700 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 rounded-2xl">
+                  <FileSpreadsheet size={22} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 dark:text-white text-lg">
+                    Import Contacts from Excel
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Upload .xlsx, .xls or .csv file to import or update your WhatsApp contacts
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImportModal(false);
+                  setParsedRows([]);
+                  setImportError("");
+                  setImportFileName("");
+                }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body (Scrollable) */}
+            <div className="overflow-y-auto py-4 space-y-4 pr-1">
+              {/* Dummy Template Download Card */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-indigo-50 dark:from-emerald-950/30 dark:via-teal-950/20 dark:to-indigo-950/30 border border-emerald-200 dark:border-emerald-800/50">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                      <Sparkles size={14} className="text-emerald-600" />
+                      <span>Need the exact format with Country Code & Tags?</span>
+                    </div>
+                    <p className="text-xs text-gray-600 dark:text-gray-300 max-w-md leading-relaxed">
+                      Download our ready-to-use dummy spreadsheet pre-filled with activewear buyer data, country code (+91) guides, and multi-tag samples.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDownloadDummyTemplate}
+                    className="flex-shrink-0 flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow transition"
+                  >
+                    <Download size={14} />
+                    <span>Download Dummy (.xlsx)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Upload Dropzone / File Picker */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">
+                  Select or Drag Excel Spreadsheet:
+                </label>
+                <div className="relative border-2 border-dashed border-gray-300 dark:border-slate-600 hover:border-emerald-500 dark:hover:border-emerald-500 rounded-2xl p-6 text-center transition bg-gray-50/50 dark:bg-slate-900/40 cursor-pointer group">
+                  <input
+                    type="file"
+                    accept=".xlsx, .xls, .csv"
+                    onChange={handleFileSelect}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <div className="p-3 bg-white dark:bg-slate-800 rounded-full shadow-sm group-hover:scale-110 transition text-emerald-600">
+                      <Upload size={24} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                        {importFileName ? (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                            {importFileName}
+                          </span>
+                        ) : (
+                          "Click to browse or drop file here"
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Supports Microsoft Excel (.xlsx, .xls) and CSV (.csv)
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Parsing Indicator */}
+              {parsingFile && (
+                <div className="flex items-center justify-center gap-2 py-3 text-xs font-semibold text-gray-500">
+                  <RefreshCw size={14} className="animate-spin text-emerald-600" />
+                  <span>Parsing spreadsheet columns and contacts...</span>
+                </div>
+              )}
+
+              {/* Error Callout */}
+              {importError && (
+                <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs">
+                  <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Format Error: </span>
+                    {importError}
+                  </div>
+                </div>
+              )}
+
+              {/* Parsed Contacts Preview */}
+              {parsedRows.length > 0 && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                      <CheckCircle2 size={14} className="text-emerald-600" />
+                      <span>Found {parsedRows.length} Contacts Ready to Import</span>
+                    </span>
+                    <span className="text-[11px] text-gray-400">Showing first 4 rows preview</span>
+                  </div>
+
+                  <div className="border border-gray-200 dark:border-slate-700 rounded-2xl overflow-hidden bg-gray-50/50 dark:bg-slate-900/50">
+                    <div className="max-h-48 overflow-x-auto overflow-y-auto divide-y divide-gray-200 dark:divide-slate-800 text-xs">
+                      <table className="w-full text-left">
+                        <thead className="bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 font-bold text-[11px]">
+                          <tr>
+                            <th className="px-3 py-2">Phone</th>
+                            <th className="px-3 py-2">Name</th>
+                            <th className="px-3 py-2">Shop / Business</th>
+                            <th className="px-3 py-2">Tags</th>
+                            <th className="px-3 py-2">City</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-slate-800 text-gray-700 dark:text-gray-300">
+                          {parsedRows.slice(0, 4).map((row: any, idx: number) => (
+                            <tr key={idx} className="hover:bg-white dark:hover:bg-slate-800/80">
+                              <td className="px-3 py-2 font-mono font-bold text-gray-900 dark:text-white whitespace-nowrap">
+                                {row.countryCode ? `${row.countryCode} ` : ""}
+                                {row.phoneNumber}
+                              </td>
+                              <td className="px-3 py-2 font-medium whitespace-nowrap">
+                                {row.fullName || "—"}
+                              </td>
+                              <td className="px-3 py-2 text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                {row.businessName || "—"}
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="flex flex-wrap gap-1 max-w-xs">
+                                  {row.tags
+                                    ? String(row.tags)
+                                        .split(",")
+                                        .map((t) => t.trim())
+                                        .filter(Boolean)
+                                        .map((t, tidx) => (
+                                          <span
+                                            key={tidx}
+                                            className="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded text-[10px] font-semibold whitespace-nowrap"
+                                          >
+                                            {t}
+                                          </span>
+                                        ))
+                                    : <span className="text-gray-400 text-[10px]">—</span>}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                                {row.city || "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {parsedRows.length > 4 && (
+                      <div className="px-3 py-1.5 bg-gray-100 dark:bg-slate-800 text-center text-[11px] font-semibold text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-slate-700">
+                        + {parsedRows.length - 4} more contacts will be imported
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Import Configuration Settings */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                {/* Default Country Code */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                    Default Country Code (if missing):
+                  </label>
+                  <select
+                    value={importDefaultCc}
+                    onChange={(e) => setImportDefaultCc(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="+91">+91 (India)</option>
+                    <option value="+1">+1 (USA / Canada)</option>
+                    <option value="+44">+44 (UK)</option>
+                    <option value="+971">+971 (UAE)</option>
+                    <option value="+966">+966 (Saudi Arabia)</option>
+                    <option value="+65">+65 (Singapore)</option>
+                    <option value="+61">+61 (Australia)</option>
+                  </select>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    Automatically attached to 10-digit mobile numbers
+                  </p>
+                </div>
+
+                {/* Batch Tag */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                    Assign Batch Tag (Optional):
+                  </label>
+                  <input
+                    type="text"
+                    value={importBatchTag}
+                    onChange={(e) => setImportBatchTag(e.target.value)}
+                    placeholder="e.g. BulkImport-2026, RetailExhibition"
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    Applies to all contacts in this upload
+                  </p>
+                </div>
+              </div>
+
+              {/* Advanced Flags */}
+              <div className="space-y-2 pt-1">
+                <label className="flex items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={importAppendTags}
+                    onChange={(e) => setImportAppendTags(e.target.checked)}
+                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>Merge new tags with existing contact tags (prevents tag loss)</span>
+                </label>
+
+                {isCrmConnected && (
+                  <label className="flex items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={importPushToCrm}
+                      onChange={(e) => setImportPushToCrm(e.target.checked)}
+                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span>Mark imported contacts as pushed to CRM (Status: DONE)</span>
+                  </label>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-slate-700 flex-shrink-0">
+              <button
+                type="button"
+                onClick={handleDownloadDummyTemplate}
+                className="text-xs font-bold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 transition"
+              >
+                <Download size={13} />
+                <span>Get Dummy Template</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setParsedRows([]);
+                    setImportError("");
+                    setImportFileName("");
+                  }}
+                  className="px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 text-sm font-semibold rounded-xl hover:bg-gray-200 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteImport}
+                  disabled={parsedRows.length === 0 || importing}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl shadow-md transition flex items-center gap-2"
+                >
+                  {importing ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <CheckCheck size={14} />
+                  )}
+                  <span>
+                    {importing
+                      ? "Importing Contacts..."
+                      : `Import ${parsedRows.length > 0 ? parsedRows.length : ""} Contacts`}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --------------------------------------------------------- */}
+      {/* POST-IMPORT ASSIGNMENT MODAL (AGENT, TEAM, ROUND-ROBIN)  */}
+      {/* --------------------------------------------------------- */}
+      {showAssignModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-gray-100 dark:border-slate-700 flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-slate-700 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 rounded-2xl">
+                  <Shuffle size={22} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-gray-900 dark:text-white text-lg">
+                      Assign Imported Contacts
+                    </h3>
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                      {importedCustomerIds.length} Contacts Ready
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Choose how to assign these contacts to your sales agents or teams
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleSkipAssignment}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="overflow-y-auto py-4 space-y-4 pr-1">
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                Select Assignment Method:
+              </label>
+
+              {/* 4 Selectable Method Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 1. Do Not Assign */}
+                <div
+                  onClick={() => setAssignMode("NONE")}
+                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition flex items-start gap-3 ${
+                    assignMode === "NONE"
+                      ? "border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20"
+                      : "border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900/40"
+                  }`}
+                >
+                  <div
+                    className={`p-2 rounded-xl mt-0.5 ${
+                      assignMode === "NONE"
+                        ? "bg-indigo-600 text-white"
+                        : "bg-gray-100 dark:bg-slate-800 text-gray-500"
+                    }`}
+                  >
+                    <UserX size={18} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                      <span>Do Not Assign</span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">
+                      Leave in unassigned pool. Sales reps can pick or assign them later.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 2. Specific Agent */}
+                <div
+                  onClick={() => setAssignMode("DIRECT_AGENT")}
+                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition flex items-start gap-3 ${
+                    assignMode === "DIRECT_AGENT"
+                      ? "border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20"
+                      : "border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900/40"
+                  }`}
+                >
+                  <div
+                    className={`p-2 rounded-xl mt-0.5 ${
+                      assignMode === "DIRECT_AGENT"
+                        ? "bg-indigo-600 text-white"
+                        : "bg-gray-100 dark:bg-slate-800 text-gray-500"
+                    }`}
+                  >
+                    <UserCheck size={18} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                      <span>Specific Agent</span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">
+                      Assign all {importedCustomerIds.length} contacts to one selected salesperson.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 3. Assign to Team */}
+                <div
+                  onClick={() => setAssignMode("TEAM")}
+                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition flex items-start gap-3 ${
+                    assignMode === "TEAM"
+                      ? "border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20"
+                      : "border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900/40"
+                  }`}
+                >
+                  <div
+                    className={`p-2 rounded-xl mt-0.5 ${
+                      assignMode === "TEAM"
+                        ? "bg-indigo-600 text-white"
+                        : "bg-gray-100 dark:bg-slate-800 text-gray-500"
+                    }`}
+                  >
+                    <Users size={18} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                      <span>Assign to Team</span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">
+                      Route contacts to a department queue without locking to a single agent.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 4. Round-Robin Distribution */}
+                <div
+                  onClick={() => setAssignMode("ROUND_ROBIN")}
+                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition flex items-start gap-3 ${
+                    assignMode === "ROUND_ROBIN"
+                      ? "border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20"
+                      : "border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900/40"
+                  }`}
+                >
+                  <div
+                    className={`p-2 rounded-xl mt-0.5 ${
+                      assignMode === "ROUND_ROBIN"
+                        ? "bg-indigo-600 text-white"
+                        : "bg-gray-100 dark:bg-slate-800 text-gray-500"
+                    }`}
+                  >
+                    <Shuffle size={18} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                      <span>Round-Robin</span>
+                      <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 rounded text-[9px] font-extrabold">
+                        Balanced
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">
+                      Evenly rotate leads across agents (Team or Custom Agent basis).
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* DYNAMIC CONFIGURATION PANELS */}
+
+              {/* Panel 1: Direct Agent Selector */}
+              {assignMode === "DIRECT_AGENT" && (
+                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-slate-900/60 border border-gray-200 dark:border-slate-700 space-y-2">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                    Select Sales Rep / Agent:
+                  </label>
+                  {employeesList.length > 0 ? (
+                    <select
+                      value={assignAgentId}
+                      onChange={(e) => setAssignAgentId(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {employeesList.map((emp: any) => {
+                        const name = emp.user?.name || emp.name || "Agent";
+                        const team = emp.team?.name ? ` · ${emp.team.name}` : "";
+                        const chats = emp.assignedWhatsAppConversations?.length || 0;
+                        return (
+                          <option key={emp.id} value={emp.id}>
+                            {name} {team} ({chats} open chats)
+                          </option>
+                        );
+                      })}
+                    </select>
+                  ) : (
+                    <div className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/40 p-3 rounded-xl">
+                      No active agents found in the system. Create agents in WhatsApp Settings.
+                    </div>
+                  )}
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    All {importedCustomerIds.length} contacts and their active WhatsApp chats will be assigned directly to this agent.
+                  </p>
+                </div>
+              )}
+
+              {/* Panel 2: Team Selector */}
+              {assignMode === "TEAM" && (
+                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-slate-900/60 border border-gray-200 dark:border-slate-700 space-y-2">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                    Select Team / Department:
+                  </label>
+                  {teamsList.length > 0 ? (
+                    <select
+                      value={assignTeamId}
+                      onChange={(e) => setAssignTeamId(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {teamsList.map((team: any) => (
+                        <option key={team.id} value={team.id}>
+                          {team.name} ({team.members?.length || 0} agents)
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/40 p-3 rounded-xl">
+                      No teams created yet. Create teams under WhatsApp Settings &gt; Teams.
+                    </div>
+                  )}
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    Contacts will be routed to this department queue and visible to all team members.
+                  </p>
+                </div>
+              )}
+
+              {/* Panel 3: Round-Robin Distribution (With Selectable Both Basis) */}
+              {assignMode === "ROUND_ROBIN" && (
+                <div className="p-4 rounded-2xl bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/50 space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-800 dark:text-gray-200 mb-1.5">
+                      Round-Robin Distribution Basis (Selectable):
+                    </label>
+                    {/* Basis Selector Pills */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRoundRobinBasis("TEAM")}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                          roundRobinBasis === "TEAM"
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                            : "bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-slate-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        <Users size={13} />
+                        <span>Team Basis</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setRoundRobinBasis("AGENTS")}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                          roundRobinBasis === "AGENTS"
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                            : "bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-slate-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        <UserCheck size={13} />
+                        <span>Select Agents</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setRoundRobinBasis("ALL_ACTIVE")}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                          roundRobinBasis === "ALL_ACTIVE"
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                            : "bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-slate-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        <Shuffle size={13} />
+                        <span>All Active</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Basis Sub-Form: Team Basis */}
+                  {roundRobinBasis === "TEAM" && (
+                    <div className="space-y-2 pt-1">
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                        Select Team to Distribute Across:
+                      </label>
+                      <select
+                        value={assignRoundRobinTeamId}
+                        onChange={(e) => setAssignRoundRobinTeamId(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        {teamsList.map((team: any) => (
+                          <option key={team.id} value={team.id}>
+                            {team.name} ({team.members?.length || 0} agents)
+                          </option>
+                        ))}
+                      </select>
+                      {(() => {
+                        const selTeam = teamsList.find((t: any) => t.id === assignRoundRobinTeamId);
+                        const count = selTeam?.members?.length || 0;
+                        const perAgent = count > 0 ? Math.ceil(importedCustomerIds.length / count) : 0;
+                        return (
+                          <div className="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-indigo-100 dark:border-indigo-900/40 text-[11px] text-indigo-700 dark:text-indigo-300 font-medium">
+                            💡 Each agent in <strong>{selTeam?.name || "this team"}</strong> ({count} members) will receive approximately <strong>~{perAgent} contacts</strong>.
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Basis Sub-Form: Custom Agent Multi-Select */}
+                  {roundRobinBasis === "AGENTS" && (
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                          Select Specific Agents ({assignSelectedAgentIds.length} of {employeesList.length} chosen):
+                        </label>
+                        <div className="flex gap-2 text-[11px]">
+                          <button
+                            type="button"
+                            onClick={() => setAssignSelectedAgentIds(employeesList.map((e: any) => e.id))}
+                            className="text-indigo-600 hover:underline font-bold"
+                          >
+                            Select All
+                          </button>
+                          <span className="text-gray-300">|</span>
+                          <button
+                            type="button"
+                            onClick={() => setAssignSelectedAgentIds([])}
+                            className="text-gray-500 hover:underline font-bold"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto p-2 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700">
+                        {employeesList.map((emp: any) => {
+                          const isChecked = assignSelectedAgentIds.includes(emp.id);
+                          const name = emp.user?.name || emp.name || "Agent";
+                          const team = emp.team?.name || "General";
+                          return (
+                            <label
+                              key={emp.id}
+                              className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition border text-xs ${
+                                isChecked
+                                  ? "bg-indigo-50 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 font-bold"
+                                  : "hover:bg-gray-50 dark:hover:bg-slate-700/50 border-transparent text-gray-700 dark:text-gray-300"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setAssignSelectedAgentIds([...assignSelectedAgentIds, emp.id]);
+                                  } else {
+                                    setAssignSelectedAgentIds(assignSelectedAgentIds.filter((id) => id !== emp.id));
+                                  }
+                                }}
+                                className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500"
+                              />
+                              <div className="truncate">
+                                <div>{name}</div>
+                                <div className="text-[10px] text-gray-400 font-normal">{team}</div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+
+                      {assignSelectedAgentIds.length > 0 ? (
+                        <div className="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-indigo-100 dark:border-indigo-900/40 text-[11px] text-indigo-700 dark:text-indigo-300 font-medium">
+                          💡 Each of the <strong>{assignSelectedAgentIds.length} selected agents</strong> will receive approximately <strong>~{Math.ceil(importedCustomerIds.length / assignSelectedAgentIds.length)} contacts</strong>.
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-rose-500 font-medium">
+                          Please select at least one agent.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Basis Sub-Form: All Active */}
+                  {roundRobinBasis === "ALL_ACTIVE" && (
+                    <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-indigo-100 dark:border-indigo-900/40 text-xs text-gray-600 dark:text-gray-300 space-y-1">
+                      <div className="font-bold text-gray-800 dark:text-white">
+                        Organization-Wide Active Agent Round-Robin
+                      </div>
+                      <p className="text-[11px] text-gray-500 leading-relaxed">
+                        Contacts will be distributed cyclically across all active agents currently marked available for chat in the company.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-slate-700 flex-shrink-0">
+              <button
+                type="button"
+                onClick={handleSkipAssignment}
+                className="text-xs font-bold text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition"
+              >
+                Skip (Leave Unassigned)
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSkipAssignment}
+                  className="px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 text-sm font-semibold rounded-xl hover:bg-gray-200 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteAssignment}
+                  disabled={assigningLoading}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-md transition flex items-center gap-2"
+                >
+                  {assigningLoading ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <CheckCheck size={14} />
+                  )}
+                  <span>
+                    {assigningLoading
+                      ? "Assigning Contacts..."
+                      : assignMode === "NONE"
+                      ? "Keep Unassigned"
+                      : `Confirm Assignment (${importedCustomerIds.length})`}
+                  </span>
                 </button>
               </div>
             </div>
