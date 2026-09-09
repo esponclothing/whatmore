@@ -380,12 +380,21 @@ export default function WhatsAppTemplatesComponent() {
       setNameError("");
     }
     if (t.category) setCategory(t.category);
-    if (t.templateType) setTemplateType(t.templateType);
     if (t.language) setLanguage(t.language);
-    
-    if (t.headerType) setHeaderType(t.headerType);
-    if (t.headerContent) setHeaderContent(t.headerContent);
-    if (t.headerMediaUrl) setHeaderMediaPreview(t.headerMediaUrl);
+
+    // Force CAROUSEL type whenever carousel cards are present
+    const hasCards = t.carouselCards && Array.isArray(t.carouselCards) && t.carouselCards.length > 0;
+    const resolvedType = hasCards ? "CAROUSEL" : (t.templateType || "STANDARD");
+    setTemplateType(resolvedType);
+
+    // For carousel, Meta requires headerType NONE at the template level
+    if (resolvedType === "CAROUSEL") {
+      setHeaderType("NONE");
+    } else {
+      if (t.headerType) setHeaderType(t.headerType);
+      if (t.headerContent) setHeaderContent(t.headerContent);
+      if (t.headerMediaUrl) setHeaderMediaPreview(t.headerMediaUrl);
+    }
 
     if (t.bodyText) setBodyText(t.bodyText);
     if (t.footerText) setFooterText(t.footerText);
@@ -395,11 +404,12 @@ export default function WhatsAppTemplatesComponent() {
     }
     if (t.couponCode) setCouponCode(t.couponCode);
 
-    if (t.carouselCards && Array.isArray(t.carouselCards) && t.carouselCards.length > 0) {
+    if (hasCards) {
       setCarouselCards(t.carouselCards);
+      setActiveCarouselCardIndex(0);
     }
 
-    showToast("🎉 AI Template Approved! Loaded directly into Studio & phone simulator.", "success");
+    showToast(`🎉 AI Template ${hasCards ? `(${t.carouselCards.length}-card Carousel)` : ''} loaded into Studio & phone simulator!`, "success");
   };
 
   const handleRefineAIDraft = async () => {
@@ -1395,7 +1405,14 @@ export default function WhatsAppTemplatesComponent() {
 
                         <button
                           type="button"
-                          onClick={() => setAiProductDropdownOpen(!aiProductDropdownOpen)}
+                          onClick={() => {
+                            const opening = !aiProductDropdownOpen;
+                            setAiProductDropdownOpen(opening);
+                            // Auto-fetch inventory if not yet loaded when dropdown opens
+                            if (opening && inventoryProducts.length === 0 && !inventoryLoading) {
+                              fetchInventory("", "ALL", false);
+                            }
+                          }}
                           className="px-3 py-1 bg-white dark:bg-slate-800 hover:bg-indigo-50 border border-indigo-200 dark:border-slate-700 rounded-lg text-xs font-bold text-indigo-700 dark:text-indigo-300 transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
                         >
                           <Plus size={12} />
@@ -1433,72 +1450,100 @@ export default function WhatsAppTemplatesComponent() {
 
                     {/* Searchable Products Dropdown Modal / Drawer */}
                     {aiProductDropdownOpen && (
-                      <div className="mt-1 p-3 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-slate-700 rounded-2xl shadow-lg flex flex-col gap-2.5 max-h-72 overflow-y-auto animate-in slide-in-from-top-2 duration-150">
-                        <div className="flex items-center gap-2 pb-2 border-b border-gray-100 dark:border-slate-700">
-                          <Search size={14} className="text-gray-400" />
+                      <div className="mt-1 p-3 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-slate-700 rounded-2xl shadow-lg flex flex-col gap-2.5 max-h-80 overflow-y-auto animate-in slide-in-from-top-2 duration-150">
+                        <div className="flex items-center gap-2 pb-2 border-b border-gray-100 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10">
+                          <Search size={14} className="text-gray-400 flex-shrink-0" />
                           <input
                             type="text"
                             value={aiProductSearch}
                             onChange={(e) => setAiProductSearch(e.target.value)}
-                            placeholder="Search by product name, category, or fabric (e.g. Lycra, Shorts, Trackpant)..."
+                            placeholder="Search by product name, category (e.g. Lycra, Shorts, Trackpant)..."
                             className="w-full text-xs bg-transparent outline-none text-gray-800 dark:text-gray-100 placeholder-gray-400 font-medium"
+                            autoFocus
                           />
                           {aiProductSearch && (
-                            <button type="button" onClick={() => setAiProductSearch("")} className="text-gray-400 hover:text-gray-600">
+                            <button type="button" onClick={() => setAiProductSearch("")} className="text-gray-400 hover:text-gray-600 flex-shrink-0">
                               <X size={12} />
                             </button>
                           )}
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {inventoryProducts
-                            .filter((p) => {
-                              if (!aiProductSearch) return true;
-                              const s = aiProductSearch.toLowerCase();
-                              return (
-                                p.name?.toLowerCase().includes(s) ||
-                                p.category?.toLowerCase().includes(s) ||
-                                p.fabric?.toLowerCase().includes(s) ||
-                                p.handle?.toLowerCase().includes(s)
-                              );
-                            })
-                            .map((p) => {
-                              const isSelected = aiSelectedProducts.some((item) => item.id === p.id || item.handle === p.handle);
-                              return (
-                                <div
-                                  key={p.id || p.handle}
-                                  onClick={() => toggleSelectProductForAI(p)}
-                                  className={`p-2 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
-                                    isSelected
-                                      ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-500 shadow-2xs"
-                                      : "bg-gray-50/70 dark:bg-slate-900/60 border-gray-200 dark:border-slate-700 hover:border-indigo-300"
-                                  }`}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={() => {}}
-                                    className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer pointer-events-none"
-                                  />
-                                  <div className="w-9 h-9 rounded-lg overflow-hidden bg-white dark:bg-slate-800 border border-gray-200 flex-shrink-0">
-                                    <img src={p.primaryImage || p.images?.[0]} alt={p.name} className="w-full h-full object-cover" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-xs font-bold text-gray-800 dark:text-gray-100 truncate">{p.name}</div>
-                                    <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
-                                      <span className="font-bold text-emerald-600">₹{p.sellingPrice}</span>
-                                      {p.mrp > p.sellingPrice && <span className="line-through text-gray-400">₹{p.mrp}</span>}
-                                      {p.stockQuantity > 0 ? (
-                                        <span className="text-emerald-600 font-bold">🟢 {p.stockQuantity} in stock</span>
-                                      ) : (
-                                        <span className="text-amber-500 font-medium">Ready</span>
-                                      )}
+                        {/* Loading state */}
+                        {inventoryLoading && (
+                          <div className="flex items-center justify-center gap-2 py-6 text-indigo-500 text-xs font-semibold">
+                            <RefreshCw size={14} className="animate-spin" />
+                            Loading your product catalog...
+                          </div>
+                        )}
+
+                        {/* Empty state */}
+                        {!inventoryLoading && inventoryProducts.length === 0 && (
+                          <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
+                            <ShoppingBag size={28} className="text-gray-300" />
+                            <p className="text-xs font-bold text-gray-500">No products found in inventory.</p>
+                            <p className="text-[10px] text-gray-400">Add products to your catalog first.</p>
+                          </div>
+                        )}
+
+                        {/* Products grid */}
+                        {!inventoryLoading && inventoryProducts.length > 0 && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {inventoryProducts
+                              .filter((p) => {
+                                if (!aiProductSearch) return true;
+                                const s = aiProductSearch.toLowerCase();
+                                return (
+                                  p.name?.toLowerCase().includes(s) ||
+                                  p.category?.toLowerCase().includes(s) ||
+                                  p.fabric?.toLowerCase().includes(s) ||
+                                  p.handle?.toLowerCase().includes(s)
+                                );
+                              })
+                              .map((p) => {
+                                const isSelected = aiSelectedProducts.some((item) => item.id === p.id || item.handle === p.handle);
+                                return (
+                                  <div
+                                    key={p.id || p.handle}
+                                    onClick={() => toggleSelectProductForAI(p)}
+                                    className={`p-2 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
+                                      isSelected
+                                        ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-500 shadow-2xs"
+                                        : "bg-gray-50/70 dark:bg-slate-900/60 border-gray-200 dark:border-slate-700 hover:border-indigo-300"
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => {}}
+                                      className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer pointer-events-none flex-shrink-0"
+                                    />
+                                    <div className="w-9 h-9 rounded-lg overflow-hidden bg-white dark:bg-slate-800 border border-gray-200 flex-shrink-0">
+                                      <img src={p.primaryImage || p.images?.[0]} alt={p.name} className="w-full h-full object-cover" />
                                     </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-xs font-bold text-gray-800 dark:text-gray-100 truncate">{p.name}</div>
+                                      <div className="flex items-center gap-1.5 text-[10px] text-gray-500 flex-wrap">
+                                        <span className="font-bold text-emerald-600">₹{p.sellingPrice}</span>
+                                        {p.mrp > p.sellingPrice && <span className="line-through text-gray-400">₹{p.mrp}</span>}
+                                        {p.discountPercent > 0 && <span className="text-rose-500 font-bold">{p.discountPercent}% OFF</span>}
+                                        {p.stockQuantity > 0 ? (
+                                          <span className="text-emerald-600 font-bold">🟢 {p.stockQuantity}</span>
+                                        ) : (
+                                          <span className="text-amber-500 font-medium">Ready</span>
+                                        )}
+                                        {p.variantsCount > 1 && <span className="text-indigo-500">{p.variantsCount} variants</span>}
+                                      </div>
+                                    </div>
+                                    {isSelected && (
+                                      <span className="ml-auto flex-shrink-0 w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center">
+                                        <Check size={10} className="text-white" />
+                                      </span>
+                                    )}
                                   </div>
-                                </div>
-                              );
-                            })}
-                        </div>
+                                );
+                              })}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

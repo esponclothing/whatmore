@@ -2562,14 +2562,38 @@ ${cannedFaqsSummary ? `=== 💬 FREQUENTLY ASKED QUESTIONS & POLICY SNIPPETS ===
    - Dynamic parameters MUST strictly follow sequential numbering {{1}}, {{2}}, {{3}} without skipping numbers.
    - Weave in the real brand name, brand domain, or contact phone when suitable.
    - Maximum 1024 characters.
-7. "footerText": Short footer (max 60 chars, e.g. "${brandName} | Official Store: ${brandDomain}").
+7. "footerText": Short footer (max 60 chars, e.g. "${brandName} | Official Store").
 8. "buttons": Array of up to 3 interactive buttons:
    - Static URL: { "type": "URL", "text": "Shop Store", "url": "https://${brandDomain}/collections/all", "urlType": "STATIC" }
    - Copy Code: { "type": "COPY_CODE", "text": "Copy Coupon", "code": "FLAT30" }
-   - Phone Call: { "type": "PHONE_NUMBER", "text": "Call Support", "phone_number": "${brandPhone}" }
+   - Phone Call: { "type": "PHONE_NUMBER", "text": "Call Us", "phone_number": "${brandPhone}" }
 9. "variables": Array of variable descriptors: [{ "param": "{{1}}", "name": "Customer Name", "example": "Rahul", "description": "Customer Name" }]
 10. "couponCode": Coupon code string if applicable (e.g. "FLAT30", "SAVE20").
-11. "carouselCards": If CAROUSEL or multiple products requested, provide cards for ALL requested products (up to 10 cards) with id, mediaUrl, headerType ("IMAGE"), title, bodyText (price/features), and buttons ([{"type":"URL","text":"Buy Now","url":"https://${brandDomain}/products/<handle>","urlType":"STATIC"},{"type":"URL","text":"Explore More","url":"https://${brandDomain}/collections/all","urlType":"STATIC"}]).
+11. "carouselCards": STRICT RULES FOR EACH CARD OBJECT — read carefully:
+
+   ⚠️ FIELD "title": MUST be the SHORT PRODUCT NAME ONLY. Max 60 characters. NO sentences, NO descriptions, NO "Buy Now", NO promo text. ONLY the product name. Example: "Espon Pro Gym Shorts" or "Sublimation Track Pant".
+
+   ⚠️ FIELD "bodyText": MUST be ONLY the price and ONE short feature (max 160 characters). Format: "₹999 • Premium Activewear" or "₹1,299 (MRP ₹1,799) • GST Invoice Available". NEVER put long sentences, template descriptions, or marketing copy here.
+
+   ⚠️ FIELD "mediaUrl": Use the EXACT image URL provided in the 🎯 MANDATORY PRODUCTS section above. Do NOT invent or hallucinate image URLs.
+
+   ⚠️ FIELD buttons[0] "url": MUST be the EXACT product URL provided in the 🎯 MANDATORY PRODUCTS section. Format: "https://${brandDomain}/products/<exact-handle>". The handle MUST be a short slug (e.g. "espon-pro-gym-shorts"), NOT a full sentence or description.
+
+   ⚠️ FIELD buttons[1]: Use { "type": "URL", "text": "Explore More", "url": "https://${brandDomain}/collections/all", "urlType": "STATIC" } OR { "type": "PHONE_NUMBER", "text": "Call Us", "phone_number": "${brandPhone}" }. NEVER a second "Buy Now" button.
+
+   EXAMPLE of a CORRECTLY formatted carousel card (follow this EXACTLY):
+   {
+     "id": "card_1",
+     "mediaUrl": "<exact image URL from product data>",
+     "headerType": "IMAGE",
+     "title": "Espon Pro Gym Shorts",
+     "bodyText": "₹1,199 (MRP ₹1,499) • 4-Way Stretch Fabric",
+     "buttons": [
+       { "type": "URL", "text": "Buy Now", "url": "https://${brandDomain}/products/espon-pro-gym-shorts", "urlType": "STATIC" },
+       { "type": "URL", "text": "Explore More", "url": "https://${brandDomain}/collections/all", "urlType": "STATIC" }
+     ]
+   }
+
 12. "explanation": 1-2 sentences explaining how this template addresses the user's specific requirement and utilizes the brand's unique assets.
 13. "complianceChecks": Array of 3-4 Meta compliance guarantee bullet points.
 
@@ -2599,17 +2623,85 @@ RETURN ONLY RAW VALID JSON without markdown ticks if possible or inside \`\`\`js
       headerType: ['NONE', 'TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT'].includes(generatedJson.headerType) ? generatedJson.headerType : (generatedJson.headerMediaUrl ? 'IMAGE' : 'NONE'),
       headerContent: generatedJson.headerContent || '',
       headerMediaUrl: generatedJson.headerMediaUrl || (generatedJson.headerType === 'IMAGE' ? 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800&auto=format&fit=crop&q=80' : ''),
-      bodyText: generatedJson.bodyText || `Hi {{1}}, thank you for shopping with ${brandName}! Use code {{2}} at checkout for an exclusive discount.`,
-      footerText: generatedJson.footerText || `${brandName} | Reply STOP to unsubscribe`,
+      bodyText: (generatedJson.bodyText || `Hi {{1}}, thank you for shopping with ${brandName}! Use code {{2}} at checkout for an exclusive discount.`).slice(0, 1024),
+      footerText: (generatedJson.footerText || `${brandName} | Official Store`).slice(0, 60),
       buttons: Array.isArray(generatedJson.buttons) && generatedJson.buttons.length > 0 ? generatedJson.buttons : [
-        { type: 'URL', text: 'Shop Now', url: `https://${brandDomain}/shop/{{1}}`, urlType: 'DYNAMIC', urlExample: `https://${brandDomain}/shop/sale` },
+        { type: 'URL', text: 'Shop Now', url: `https://${brandDomain}/collections/all`, urlType: 'STATIC' },
         { type: 'COPY_CODE', text: 'Copy Code', code: generatedJson.couponCode || 'FLAT30' }
       ],
       variables: Array.isArray(generatedJson.variables) && generatedJson.variables.length > 0 ? generatedJson.variables : [
         { param: '{{1}}', name: 'Customer Name', example: 'Rahul', description: 'Customer Name' }
       ],
       couponCode: generatedJson.couponCode || 'FLAT30',
-      carouselCards: Array.isArray(generatedJson.carouselCards) && generatedJson.carouselCards.length > 0 ? generatedJson.carouselCards : undefined,
+      carouselCards: (() => {
+        const rawCards = Array.isArray(generatedJson.carouselCards) && generatedJson.carouselCards.length > 0 ? generatedJson.carouselCards : null;
+        if (!rawCards) return undefined;
+
+        return rawCards.map((card: any, cIdx: number) => {
+          // --- Title: must be product NAME only, max 60 chars ---
+          let cleanTitle = (card.title || card.name || `Product ${cIdx + 1}`).trim();
+          // If the title looks like body copy (contains "Carousel", "Template", "Showcasing", sentence length >60 chars), reset it
+          if (cleanTitle.length > 60 || /showcasing|template|carousel|swipe through|buy now buttons/i.test(cleanTitle)) {
+            // Try to extract a short product name from the front
+            cleanTitle = cleanTitle.split(/[.!,|]/)[0].trim().slice(0, 60).trim();
+          }
+          // Final cap
+          cleanTitle = cleanTitle.slice(0, 60);
+
+          // --- Body Text: price + category line only, max 160 chars ---
+          let cleanBody = (card.bodyText || '').trim();
+          if (cleanBody.length > 160 || /showcasing|template|carousel|swipe through/i.test(cleanBody)) {
+            // Try to preserve price info if it's in there
+            const priceMatch = cleanBody.match(/₹[\d,]+/);
+            cleanBody = priceMatch ? `${priceMatch[0]} • Premium Activewear` : 'Premium Activewear';
+          }
+          cleanBody = cleanBody.slice(0, 160);
+
+          // --- Product URL: must be a clean /products/<handle> URL ---
+          const sanitizeProductUrl = (rawUrl: string | undefined): string => {
+            if (!rawUrl) return `https://${brandDomain}/collections/all`;
+            // If URL contains 60+ char path segments it's malformed — rebuild from slug
+            try {
+              const parsed = new URL(rawUrl);
+              const pathParts = parsed.pathname.split('/').filter(Boolean);
+              // Find 'products' segment and take ONLY the immediate next segment
+              const prodIdx = pathParts.indexOf('products');
+              if (prodIdx !== -1 && pathParts[prodIdx + 1]) {
+                const handle = pathParts[prodIdx + 1];
+                // If handle looks like a real slug (no spaces, reasonable length)
+                if (handle.length <= 120 && /^[a-z0-9%-]+$/i.test(handle)) {
+                  return `https://${brandDomain}/products/${handle}`;
+                }
+              }
+              // Fallback: derive from title
+              const titleSlug = cleanTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+              return `https://${brandDomain}/products/${titleSlug}`;
+            } catch {
+              return `https://${brandDomain}/collections/all`;
+            }
+          };
+
+          // Sanitize each button URL
+          const cleanButtons = Array.isArray(card.buttons) ? card.buttons.map((btn: any) => {
+            if (btn.type === 'URL') {
+              return { ...btn, url: sanitizeProductUrl(btn.url), text: (btn.text || 'Buy Now').slice(0, 25) };
+            }
+            return btn;
+          }) : [
+            { type: 'URL', text: 'Buy Now', url: sanitizeProductUrl(undefined), urlType: 'STATIC' },
+            { type: 'URL', text: 'Explore More', url: `https://${brandDomain}/collections/all`, urlType: 'STATIC' }
+          ];
+
+          return {
+            id: card.id || `card_${cIdx + 1}`,
+            mediaUrl: card.mediaUrl || 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800&auto=format&fit=crop&q=80',
+            headerType: 'IMAGE',
+            title: cleanTitle,
+            bodyText: cleanBody,
+            buttons: cleanButtons
+          };
+        });
+      })(),
       explanation: generatedJson.explanation || `Template tailored dynamically for ${brandName} with real contact details, product references, and Meta-compliant CTA buttons.`,
       complianceChecks: Array.isArray(generatedJson.complianceChecks) && generatedJson.complianceChecks.length > 0 ? generatedJson.complianceChecks : [
         '✅ Name is strictly lowercase snake_case alphanumeric',
