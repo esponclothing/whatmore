@@ -785,9 +785,6 @@ export async function updateCRMProfileFromWhatsApp(data: {
         businessName: data.businessName,
         contactPerson: data.contactPerson,
         mobile: data.mobile,
-        email: data.email,
-        city: data.city,
-        state: data.state,
         customerType: data.customerType,
         leadStage: data.leadStage,
         tags: data.tags,
@@ -4757,9 +4754,6 @@ export async function createCRMCustomerAction(data: {
         contactPerson: data.contactPerson,
         mobile: data.mobile,
         businessName: data.businessName || data.contactPerson,
-        email: data.email || null,
-        city: data.city || null,
-        state: data.state || null,
         customerType: data.customerType || "Retailer"
       }
     });
@@ -6076,7 +6070,6 @@ export async function getWhatsAppContactsListAction(params?: {
         pushedToCrm: isDone,
         leadStage: c.leadStage,
         status: c.status,
-        city: c.city || "",
         conversationId: c.whatsAppConversations?.[0]?.id || null,
         assignedAgent: assignedAgentName,
         assignedTeam: assignedTeamName
@@ -6384,13 +6377,8 @@ export interface RawImportContactRow {
   businessName?: string;
   shopName?: string;
   companyName?: string;
-  email?: string;
   tags?: string;
-  city?: string;
-  state?: string;
-  pincode?: string | number;
   customerType?: string;
-  notes?: string;
 }
 
 export interface ImportContactsBatchOptions {
@@ -6466,16 +6454,11 @@ export async function importWhatsAppContactsBatchAction(
       const formattedPhone = `+${finalDigits}`;
       const searchKey = finalDigits.slice(-10);
 
-      // Name & details resolution
+      // Name & details resolution (Clean: Only Name, Shop, Tags, Type)
       const rawName = String(row.fullName || row.contactPerson || row.name || row.businessName || row.shopName || "").trim();
       const contactPerson = rawName || `Customer ${searchKey}`;
       const businessName = String(row.businessName || row.shopName || row.companyName || contactPerson).trim();
-      const email = String(row.email || "").trim() || null;
-      const city = String(row.city || "").trim() || null;
-      const state = String(row.state || "").trim() || null;
-      const pincode = String(row.pincode || "").trim() || null;
       const customerType = String(row.customerType || "Retailer").trim();
-      const notes = String(row.notes || "").trim() || null;
 
       // Tag parsing
       const rowTagsRaw = String(row.tags || "").split(/[,;\n•]+/).map(t => t.trim()).filter(Boolean);
@@ -6495,21 +6478,13 @@ export async function importWhatsAppContactsBatchAction(
           mergedTags = Array.from(new Set([...oldTags, ...rowTagsRaw]));
         }
 
-        const updatedNotes = pushToCrm && !existing.notes?.includes("PUSHED_TO_CRM")
-          ? (existing.notes ? `${existing.notes} | PUSHED_TO_CRM` : "PUSHED_TO_CRM")
-          : (notes || existing.notes);
-
         await prisma.customer.update({
           where: { id: existing.id },
           data: {
             contactPerson: contactPerson !== `Customer ${searchKey}` ? contactPerson : existing.contactPerson,
             businessName: businessName || undefined,
-            email: email || undefined,
-            city: city || undefined,
-            state: state || undefined,
-            pincode: pincode || undefined,
+            customerType: customerType || undefined,
             tags: mergedTags.join(", "),
-            notes: updatedNotes || undefined,
             leadStage: pushToCrm ? "CRM Synced" : undefined
           }
         });
@@ -6530,15 +6505,10 @@ export async function importWhatsAppContactsBatchAction(
             businessName,
             mobile: formattedPhone,
             whatsappNumber: formattedPhone,
-            email,
-            city,
-            state,
-            pincode,
             customerType,
             tags: rowTagsRaw.join(", "),
             status: "New Lead",
-            leadStage: pushToCrm ? "CRM Synced" : "Contacted",
-            notes: pushToCrm ? (notes ? `${notes} | PUSHED_TO_CRM` : "PUSHED_TO_CRM") : notes
+            leadStage: pushToCrm ? "CRM Synced" : "Contacted"
           }
         });
 
@@ -6893,16 +6863,9 @@ export async function exportAllWhatsAppContactsAction() {
         businessName: true,
         mobile: true,
         whatsappNumber: true,
-        email: true,
-        city: true,
-        state: true,
-        pincode: true,
         customerType: true,
         tags: true,
-        notes: true,
-        status: true,
-        leadStage: true,
-        createdAt: true
+        status: true
       },
       take: 10000
     });

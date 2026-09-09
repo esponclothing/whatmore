@@ -60,9 +60,9 @@ export default function TemplatePickerModal({ onClose, activeConvDetail, onSendT
   const businessName = activeConvDetail?.customer?.businessName || "";
   const phone = activeConvDetail?.customer?.whatsappNumber || activeConvDetail?.customer?.mobile || "";
   const agentName = activeConvDetail?.assignedEmployee?.user?.name || "Sales Rep";
-  const brandName = "Espon";
-  const city = activeConvDetail?.customer?.city || "";
-  const state = activeConvDetail?.customer?.state || "";
+  const brandName = "Whatmore";
+  const city = (activeConvDetail?.customer as any)?.city || "";
+  const state = (activeConvDetail?.customer as any)?.state || "";
 
   // Extract clean tags
   const tagsList = (() => {

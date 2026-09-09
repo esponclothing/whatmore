@@ -627,9 +627,9 @@ export default function WhatsAppInboxComponent() {
             businessName: res.conversation.customer?.businessName || "",
             contactPerson: res.conversation.customer?.contactPerson || "",
             mobile: res.conversation.customer?.mobile || "",
-            email: res.conversation.customer?.email || "",
-            city: res.conversation.customer?.city || "",
-            state: res.conversation.customer?.state || "",
+            email: (res.conversation.customer as any)?.email || "",
+            city: (res.conversation.customer as any)?.city || "",
+            state: (res.conversation.customer as any)?.state || "",
             customerType: res.conversation.customer?.customerType || "Wholesaler",
             leadStage: res.conversation.leadStatus || "New Lead",
             tags: res.conversation.tags || ""
@@ -2830,13 +2830,13 @@ export default function WhatsAppInboxComponent() {
                 </div>
                 <div className="info-item">
                   <Mail size={14} />
-                  <span>{activeConvDetail.customer?.email || "No email added"}</span>
+                  <span>{(activeConvDetail.customer as any)?.email || "No email added"}</span>
                 </div>
                 <div className="info-item">
                   <MapPin size={14} />
                   <span>
-                    {activeConvDetail.customer?.city || "Surat"},{" "}
-                    {activeConvDetail.customer?.state || "Gujarat"}
+                    {(activeConvDetail.customer as any)?.city || "Surat"},{" "}
+                    {(activeConvDetail.customer as any)?.state || "Gujarat"}
                   </span>
                 </div>
                 <div className="info-item">

@@ -256,15 +256,11 @@ model Customer {
   contactPerson   String
   mobile          String
   whatsappNumber  String?
-  email           String?
   alternatePhone  String?
   gstNumber       String?
   pan             String?
   billingAddress  String?
   shippingAddress String?
-  city            String?
-  state           String?
-  pincode         String?
   landmark        String?
 
   openingBalance  Float    @default(0)

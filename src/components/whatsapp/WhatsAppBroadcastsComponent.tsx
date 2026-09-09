@@ -502,7 +502,7 @@ export default function WhatsAppBroadcastsComponent() {
       audienceType,
       selectedTags: audienceType === "TAGS" ? selectedTags : undefined,
       customPhones: audienceType === "CUSTOM" ? customRecipientsList.map((r) => r.mobile) : undefined,
-      customRecipients: audienceType === "CUSTOM" ? customRecipientsList.map((r) => ({ toPhone: r.mobile, customerName: r.contactPerson, customerCity: r.city })) : undefined,
+      customRecipients: audienceType === "CUSTOM" ? customRecipientsList.map((r) => ({ toPhone: r.mobile, customerName: r.contactPerson, customerCity: (r as any).city || "India" })) : undefined,
       scheduledAt: isScheduled && scheduledAt ? scheduledAt : undefined,
       variablesMap: JSON.stringify(formattedMappings),
       headerMediaUrl: headerMediaUrl.trim() || undefined,
@@ -590,7 +590,7 @@ export default function WhatsAppBroadcastsComponent() {
         (c.contactPerson && c.contactPerson.toLowerCase().includes(q)) ||
         (c.businessName && c.businessName.toLowerCase().includes(q)) ||
         (c.mobile && c.mobile.includes(q)) ||
-        (c.city && c.city.toLowerCase().includes(q)) ||
+        ((c as any).city && (c as any).city.toLowerCase().includes(q)) ||
         (c.tags && c.tags.toLowerCase().includes(q))
     );
   }, [filteredAudienceContacts, previewSearchQuery]);
@@ -1769,7 +1769,7 @@ export default function WhatsAppBroadcastsComponent() {
                                   </span>
                                 </td>
                                 <td className="py-2 px-4 text-gray-500 dark:text-gray-400">
-                                  {contact.city || "-"}
+                                  {(contact as any).city || "-"}
                                 </td>
                                 <td className="py-2 px-4">
                                   <div className="flex flex-wrap gap-1 max-w-[220px]">

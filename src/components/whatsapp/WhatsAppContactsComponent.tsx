@@ -74,6 +74,23 @@ export default function WhatsAppContactsComponent() {
   const [importFileName, setImportFileName] = useState("");
   const [parsingFile, setParsingFile] = useState(false);
   const [parsedRows, setParsedRows] = useState<any[]>([]);
+  const [rawSheetRows, setRawSheetRows] = useState<any[]>([]);
+  const [sheetHeaders, setSheetHeaders] = useState<string[]>([]);
+  const [fieldMappings, setFieldMappings] = useState<{
+    phoneNumber: string;
+    countryCode: string;
+    fullName: string;
+    businessName: string;
+    tags: string;
+    customerType: string;
+  }>({
+    phoneNumber: "",
+    countryCode: "",
+    fullName: "",
+    businessName: "",
+    tags: "",
+    customerType: ""
+  });
   const [importError, setImportError] = useState("");
   const [importing, setImporting] = useState(false);
   const [importDefaultCc, setImportDefaultCc] = useState("+91");
@@ -349,13 +366,8 @@ export default function WhatsAppContactsComponent() {
         "Country Code",
         "Full Name (Required)",
         "Business / Shop Name",
-        "Email",
         "Tags (Comma-Separated)",
-        "City",
-        "State",
-        "Pincode",
-        "Customer Type",
-        "Notes"
+        "Customer Type"
       ];
 
       const sampleRows = [
@@ -364,65 +376,40 @@ export default function WhatsAppContactsComponent() {
           "+91",
           "Rahul Sharma",
           "Sharma Activewear & Sports",
-          "rahul@sharmasports.in",
           "Wholesale, VIP Buyer, Trackpants",
-          "New Delhi",
-          "Delhi",
-          "110001",
-          "Wholesaler",
-          "Regular bulk buyer for gym activewear & trackpants"
+          "Wholesaler"
         ],
         [
           "9123456780",
           "+91",
           "Priya Verma",
           "FitZone Studios",
-          "priya@fitzone.com",
           "Retail, High Spender, Gym Co-Ords",
-          "Mumbai",
-          "Maharashtra",
-          "400050",
-          "Retailer",
-          "Interested in women gym wear, co-ords, and sports shorts"
+          "Retailer"
         ],
         [
           "7206066678",
           "+91",
           "Amit Patel",
           "Patel Fitness Hub",
-          "amit@patelfitness.com",
           "Summer 2026, Bulk Buyer, Polyester Tees",
-          "Ahmedabad",
-          "Gujarat",
-          "380009",
-          "Wholesaler",
-          "Inquired for factory wholesale catalog & GST invoice"
+          "Wholesaler"
         ],
         [
           "9988776655",
           "+91",
           "Karan Singh",
           "Singh Uniforms & Apparel",
-          "karan@singhapparel.com",
           "Sublimation Tees, Dealer, B2B",
-          "Ludhiana",
-          "Punjab",
-          "141001",
-          "Distributor",
-          "Requires 500+ pcs minimum order quantity per batch"
+          "Distributor"
         ],
         [
           "9811223344",
           "+91",
           "Sneha Kapoor",
           "Kapoor Fashion Boutique",
-          "sneha@kapoorfashion.in",
           "Festive Sale, Repeat Customer",
-          "Jaipur",
-          "Rajasthan",
-          "302001",
-          "Retailer",
-          "VIP festive buyer for activewear dry-fit t-shirts"
+          "Retailer"
         ]
       ];
 
@@ -436,15 +423,10 @@ export default function WhatsAppContactsComponent() {
       ws["!cols"] = [
         { wch: 24 }, // Phone Number
         { wch: 14 }, // Country Code
-        { wch: 22 }, // Full Name
-        { wch: 30 }, // Business Name
-        { wch: 26 }, // Email
+        { wch: 24 }, // Full Name
+        { wch: 32 }, // Business / Shop Name
         { wch: 38 }, // Tags
-        { wch: 16 }, // City
-        { wch: 16 }, // State
-        { wch: 12 }, // Pincode
-        { wch: 16 }, // Customer Type
-        { wch: 45 }  // Notes
+        { wch: 18 }  // Customer Type
       ];
 
       XLSX.utils.book_append_sheet(wb, ws, "Contacts Import Template");
@@ -456,13 +438,8 @@ export default function WhatsAppContactsComponent() {
         ["Country Code", "Optional", "+91 (or +1, +44, +971)", "Country dial code. If omitted or left empty, default +91 (India) is automatically applied."],
         ["Full Name", "YES (Mandatory)", "Rahul Sharma", "Name of the customer, shop owner, or contact person."],
         ["Business / Shop Name", "Optional", "Sharma Activewear & Sports", "Name of store, retail business, gym brand, or firm."],
-        ["Email", "Optional", "rahul@sharmasports.in", "Customer email address for updates and invoices."],
-        ["Tags", "Optional", "Wholesale, VIP Buyer, Delhi", "Multiple tags separated by commas. These will be added as searchable tags in WhatsApp campaigns & broadcast audience pickers."],
-        ["City", "Optional", "New Delhi", "Customer delivery or store city."],
-        ["State", "Optional", "Delhi", "Customer state."],
-        ["Pincode", "Optional", "110001", "6-digit postal code."],
+        ["Tags", "Optional", "Wholesale, VIP Buyer, Activewear", "Multiple tags separated by commas. These will be added as searchable tags in WhatsApp campaigns & broadcast audience pickers."],
         ["Customer Type", "Optional", "Wholesaler / Retailer", "Account type (Wholesaler, Retailer, Distributor, Direct Buyer)."],
-        ["Notes", "Optional", "Interested in gym trackpants", "Any custom notes, conversation history, or order requirements."],
         [],
         ["IMPORTANT MERGING & IMPORT RULES", "", "", ""],
         ["1. Duplicate Handling", "", "", "If a contact with the same phone number already exists, their details will be updated and new tags will be safely merged."],
@@ -512,15 +489,8 @@ export default function WhatsAppContactsComponent() {
         "Country Code",
         "Full Name",
         "Business / Shop Name",
-        "Email",
         "Tags",
-        "City",
-        "State",
-        "Pincode",
-        "Customer Type",
-        "Notes",
-        "Lead Stage",
-        "Created At"
+        "Customer Type"
       ];
 
       const rows = exportList.map((c: any) => {
@@ -533,15 +503,8 @@ export default function WhatsAppContactsComponent() {
           parsed.countryCode || "+91",
           c.contactPerson || c.name || "",
           c.businessName || "",
-          c.email || "",
           tagsStr,
-          c.city || "",
-          c.state || "",
-          c.pincode || "",
-          c.customerType || "Retailer",
-          c.notes || "",
-          c.leadStage || "Contacted",
-          c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-IN") : ""
+          c.customerType || "Retailer"
         ];
       });
 
@@ -552,15 +515,8 @@ export default function WhatsAppContactsComponent() {
         { wch: 14 },
         { wch: 24 },
         { wch: 30 },
-        { wch: 26 },
         { wch: 35 },
-        { wch: 16 },
-        { wch: 16 },
-        { wch: 12 },
-        { wch: 16 },
-        { wch: 35 },
-        { wch: 16 },
-        { wch: 14 }
+        { wch: 18 }
       ];
 
       XLSX.utils.book_append_sheet(wb, ws, "WhatsApp Contacts");
@@ -574,8 +530,76 @@ export default function WhatsAppContactsComponent() {
     }
   };
 
+  // Helper to re-map raw sheet rows according to user's column mappings
+  const applyMappingToRows = (
+    rawRows: any[],
+    mapping: {
+      phoneNumber: string;
+      countryCode: string;
+      fullName: string;
+      businessName: string;
+      tags: string;
+      customerType: string;
+    }
+  ) => {
+    const normalized = rawRows.map((row: any) => ({
+      phoneNumber: mapping.phoneNumber ? String(row[mapping.phoneNumber] ?? "").trim() : "",
+      countryCode: mapping.countryCode ? String(row[mapping.countryCode] ?? "").trim() : "",
+      fullName: mapping.fullName ? String(row[mapping.fullName] ?? "").trim() : "",
+      businessName: mapping.businessName ? String(row[mapping.businessName] ?? "").trim() : "",
+      tags: mapping.tags ? String(row[mapping.tags] ?? "").trim() : "",
+      customerType: mapping.customerType ? String(row[mapping.customerType] ?? "").trim() : ""
+    }));
+
+    const validRows = normalized.filter((r: any) => {
+      const digits = String(r.phoneNumber).replace(/\D/g, "");
+      return digits.length >= 7 || r.fullName.trim().length > 0;
+    });
+
+    return validRows;
+  };
+
+  // User manually changes a matched column dropdown
+  const handleUpdateFieldMapping = (
+    fieldKey: "phoneNumber" | "countryCode" | "fullName" | "businessName" | "tags" | "customerType",
+    selectedHeader: string
+  ) => {
+    const updated = {
+      ...fieldMappings,
+      [fieldKey]: selectedHeader
+    };
+    setFieldMappings(updated);
+
+    if (rawSheetRows.length > 0) {
+      const validRows = applyMappingToRows(rawSheetRows, updated);
+      setParsedRows(validRows);
+      if (validRows.length === 0) {
+        setImportError("No valid contact rows with phone numbers were found with this column selection.");
+      } else {
+        setImportError("");
+      }
+    }
+  };
+
+  const handleCloseImportModal = () => {
+    setShowImportModal(false);
+    setParsedRows([]);
+    setRawSheetRows([]);
+    setSheetHeaders([]);
+    setImportError("");
+    setImportFileName("");
+    setFieldMappings({
+      phoneNumber: "",
+      countryCode: "",
+      fullName: "",
+      businessName: "",
+      tags: "",
+      customerType: ""
+    });
+  };
+
   // ---------------------------------------------------------
-  // PARSE UPLOADED EXCEL / CSV FILE
+  // PARSE UPLOADED EXCEL / CSV FILE WITH AUTO FIELD MATCHING
   // ---------------------------------------------------------
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -585,6 +609,8 @@ export default function WhatsAppContactsComponent() {
     setParsingFile(true);
     setImportError("");
     setParsedRows([]);
+    setRawSheetRows([]);
+    setSheetHeaders([]);
 
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -601,52 +627,43 @@ export default function WhatsAppContactsComponent() {
           return;
         }
 
-        // Map dynamic header columns to standard keys
-        const normalized = rawJson.map((row: any) => {
-          const phoneKey = Object.keys(row).find((k) =>
-            /phone|mobile|contact\s*no|contact\s*number|number|whatsapp/i.test(k)
-          );
-          const nameKey = Object.keys(row).find((k) =>
-            /full\s*name|contact\s*person|customer\s*name|name|buyer/i.test(k)
-          );
-          const ccKey = Object.keys(row).find((k) =>
-            /country\s*code|country|dial\s*code|cc/i.test(k)
-          );
-          const shopKey = Object.keys(row).find((k) =>
-            /shop|business|company|store|firm/i.test(k)
-          );
-          const tagsKey = Object.keys(row).find((k) =>
-            /tag|category|labels|group/i.test(k)
-          );
-          const emailKey = Object.keys(row).find((k) => /email|mail/i.test(k));
-          const cityKey = Object.keys(row).find((k) => /city|location/i.test(k));
-          const stateKey = Object.keys(row).find((k) => /state|province/i.test(k));
-          const pinKey = Object.keys(row).find((k) => /pincode|pin|postal|zip/i.test(k));
-          const typeKey = Object.keys(row).find((k) => /type|customer\s*type|tier/i.test(k));
-          const notesKey = Object.keys(row).find((k) => /note|remark|comment/i.test(k));
+        const headers = Object.keys(rawJson[0]);
+        setSheetHeaders(headers);
+        setRawSheetRows(rawJson);
 
-          return {
-            phoneNumber: phoneKey ? row[phoneKey] : "",
-            countryCode: ccKey ? row[ccKey] : "",
-            fullName: nameKey ? row[nameKey] : "",
-            businessName: shopKey ? row[shopKey] : "",
-            email: emailKey ? row[emailKey] : "",
-            tags: tagsKey ? row[tagsKey] : "",
-            city: cityKey ? row[cityKey] : "",
-            state: stateKey ? row[stateKey] : "",
-            pincode: pinKey ? row[pinKey] : "",
-            customerType: typeKey ? row[typeKey] : "",
-            notes: notesKey ? row[notesKey] : ""
-          };
-        });
+        // Auto-match dynamic header columns to our 6 core fields
+        const matchedPhone = headers.find((k) =>
+          /phone|mobile|contact\s*no|contact\s*number|number|whatsapp/i.test(k)
+        ) || "";
+        const matchedName = headers.find((k) =>
+          /full\s*name|contact\s*person|customer\s*name|name|buyer/i.test(k)
+        ) || "";
+        const matchedCc = headers.find((k) =>
+          /country\s*code|country|dial\s*code|cc/i.test(k)
+        ) || "";
+        const matchedShop = headers.find((k) =>
+          /shop|business|company|store|firm/i.test(k)
+        ) || "";
+        const matchedTags = headers.find((k) =>
+          /tag|category|labels|group/i.test(k)
+        ) || "";
+        const matchedType = headers.find((k) =>
+          /type|customer\s*type|tier/i.test(k)
+        ) || "";
 
-        const validRows = normalized.filter((r: any) => {
-          const digits = String(r.phoneNumber).replace(/\D/g, "");
-          return digits.length >= 7 || r.fullName.trim().length > 0;
-        });
+        const initialMapping = {
+          phoneNumber: matchedPhone,
+          countryCode: matchedCc,
+          fullName: matchedName,
+          businessName: matchedShop,
+          tags: matchedTags,
+          customerType: matchedType
+        };
+        setFieldMappings(initialMapping);
 
+        const validRows = applyMappingToRows(rawJson, initialMapping);
         if (validRows.length === 0) {
-          setImportError("No valid contact rows with phone numbers were found in the file. Check the format.");
+          setImportError("No valid contact rows with phone numbers were found in the file. Check column mapping below.");
         }
 
         setParsedRows(validRows);
@@ -680,6 +697,16 @@ export default function WhatsAppContactsComponent() {
       if (res.success) {
         setShowImportModal(false);
         setParsedRows([]);
+        setRawSheetRows([]);
+        setSheetHeaders([]);
+        setFieldMappings({
+          phoneNumber: "",
+          countryCode: "",
+          fullName: "",
+          businessName: "",
+          tags: "",
+          customerType: ""
+        });
         setImportFileName("");
         fetchContacts();
 
@@ -922,7 +949,7 @@ export default function WhatsAppContactsComponent() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, mobile number, tag, or city..."
+            placeholder="Search by name, mobile number, business, or tag..."
             className="w-full pl-10 pr-4 py-2 text-sm bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
@@ -935,11 +962,11 @@ export default function WhatsAppContactsComponent() {
               <select
                 value={crmFilter}
                 onChange={(e) => setCrmFilter(e.target.value as any)}
-                className="bg-transparent text-xs font-semibold text-gray-700 dark:text-gray-200 outline-none cursor-pointer"
+                className="bg-transparent text-xs font-bold text-gray-800 dark:text-gray-200 outline-none cursor-pointer"
               >
-                <option value="ALL">All Status</option>
-                <option value="DONE">✅ Done (Pushed)</option>
-                <option value="NOT_DONE">⏳ Not Done (Pending)</option>
+                <option value="ALL">All Statuses</option>
+                <option value="DONE">CRM Pushed (Done)</option>
+                <option value="NOT_DONE">Not Pushed (Pending)</option>
               </select>
             </div>
           )}
@@ -951,12 +978,12 @@ export default function WhatsAppContactsComponent() {
               <select
                 value={tagFilter}
                 onChange={(e) => setTagFilter(e.target.value)}
-                className="bg-transparent text-xs font-semibold text-gray-700 dark:text-gray-200 outline-none cursor-pointer"
+                className="bg-transparent text-xs font-bold text-gray-800 dark:text-gray-200 outline-none cursor-pointer max-w-[120px] truncate"
               >
                 <option value="ALL">All Tags</option>
                 {allAvailableTags.map((t) => (
                   <option key={t} value={t}>
-                    🏷️ {t}
+                    {t}
                   </option>
                 ))}
               </select>
@@ -977,7 +1004,6 @@ export default function WhatsAppContactsComponent() {
               <tr className="bg-gray-50 dark:bg-slate-900/50 border-b border-gray-200 dark:border-slate-700 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                 <th className="py-3.5 px-5">Name & Customer</th>
                 <th className="py-3.5 px-5">Mobile Number</th>
-                <th className="py-3.5 px-5">Created Time & Date</th>
                 <th className="py-3.5 px-5">Tags Applied</th>
                 {isCrmConnected && <th className="py-3.5 px-5">Pushed to CRM</th>}
                 <th className="py-3.5 px-5 text-right">Actions</th>
@@ -987,14 +1013,14 @@ export default function WhatsAppContactsComponent() {
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {loading ? (
                 <tr>
-                  <td colSpan={isCrmConnected ? 6 : 5} className="py-12 text-center text-gray-400">
+                  <td colSpan={isCrmConnected ? 5 : 4} className="py-12 text-center text-gray-400">
                     <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-indigo-500" />
                     Loading contacts list...
                   </td>
                 </tr>
               ) : contacts.length === 0 ? (
                 <tr>
-                  <td colSpan={isCrmConnected ? 6 : 5} className="py-16 text-center text-gray-400">
+                  <td colSpan={isCrmConnected ? 5 : 4} className="py-16 text-center text-gray-400">
                     <Users size={40} className="mx-auto mb-3 opacity-30" />
                     <div className="font-bold text-gray-700 dark:text-gray-300">No contacts found</div>
                     <div className="text-xs mt-1">Try adjusting your search or create a new contact.</div>
@@ -1043,9 +1069,6 @@ export default function WhatsAppContactsComponent() {
                               {c.businessName}
                             </div>
                           )}
-                          {c.city && (
-                            <div className="text-[11px] text-gray-400 mt-0.5">📍 {c.city}</div>
-                          )}
                         </div>
                       </div>
                     </td>
@@ -1066,14 +1089,7 @@ export default function WhatsAppContactsComponent() {
                       </div>
                     </td>
 
-                    {/* 3. Created Time & Date */}
-                    <td className="py-3.5 px-5">
-                      <div className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        {formatDateTime(c.createdAt)}
-                      </div>
-                    </td>
-
-                    {/* 4. Tags Applied - only show 1 tag and a "+N more" badge if more exist */}
+                    {/* 3. Tags Applied - only show 1 tag and a "+N more" badge if more exist */}
                     <td className="py-3.5 px-5">
                       <div className="flex items-center gap-1.5 flex-nowrap">
                         {c.tags && c.tags.length > 0 ? (
@@ -1506,12 +1522,7 @@ export default function WhatsAppContactsComponent() {
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setShowImportModal(false);
-                  setParsedRows([]);
-                  setImportError("");
-                  setImportFileName("");
-                }}
+                onClick={handleCloseImportModal}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700 transition"
               >
                 <X size={20} />
@@ -1596,35 +1607,164 @@ export default function WhatsAppContactsComponent() {
                 </div>
               )}
 
-              {/* Parsed Contacts Preview */}
+              {/* 1. Matched Fields Preview (Column Mapping) */}
+              {rawSheetRows.length > 0 && (
+                <div className="space-y-3 p-4 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-gray-200 dark:border-slate-800">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+                        <CheckCheck size={16} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                          <span>Matched Fields Preview</span>
+                          <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-full">
+                            {Object.values(fieldMappings).filter(Boolean).length} of 6 Fields Matched
+                          </span>
+                        </h4>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                          Verify how columns in your spreadsheet connect to WhatMore fields. You can adjust mappings if needed.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mapping Grid (6 Core Fields) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                    {[
+                      { key: "phoneNumber", label: "Phone Number", required: true, icon: Phone, fallbackHint: "10-digit number" },
+                      { key: "fullName", label: "Full Name", required: true, icon: Users, fallbackHint: "Customer / Contact" },
+                      { key: "businessName", label: "Business / Shop Name", required: false, icon: Briefcase, fallbackHint: "Shop / Store Name" },
+                      { key: "countryCode", label: "Country Code", required: false, icon: Sparkles, fallbackHint: `Default ${importDefaultCc}` },
+                      { key: "tags", label: "Tags", required: false, icon: Tag, fallbackHint: "Comma-separated tags" },
+                      { key: "customerType", label: "Customer Type", required: false, icon: Layers, fallbackHint: "Default Retailer" }
+                    ].map((field) => {
+                      const mappedCol = fieldMappings[field.key as keyof typeof fieldMappings];
+                      const isMatched = Boolean(mappedCol);
+                      const sampleVal = isMatched && rawSheetRows[0] ? String(rawSheetRows[0][mappedCol] ?? "") : "";
+
+                      return (
+                        <div
+                          key={field.key}
+                          className={`p-3 rounded-xl border transition ${
+                            isMatched
+                              ? "bg-white dark:bg-slate-800/90 border-emerald-200 dark:border-emerald-900/50 shadow-2xs"
+                              : "bg-white/60 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                              <field.icon size={12} className={isMatched ? "text-emerald-500" : "text-gray-400"} />
+                              <span>{field.label}</span>
+                              {field.required && <span className="text-rose-500 text-[11px]">*</span>}
+                            </span>
+                            {isMatched ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                                ✓ Matched
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-gray-500 bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
+                                Not in file
+                              </span>
+                            )}
+                          </div>
+
+                          <select
+                            value={mappedCol}
+                            onChange={(e) =>
+                              handleUpdateFieldMapping(
+                                field.key as keyof typeof fieldMappings,
+                                e.target.value
+                              )
+                            }
+                            className="w-full text-xs font-semibold px-2.5 py-1.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 text-gray-800 dark:text-gray-200"
+                          >
+                            <option value="">-- Do not map (Use default) --</option>
+                            {sheetHeaders.map((hdr) => (
+                              <option key={hdr} value={hdr}>
+                                Column: {hdr}
+                              </option>
+                            ))}
+                          </select>
+
+                          <div className="mt-1.5 text-[11px] text-gray-400 truncate flex items-center justify-between gap-1">
+                            <span className="text-[10px] font-medium text-gray-400">Row 1 sample:</span>
+                            <span
+                              className="font-mono text-[10px] font-semibold text-gray-700 dark:text-gray-300 truncate max-w-[140px]"
+                              title={sampleVal || field.fallbackHint}
+                            >
+                              {sampleVal ? `"${sampleVal}"` : field.fallbackHint}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 2. Live Data Preview with Matched Fields */}
               {parsedRows.length > 0 && (
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                       <CheckCircle2 size={14} className="text-emerald-600" />
-                      <span>Found {parsedRows.length} Contacts Ready to Import</span>
+                      <span>Data Preview ({parsedRows.length} Contacts Ready to Import)</span>
                     </span>
-                    <span className="text-[11px] text-gray-400">Showing first 4 rows preview</span>
+                    <span className="text-[11px] text-gray-400">Showing first 4 rows with matched fields</span>
                   </div>
 
                   <div className="border border-gray-200 dark:border-slate-700 rounded-2xl overflow-hidden bg-gray-50/50 dark:bg-slate-900/50">
-                    <div className="max-h-48 overflow-x-auto overflow-y-auto divide-y divide-gray-200 dark:divide-slate-800 text-xs">
+                    <div className="max-h-52 overflow-x-auto overflow-y-auto divide-y divide-gray-200 dark:divide-slate-800 text-xs">
                       <table className="w-full text-left">
                         <thead className="bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 font-bold text-[11px]">
                           <tr>
-                            <th className="px-3 py-2">Phone</th>
-                            <th className="px-3 py-2">Name</th>
-                            <th className="px-3 py-2">Shop / Business</th>
-                            <th className="px-3 py-2">Tags</th>
-                            <th className="px-3 py-2">City</th>
+                            <th className="px-3 py-2.5">
+                              <div>Phone Number</div>
+                              <div className="text-[10px] font-normal text-emerald-600 dark:text-emerald-400 truncate">
+                                ← {fieldMappings.phoneNumber ? `"${fieldMappings.phoneNumber}"` : "Auto"}
+                              </div>
+                            </th>
+                            <th className="px-3 py-2.5">
+                              <div>Country Code</div>
+                              <div className="text-[10px] font-normal text-gray-400 truncate">
+                                ← {fieldMappings.countryCode ? `"${fieldMappings.countryCode}"` : importDefaultCc}
+                              </div>
+                            </th>
+                            <th className="px-3 py-2.5">
+                              <div>Full Name</div>
+                              <div className="text-[10px] font-normal text-emerald-600 dark:text-emerald-400 truncate">
+                                ← {fieldMappings.fullName ? `"${fieldMappings.fullName}"` : "Auto"}
+                              </div>
+                            </th>
+                            <th className="px-3 py-2.5">
+                              <div>Business / Shop</div>
+                              <div className="text-[10px] font-normal text-gray-400 truncate">
+                                ← {fieldMappings.businessName ? `"${fieldMappings.businessName}"` : "—"}
+                              </div>
+                            </th>
+                            <th className="px-3 py-2.5">
+                              <div>Tags</div>
+                              <div className="text-[10px] font-normal text-gray-400 truncate">
+                                ← {fieldMappings.tags ? `"${fieldMappings.tags}"` : "None"}
+                              </div>
+                            </th>
+                            <th className="px-3 py-2.5">
+                              <div>Customer Type</div>
+                              <div className="text-[10px] font-normal text-gray-400 truncate">
+                                ← {fieldMappings.customerType ? `"${fieldMappings.customerType}"` : "Retailer"}
+                              </div>
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-slate-800 text-gray-700 dark:text-gray-300">
                           {parsedRows.slice(0, 4).map((row: any, idx: number) => (
                             <tr key={idx} className="hover:bg-white dark:hover:bg-slate-800/80">
                               <td className="px-3 py-2 font-mono font-bold text-gray-900 dark:text-white whitespace-nowrap">
-                                {row.countryCode ? `${row.countryCode} ` : ""}
-                                {row.phoneNumber}
+                                {row.phoneNumber || "—"}
+                              </td>
+                              <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">
+                                {row.countryCode || importDefaultCc}
                               </td>
                               <td className="px-3 py-2 font-medium whitespace-nowrap">
                                 {row.fullName || "—"}
@@ -1637,9 +1777,9 @@ export default function WhatsAppContactsComponent() {
                                   {row.tags
                                     ? String(row.tags)
                                         .split(",")
-                                        .map((t) => t.trim())
+                                        .map((t: string) => t.trim())
                                         .filter(Boolean)
-                                        .map((t, tidx) => (
+                                        .map((t: string, tidx: number) => (
                                           <span
                                             key={tidx}
                                             className="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded text-[10px] font-semibold whitespace-nowrap"
@@ -1650,8 +1790,8 @@ export default function WhatsAppContactsComponent() {
                                     : <span className="text-gray-400 text-[10px]">—</span>}
                                 </div>
                               </td>
-                              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
-                                {row.city || "—"}
+                              <td className="px-3 py-2 text-gray-500 whitespace-nowrap font-medium">
+                                {row.customerType || "Retailer"}
                               </td>
                             </tr>
                           ))}
@@ -1660,7 +1800,7 @@ export default function WhatsAppContactsComponent() {
                     </div>
                     {parsedRows.length > 4 && (
                       <div className="px-3 py-1.5 bg-gray-100 dark:bg-slate-800 text-center text-[11px] font-semibold text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-slate-700">
-                        + {parsedRows.length - 4} more contacts will be imported
+                        + {parsedRows.length - 4} more contacts will be imported with this matched mapping
                       </div>
                     )}
                   </div>
@@ -1750,12 +1890,7 @@ export default function WhatsAppContactsComponent() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowImportModal(false);
-                    setParsedRows([]);
-                    setImportError("");
-                    setImportFileName("");
-                  }}
+                  onClick={handleCloseImportModal}
                   className="px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 text-sm font-semibold rounded-xl hover:bg-gray-200 transition"
                 >
                   Cancel
