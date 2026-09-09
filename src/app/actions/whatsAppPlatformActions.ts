@@ -6440,6 +6440,7 @@ export interface ImportContactsBatchOptions {
   appendTags?: boolean; // default true (merges tags instead of replacing)
   pushToCrm?: boolean;
   batchTag?: string; // e.g. "ExcelImport_Sep2026"
+  skipRevalidate?: boolean;
 }
 
 export async function importWhatsAppContactsBatchAction(
@@ -6462,10 +6463,37 @@ export async function importWhatsAppContactsBatchAction(
     const errors: string[] = [];
     const importedCustomerIds: string[] = [];
 
-    // Pre-fetch existing customers to optimize lookups
-    const existingCustomers = await prisma.customer.findMany({
-      select: { id: true, mobile: true, whatsappNumber: true, tags: true, contactPerson: true, businessName: true }
-    });
+    // Pre-fetch candidate customers matching only the phone numbers in this batch
+    const candidateLookupKeys = new Set<string>();
+    const candidateLast10 = new Set<string>();
+
+    for (const r of rows) {
+      const raw = String(r.phoneNumber || r.phone || r.mobile || "").trim();
+      const digits = raw.replace(/\D/g, "");
+      if (digits.length >= 7) {
+        getPhoneLookupKeys(raw).forEach(k => candidateLookupKeys.add(k));
+        if (digits.length >= 10) {
+          candidateLast10.add(digits.slice(-10));
+        }
+      }
+    }
+
+    const candidateKeysArr = Array.from(candidateLookupKeys);
+    const candidateLast10Arr = Array.from(candidateLast10);
+
+    const existingCustomers = candidateKeysArr.length > 0
+      ? await prisma.customer.findMany({
+          where: {
+            OR: [
+              { mobile: { in: candidateKeysArr } },
+              { whatsappNumber: { in: candidateKeysArr } },
+              ...candidateLast10Arr.map(l10 => ({ mobile: { contains: l10 } })),
+              ...candidateLast10Arr.map(l10 => ({ whatsappNumber: { contains: l10 } }))
+            ]
+          },
+          select: { id: true, mobile: true, whatsappNumber: true, tags: true, contactPerson: true, businessName: true }
+        })
+      : [];
 
     // Multi-key indexing for ironclad deduplication across all phone formats
     const phoneMap = new Map<string, typeof existingCustomers[0]>();
@@ -6610,8 +6638,12 @@ export async function importWhatsAppContactsBatchAction(
       }
     }
 
-    revalidatePath("/whatsapp/contacts");
-    revalidatePath("/whatsapp/templates");
+    if (!options?.skipRevalidate) {
+      try {
+        revalidatePath("/whatsapp/contacts");
+        revalidatePath("/whatsapp/templates");
+      } catch (e) {}
+    }
 
     return {
       success: true,

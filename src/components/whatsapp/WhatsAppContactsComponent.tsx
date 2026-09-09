@@ -94,6 +94,13 @@ export default function WhatsAppContactsComponent() {
   });
   const [importError, setImportError] = useState("");
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{
+    current: number;
+    total: number;
+    percent: number;
+    batchNumber: number;
+    totalBatches: number;
+  } | null>(null);
   const [mergedInSheetCount, setMergedInSheetCount] = useState(0);
   const [cleaningDupes, setCleaningDupes] = useState(false);
   const [importDefaultCc, setImportDefaultCc] = useState("+91");
@@ -716,8 +723,10 @@ export default function WhatsAppContactsComponent() {
   };
 
   // ---------------------------------------------------------
-  // EXECUTE BATCH IMPORT TO DATABASE
+  // EXECUTE CHUNKED BATCH IMPORT TO DATABASE (PREVENTS TIMEOUTS & PAYLOAD OVERFLOWS)
   // ---------------------------------------------------------
+  const CHUNK_SIZE = 150;
+
   const handleExecuteImport = async () => {
     if (parsedRows.length === 0) {
       showToast("No valid contacts to import.", "error");
@@ -725,48 +734,99 @@ export default function WhatsAppContactsComponent() {
     }
 
     setImporting(true);
+    const totalRows = parsedRows.length;
+    const totalBatches = Math.ceil(totalRows / CHUNK_SIZE);
+
+    let totalCreated = 0;
+    let totalUpdated = 0;
+    let totalSkipped = 0;
+    const allImportedCustomerIds: string[] = [];
+
+    setImportProgress({
+      current: 0,
+      total: totalRows,
+      percent: 0,
+      batchNumber: 0,
+      totalBatches
+    });
+
     try {
-      const res = await importWhatsAppContactsBatchAction(parsedRows, {
-        defaultCountryCode: importDefaultCc,
-        appendTags: importAppendTags,
-        pushToCrm: isCrmConnected ? importPushToCrm : false,
-        batchTag: importBatchTag.trim() || undefined
+      for (let b = 0; b < totalBatches; b++) {
+        const start = b * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, totalRows);
+        const chunk = parsedRows.slice(start, end);
+        const isLastBatch = b === totalBatches - 1;
+
+        setImportProgress({
+          current: start,
+          total: totalRows,
+          percent: Math.round((start / totalRows) * 100),
+          batchNumber: b + 1,
+          totalBatches
+        });
+
+        const res = await importWhatsAppContactsBatchAction(chunk, {
+          defaultCountryCode: importDefaultCc,
+          appendTags: importAppendTags,
+          pushToCrm: isCrmConnected ? importPushToCrm : false,
+          batchTag: importBatchTag.trim() || undefined,
+          skipRevalidate: !isLastBatch
+        });
+
+        if (res.success) {
+          totalCreated += res.createdCount || 0;
+          totalUpdated += res.updatedCount || 0;
+          totalSkipped += res.skippedCount || 0;
+          if (res.importedCustomerIds && res.importedCustomerIds.length > 0) {
+            allImportedCustomerIds.push(...res.importedCustomerIds);
+          }
+        } else {
+          console.warn(`[Batch ${b + 1}] Warning:`, res.error);
+        }
+      }
+
+      setImportProgress({
+        current: totalRows,
+        total: totalRows,
+        percent: 100,
+        batchNumber: totalBatches,
+        totalBatches
       });
 
-      if (res.success) {
-        setShowImportModal(false);
-        setParsedRows([]);
-        setRawSheetRows([]);
-        setSheetHeaders([]);
-        setFieldMappings({
-          phoneNumber: "",
-          countryCode: "",
-          fullName: "",
-          businessName: "",
-          tags: "",
-          customerType: ""
-        });
-        setImportFileName("");
-        setMergedInSheetCount(0);
-        fetchContacts();
+      setShowImportModal(false);
+      setParsedRows([]);
+      setRawSheetRows([]);
+      setSheetHeaders([]);
+      setFieldMappings({
+        phoneNumber: "",
+        countryCode: "",
+        fullName: "",
+        businessName: "",
+        tags: "",
+        customerType: ""
+      });
+      setImportFileName("");
+      setMergedInSheetCount(0);
+      setImportProgress(null);
+      fetchContacts();
 
-        if (res.importedCustomerIds && res.importedCustomerIds.length > 0) {
-          setImportedCustomerIds(res.importedCustomerIds);
-          setImportedCount(res.totalProcessed || res.importedCustomerIds.length);
-          setAssignMode("NONE");
-          setShowAssignModal(true);
-        } else {
-          showToast(
-            `🎉 Processed ${res.totalProcessed} contacts (${res.createdCount} new created, ${res.updatedCount} updated)!`
-          );
-        }
+      const uniqueImportedIds = Array.from(new Set(allImportedCustomerIds));
+
+      if (uniqueImportedIds.length > 0) {
+        setImportedCustomerIds(uniqueImportedIds);
+        setImportedCount(uniqueImportedIds.length);
+        setAssignMode("NONE");
+        setShowAssignModal(true);
       } else {
-        showToast(res.error || "Failed to import contacts.", "error");
+        showToast(
+          `🎉 Processed ${totalRows} contacts (${totalCreated} new created, ${totalUpdated} updated)!`
+        );
       }
     } catch (err: any) {
-      showToast(err.message || "Import failed.", "error");
+      showToast(err.message || "Import encountered an error.", "error");
     } finally {
       setImporting(false);
+      setImportProgress(null);
     }
   };
 
@@ -1597,7 +1657,8 @@ export default function WhatsAppContactsComponent() {
               <button
                 type="button"
                 onClick={handleCloseImportModal}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700 transition"
+                disabled={importing}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700 transition disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <X size={20} />
               </button>
@@ -1953,6 +2014,33 @@ export default function WhatsAppContactsComponent() {
                   </label>
                 )}
               </div>
+
+              {/* Live Batch Import Progress Bar */}
+              {importProgress && (
+                <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-800 space-y-2.5 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between text-xs font-bold text-emerald-900 dark:text-emerald-200">
+                    <span className="flex items-center gap-2">
+                      <RefreshCw size={14} className="animate-spin text-emerald-600" />
+                      <span>
+                        Importing: {importProgress.current.toLocaleString()} / {importProgress.total.toLocaleString()} contacts
+                      </span>
+                    </span>
+                    <span className="font-mono text-sm text-emerald-700 dark:text-emerald-300 font-extrabold">
+                      {importProgress.percent}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-emerald-200 dark:bg-emerald-900/60 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className="bg-emerald-600 h-2.5 rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${Math.max(3, importProgress.percent)}%` }}
+                    />
+                  </div>
+                  <div className="text-[11px] text-emerald-700 dark:text-emerald-300 flex justify-between items-center">
+                    <span>Batch {importProgress.batchNumber} of {importProgress.totalBatches} (150 contacts per batch)</span>
+                    <span className="font-semibold text-emerald-800 dark:text-emerald-200">⚡ Deduplicating & updating in real-time</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}
@@ -1960,7 +2048,8 @@ export default function WhatsAppContactsComponent() {
               <button
                 type="button"
                 onClick={handleDownloadDummyTemplate}
-                className="text-xs font-bold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 transition"
+                disabled={importing}
+                className="text-xs font-bold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 transition disabled:opacity-50"
               >
                 <Download size={13} />
                 <span>Get Dummy Template</span>
@@ -1970,7 +2059,8 @@ export default function WhatsAppContactsComponent() {
                 <button
                   type="button"
                   onClick={handleCloseImportModal}
-                  className="px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 text-sm font-semibold rounded-xl hover:bg-gray-200 transition"
+                  disabled={importing}
+                  className="px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 text-sm font-semibold rounded-xl hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
@@ -1987,8 +2077,8 @@ export default function WhatsAppContactsComponent() {
                   )}
                   <span>
                     {importing
-                      ? "Importing Contacts..."
-                      : `Import ${parsedRows.length > 0 ? parsedRows.length : ""} Contacts`}
+                      ? `Importing (${importProgress ? `${importProgress.percent}%` : "Please wait..."})`
+                      : `Import ${parsedRows.length > 0 ? parsedRows.length.toLocaleString() : ""} Contacts`}
                   </span>
                 </button>
               </div>
