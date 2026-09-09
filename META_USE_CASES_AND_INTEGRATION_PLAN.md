@@ -227,10 +227,133 @@ A dedicated field-by-field guide has been compiled in:
 
 ---
 
-## 6. Next Phase: Instagram Messaging API Setup
+## 6. Instagram Messaging API: Step-by-Step Setup Guide
 
-Now that WhatsApp Cloud API and all Webhook fields are fully configured under `whatmore pixel`, the next phase is connecting **Instagram Direct Messaging**:
-1. **Permissions Required**: `instagram_basic`, `instagram_manage_messages`, `pages_show_list`, `pages_manage_metadata`.
-2. **Instagram Webhook Setup**: Subscribing to Instagram `messages` and `messaging_postbacks`.
-3. **Whatmore Unified Inbox Integration**: Routing Instagram DMs into the Whatmore Inbox for multi-agent support alongside WhatsApp.
+Instagram Direct Messaging allows Whatmore to receive customer DMs, Story mentions, and quick reply postbacks directly in the unified agent inbox alongside WhatsApp.
+
+```mermaid
+graph LR
+    A["Instagram Mobile App"] -->|"Switch to Professional & Link Page"| B["Meta Business Suite"]
+    B -->|"Use Case: Manage Instagram Messaging"| C["Meta Developer Portal"]
+    C -->|"Webhook URL & Client Secret"| D["Whatmore Instagram Endpoint"]
+    D -->|"Unified Inbox"| E["Live Agent Chat & AI Bot"]
+```
+
+### Step 1: Prepare Instagram Professional Account
+1. Open the **Instagram mobile app** on your phone.
+2. Go to **Settings & Privacy** -> **Account Type & Tools** -> **Switch to Professional Account** (choose either *Business* or *Creator*).
+3. Connect your Instagram account to your Facebook Business Page:
+   - In **Meta Business Suite** (`business.facebook.com`), navigate to **Settings** -> **Linked Accounts** -> **Instagram**.
+   - Click **Connect Account** and log in with your Instagram credentials.
+4. **CRITICAL STEP: Enable Messages Access**:
+   - In the Instagram mobile app: Go to **Settings** -> **Messages and story replies** -> **Message controls**.
+   - Under **Connected tools**, toggle **Allow access to messages** to **ON**. *(If this is OFF, Meta will silently drop incoming DMs without webhook delivery).*
+
+### Step 2: Configure Instagram Use Case & Webhook in Meta Developer Portal
+1. Open [Meta Developer Portal](https://developers.facebook.com) and select your App (**whatmore pixel**).
+2. Go to **Use Cases** -> Find **Manage messaging & content on Instagram** -> Click **Customize** (or Add).
+3. Under **Instagram API setup**, scroll to **3. Configure webhooks**:
+   - **Callback URL**: 
+     - *Client Dedicated URL*: `https://whatsapp.esponsports.com/api/instagram/webhook/<CLIENT_WEBHOOK_ID>`
+     - *Universal Fallback URL*: `https://whatsapp.esponsports.com/api/instagram/webhook`
+   - **Verify Token**:
+     - *Client Dedicated Secret*: `espon_ig_<FIRST_8_CHARS_OF_CLIENT_ID>` (Auto-generated per client)
+     - *Universal Secret*: `espon_instagram_secure_token_2026`
+4. Click **Verify and save**.
+5. Under **Subscriptions**, click **Subscribe** to the following fields:
+   - `[x]` `messages` (Incoming user DMs, text, images, voice notes)
+   - `[x]` `messaging_postbacks` (Button clicks, quick replies)
+   - `[x]` `message_deliveries` (Delivery receipts)
+   - `[x]` `message_reads` (Seen/Read receipts)
+   - `[x]` `message_reactions` (Emoji reactions to messages)
+
+### Step 3: Generate Permanent System User Access Token
+1. Go to [Meta Business Settings -> System Users](https://business.facebook.com/settings/system-users).
+2. Select your Admin System User -> Click **Generate New Token**.
+3. Select App: **whatmore pixel**.
+4. Set Token Expiration: **Never**.
+5. Check the following permissions:
+   - `instagram_basic`
+   - `instagram_manage_messages`
+   - `pages_show_list`
+   - `pages_manage_metadata`
+   - `pages_read_engagement`
+6. Click **Generate Token** and copy the permanent `EAA...` string.
+
+### Step 4: Configure & Test in Whatmore Platform
+1. Log in to Whatmore -> Go to **Settings & Integrations** -> Click the **Instagram API** tab.
+2. Enter:
+   - **Instagram Business Account ID**: e.g. `1784140012345678` (Found in Meta Business Suite or via Graph API `/me/accounts`).
+   - **Permanent Access Token**: The `EAA...` System User Token generated in Step 3.
+3. Click **Save Instagram Credentials**.
+4. Click **Test Connection** — Whatmore verifies live connectivity against Meta Graph API and displays your verified account name.
+
+---
+
+## 7. Facebook Messenger API: Step-by-Step Setup Guide
+
+Facebook Messenger allows Whatmore to receive customer chats from your Facebook Business Page in real-time.
+
+### Step 1: Add Messenger Product in Meta Developer Portal
+1. Open [Meta Developer Portal](https://developers.facebook.com) and select your App (**whatmore pixel**).
+2. In the left navigation, click **Use Cases** (or **Add Product**).
+3. Select **Engage with customers on Messenger from Meta** (or **Messenger**).
+
+### Step 2: Configure Messenger Webhooks
+1. In the Messenger configuration screen, find the **Webhooks** card.
+2. Click **Add Callback URL**:
+   - **Callback URL**:
+     - *Client Dedicated URL*: `https://whatsapp.esponsports.com/api/facebook/webhook/<CLIENT_WEBHOOK_ID>`
+     - *Universal Fallback URL*: `https://whatsapp.esponsports.com/api/facebook/webhook`
+   - **Verify Token**:
+     - *Client Dedicated Secret*: `espon_fb_<FIRST_8_CHARS_OF_CLIENT_ID>` (Auto-generated per client)
+     - *Universal Secret*: `espon_facebook_secure_token_2026`
+3. Click **Verify and Save**.
+4. Under **Webhooks**, select your Facebook Business Page from the dropdown and click **Subscribe**:
+   - `[x]` `messages`
+   - `[x]` `messaging_postbacks`
+   - `[x]` `message_deliveries`
+   - `[x]` `message_reads`
+
+### Step 3: Generate Permanent Page Access Token
+1. In Meta Business Settings -> System Users (or Messenger Access Token section):
+   - Select your Facebook Page.
+   - Ensure permissions: `pages_messaging`, `pages_show_list`, `pages_manage_metadata`.
+   - Generate a permanent Page Access Token.
+2. Note down your **Facebook Page ID** (Found in Facebook Page -> *About* -> *Page Transparency*).
+
+### Step 4: Configure & Test in Whatmore Platform
+1. Log in to Whatmore -> Go to **Settings & Integrations** -> Click the **Facebook Messenger** tab.
+2. Enter your **Facebook Page ID** and **Page Access Token**.
+3. Click **Save Messenger Credentials**.
+4. Click **Test Connection** — Whatmore verifies live connectivity against Meta Graph API.
+
+---
+
+## 8. Multi-Client Differentiation Architecture
+
+To ensure that multiple organizations, clients, or branches can operate simultaneously without messages ever mixing between tenants:
+
+```
+Meta Webhook Event
+       │
+       ├── Case 1: URL contains Client ID ────► /api/{channel}/webhook/[clientId] ────► Matched directly by URL path
+       │
+       ├── Case 2: Verify Token has Client Secret ─► espon_{channel}_{shortId} ────────► Matched to Client in DB
+       │
+       └── Case 3: Event contains Recipient ID ──► recipient.id (IG/Page ID) ────────► Matched to WhatsAppIntegration in DB
+```
+
+1. **Client-Dedicated Webhook URLs**:
+   - WhatsApp: `/api/whatsapp/webhook/[clientId]`
+   - Instagram: `/api/instagram/webhook/[clientId]`
+   - Facebook: `/api/facebook/webhook/[clientId]`
+2. **Client-Unique Verification Secrets**:
+   - Each client generates a distinct verify secret automatically based on their unique `webhookClientId`:
+     - WhatsApp: `wm_<first_8_chars>`
+     - Instagram: `espon_ig_<first_8_chars>`
+     - Facebook: `espon_fb_<first_8_chars>`
+3. **Payload-Level Recipient Matching**:
+   - Every incoming Meta event contains the `recipient.id` (Page ID or Instagram Account ID).
+   - Our webhook processors query the database to tag the event with the exact client / tenant ID, completely isolating conversations, contacts, and logs.
 

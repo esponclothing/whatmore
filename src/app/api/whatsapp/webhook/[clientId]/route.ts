@@ -8,22 +8,37 @@ function verifyWebhookSignature(body: string, signature: string, secret: string)
   return true;
 }
 
-export async function GET(req: NextRequest, { params }: { params: { clientId: string } }) {
-  const { clientId } = params;
+export async function GET(req: NextRequest, { params }: { params: any }) {
+  const resolvedParams = await Promise.resolve(params);
+  const clientId = resolvedParams.clientId;
   const searchParams = req.nextUrl.searchParams;
   const mode = searchParams.get("hub.mode");
   const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
 
   try {
-    const client = await prisma.whatsAppClient.findFirst({ where: { webhookClientId: clientId } });
+    const client = await prisma.whatsAppClient.findFirst({
+      where: {
+        OR: [
+          { webhookClientId: clientId },
+          { id: clientId }
+        ]
+      }
+    });
     if (!client) return NextResponse.json({ error: "Client not found" }, { status: 404 });
 
     // Use client-specific webhook token or global
     const account = await prisma.whatsAppAccount.findFirst();
-    const expectedToken = account?.webhookVerifyToken || process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "espon_whatsapp_secure_webhook_token_2026";
+    const clientVerifyToken = `wm_${client.webhookClientId.slice(0, 8)}`;
+    const allowedTokens = [
+      clientVerifyToken,
+      client.webhookVerifyToken,
+      account?.webhookVerifyToken,
+      process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+      "espon_whatsapp_secure_webhook_token_2026"
+    ].filter(Boolean);
 
-    if (mode === "subscribe" && token === expectedToken) {
+    if (mode === "subscribe" && allowedTokens.includes(token)) {
       return new NextResponse(challenge, { status: 200 });
     }
     return NextResponse.json({ error: "Verification failed" }, { status: 403 });
@@ -32,10 +47,18 @@ export async function GET(req: NextRequest, { params }: { params: { clientId: st
   }
 }
 
-export async function POST(req: NextRequest, { params }: { params: { clientId: string } }) {
-  const { clientId } = params;
+export async function POST(req: NextRequest, { params }: { params: any }) {
+  const resolvedParams = await Promise.resolve(params);
+  const clientId = resolvedParams.clientId;
   try {
-    const client = await prisma.whatsAppClient.findFirst({ where: { webhookClientId: clientId } });
+    const client = await prisma.whatsAppClient.findFirst({
+      where: {
+        OR: [
+          { webhookClientId: clientId },
+          { id: clientId }
+        ]
+      }
+    });
     if (!client) return NextResponse.json({ error: "Client not found" }, { status: 404 });
 
     // Check if client is blocked

@@ -15,7 +15,10 @@ export async function GET() {
       daysLeft, 
       ownerWhatsApp: client.ownerWhatsApp, 
       subscriptionStatus: client.subscriptionStatus,
-      maxAgents: client.maxAgents || 3
+      maxAgents: client.maxAgents || 3,
+      clientId: client.id,
+      webhookClientId: client.webhookClientId,
+      businessName: client.businessName
     });
   } catch {
     return NextResponse.json({ pastDue: false, blocked: false, daysLeft: 0, maxAgents: 3 });
