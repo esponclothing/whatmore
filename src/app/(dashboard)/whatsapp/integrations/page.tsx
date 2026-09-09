@@ -30,8 +30,6 @@ import {
 } from "@/app/actions/whatsAppIntegrationActions";
 import WhatsAppAIAutomationComponent from "@/components/whatsapp/WhatsAppAIAutomationComponent";
 
-const DEFAULT_CATALOG_TOKEN = "EAATFY0JDp9MBSTZAsBtd2VSRUuY8ZBOA4To89TOfLEZAQxvsoVQpo5tOBFwL3CcP6Gqdk4OgXtNUjZAvQISKYUJEESPG6gjgfMNBZBZCz0Cd8w7OuM6QJxtJ2bb3e8YdoL45oTggGmSnZADojWeGxFU5CLiLW5mPhc06KzHe9BD1AgskX0iJbyupeZCuWiE4MQZDZD";
-
 
 export default function IntegrationsHubPage() {
   const [activeTab, setActiveTab] = useState("whatsapp");
@@ -987,7 +985,7 @@ const reloadTeams = async () => {
                 <button
                   onClick={() => {
                     handleOpenModal(null);
-                    setFormData({ name: 'Espon Clothing Catalog', type: 'META_CATALOG', url: '', token: DEFAULT_CATALOG_TOKEN });
+                    setFormData({ name: 'Espon Clothing Catalog', type: 'META_CATALOG', url: '', token: '' });
                   }}
                   className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 text-sm shadow-sm transition-all"
                 >
@@ -1042,7 +1040,7 @@ const reloadTeams = async () => {
                 <button
                   onClick={() => {
                     handleOpenModal(null);
-                    setFormData({ name: 'Espon Clothing Catalog', type: 'META_CATALOG', url: '', token: DEFAULT_CATALOG_TOKEN });
+                    setFormData({ name: 'Espon Clothing Catalog', type: 'META_CATALOG', url: '', token: '' });
                   }}
                   className="w-full py-1.5 px-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs"
                 >
@@ -1291,7 +1289,7 @@ const reloadTeams = async () => {
                   </p>
                   <div className="text-[11px] text-slate-600 space-y-1">
                     <div><strong>Catalog ID:</strong> Find in Meta Commerce Manager (<a href="https://business.facebook.com/commerce" target="_blank" rel="noreferrer" className="underline font-bold text-purple-700">business.facebook.com/commerce ↗</a>) under <em>Settings → Catalog</em>.</div>
-                    <div><strong>Permanent Token:</strong> Pre-filled with your System User Token with <code>catalog_management</code> access.</div>
+                    <div><strong>Permanent Token:</strong> Paste your System User Token generated with <code>catalog_management</code> permission.</div>
                   </div>
                 </div>
               )}
@@ -1319,14 +1317,7 @@ const reloadTeams = async () => {
                 <label className="block text-xs font-bold text-slate-600 mb-1">Category</label>
                 <select 
                   value={formData.type} 
-                  onChange={e => {
-                    const nextType = e.target.value;
-                    if (nextType === 'META_CATALOG' && !formData.token) {
-                      setFormData({...formData, type: nextType, token: DEFAULT_CATALOG_TOKEN});
-                    } else {
-                      setFormData({...formData, type: nextType});
-                    }
-                  }} 
+                  onChange={e => setFormData({...formData, type: e.target.value})} 
                   className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500"
                 >
                   <option value="CRM_LEAD">CRM (Lead Webhook)</option>
