@@ -33,7 +33,11 @@ import {
   UserCheck,
   UserX,
   Layers,
-  Briefcase
+  Briefcase,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from "lucide-react";
 import {
   getWhatsAppContactsListAction,
@@ -62,6 +66,13 @@ export default function WhatsAppContactsComponent() {
   const [crmFilter, setCrmFilter] = useState<"ALL" | "DONE" | "NOT_DONE">("ALL");
   const [tagFilter, setTagFilter] = useState("ALL");
   const [allAvailableTags, setAllAvailableTags] = useState<string[]>([]);
+
+  // Pagination states (50 contacts per page)
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
+  const [totalFilteredContacts, setTotalFilteredContacts] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pageJumpInput, setPageJumpInput] = useState("");
 
   // Action states
   const [togglingCrmId, setTogglingCrmId] = useState<string | null>(null);
@@ -180,17 +191,25 @@ export default function WhatsAppContactsComponent() {
     loadEmployeesAndTeams();
   }, []);
 
-  const fetchContacts = async () => {
+  const fetchContacts = async (targetPage?: number) => {
     setLoading(true);
+    const pageToFetch = typeof targetPage === "number" ? targetPage : currentPage;
     const res = await getWhatsAppContactsListAction({
       search,
       crmFilter,
-      tag: tagFilter !== "ALL" ? tagFilter : undefined
+      tag: tagFilter !== "ALL" ? tagFilter : undefined,
+      page: pageToFetch,
+      limit: pageSize
     });
 
     if (res.success) {
       setContacts(res.contacts || []);
       if (res.stats) setStats(res.stats);
+      if (res.pagination) {
+        setTotalFilteredContacts(res.pagination.totalCount ?? 0);
+        setTotalPages(res.pagination.totalPages ?? 1);
+        setCurrentPage(res.pagination.page ?? pageToFetch);
+      }
       if (res.isCrmConnected !== undefined) {
         setIsCrmConnected(Boolean(res.isCrmConnected));
       }
@@ -208,8 +227,49 @@ export default function WhatsAppContactsComponent() {
   };
 
   useEffect(() => {
-    fetchContacts();
+    setCurrentPage(1);
+    fetchContacts(1);
   }, [search, crmFilter, tagFilter]);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages || newPage === currentPage || loading) return;
+    setCurrentPage(newPage);
+    fetchContacts(newPage);
+  };
+
+  const handlePageJump = (e: React.FormEvent) => {
+    e.preventDefault();
+    const p = parseInt(pageJumpInput.trim(), 10);
+    if (!isNaN(p) && p >= 1 && p <= totalPages) {
+      handlePageChange(p);
+      setPageJumpInput("");
+    }
+  };
+
+  const getPageNumbers = (current: number, total: number) => {
+    if (total <= 7) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    const pages: (number | string)[] = [];
+    if (current <= 4) {
+      for (let i = 1; i <= 5; i++) pages.push(i);
+      pages.push("...");
+      pages.push(total);
+    } else if (current >= total - 3) {
+      pages.push(1);
+      pages.push("...");
+      for (let i = total - 4; i <= total; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      pages.push("...");
+      pages.push(current - 1);
+      pages.push(current);
+      pages.push(current + 1);
+      pages.push("...");
+      pages.push(total);
+    }
+    return pages;
+  };
 
   const handleToggleCrm = async (contact: any) => {
     setTogglingCrmId(contact.id);
@@ -304,7 +364,8 @@ export default function WhatsAppContactsComponent() {
       setSelectedNewContactTags([]);
       setNewCustomTagText("");
       setNewPushToCrm(true);
-      fetchContacts();
+      setCurrentPage(1);
+      fetchContacts(1);
     } else {
       showToast(res.error || "Failed to create contact.", "error");
     }
@@ -808,7 +869,8 @@ export default function WhatsAppContactsComponent() {
       setImportFileName("");
       setMergedInSheetCount(0);
       setImportProgress(null);
-      fetchContacts();
+      setCurrentPage(1);
+      fetchContacts(1);
 
       const uniqueImportedIds = Array.from(new Set(allImportedCustomerIds));
 
@@ -888,7 +950,7 @@ export default function WhatsAppContactsComponent() {
       if (res.success) {
         showToast(`✓ ${res.message || "Contacts assigned successfully!"}`);
         setShowAssignModal(false);
-        fetchContacts();
+        fetchContacts(currentPage);
       } else {
         showToast(res.error || "Assignment failed.", "error");
       }
@@ -917,7 +979,8 @@ export default function WhatsAppContactsComponent() {
         showToast(
           `✓ Cleaned up! Found ${res.deletedRecordsCount} duplicate records, merged into ${res.mergedGroupsCount} unique contacts.`
         );
-        fetchContacts();
+        setCurrentPage(1);
+        fetchContacts(1);
       } else {
         showToast(res.error || "Failed to clean duplicates.", "error");
       }
@@ -970,7 +1033,7 @@ export default function WhatsAppContactsComponent() {
 
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
-            onClick={fetchContacts}
+            onClick={() => fetchContacts(currentPage)}
             disabled={loading}
             className="px-3.5 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg text-sm font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
             title="Refresh Contacts"
@@ -990,7 +1053,7 @@ export default function WhatsAppContactsComponent() {
 
           <button
             onClick={handleExportExcel}
-            disabled={exportingExcel || contacts.length === 0}
+            disabled={exportingExcel || (contacts.length === 0 && stats.total === 0)}
             className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
             title="Export contacts directory to Excel (.xlsx)"
           >
@@ -1025,7 +1088,9 @@ export default function WhatsAppContactsComponent() {
         <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-5 flex items-center justify-between shadow-sm">
           <div>
             <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Contacts</div>
-            <div className="text-2xl font-extrabold text-gray-900 dark:text-white mt-1">{stats.total}</div>
+            <div className="text-2xl font-extrabold text-gray-900 dark:text-white mt-1">
+              {stats.total.toLocaleString()}
+            </div>
           </div>
           <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
             <Users size={24} />
@@ -1039,7 +1104,9 @@ export default function WhatsAppContactsComponent() {
                 <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
                   Pushed to CRM (Done)
                 </div>
-                <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">{stats.done}</div>
+                <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
+                  {stats.done.toLocaleString()}
+                </div>
               </div>
               <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                 <CheckCircle2 size={24} />
@@ -1051,7 +1118,9 @@ export default function WhatsAppContactsComponent() {
                 <div className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
                   Not Pushed (Pending)
                 </div>
-                <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">{stats.notDone}</div>
+                <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">
+                  {stats.notDone.toLocaleString()}
+                </div>
               </div>
               <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
                 <Clock size={24} />
@@ -1125,7 +1194,25 @@ export default function WhatsAppContactsComponent() {
           )}
 
           <span className="text-xs text-gray-500 font-medium ml-2">
-            {contacts.length} contact{contacts.length !== 1 ? "s" : ""}
+            {totalFilteredContacts > 0 ? (
+              <>
+                Showing{" "}
+                <span className="font-bold text-gray-800 dark:text-gray-200">
+                  {((currentPage - 1) * pageSize + 1).toLocaleString()}
+                </span>
+                {" - "}
+                <span className="font-bold text-gray-800 dark:text-gray-200">
+                  {Math.min(currentPage * pageSize, totalFilteredContacts).toLocaleString()}
+                </span>
+                {" of "}
+                <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                  {totalFilteredContacts.toLocaleString()}
+                </span>
+                {" contacts"}
+              </>
+            ) : (
+              "0 contacts"
+            )}
           </span>
         </div>
       </div>
@@ -1331,6 +1418,122 @@ export default function WhatsAppContactsComponent() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Bar */}
+        {totalFilteredContacts > 0 && (
+          <div className="px-5 py-3.5 border-t border-gray-100 dark:border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-3 bg-gray-50/50 dark:bg-slate-900/30">
+            {/* Left: Summary text */}
+            <div className="text-xs text-gray-500 dark:text-gray-400 font-medium text-center sm:text-left">
+              Showing{" "}
+              <span className="font-bold text-gray-800 dark:text-gray-200">
+                {((currentPage - 1) * pageSize + 1).toLocaleString()}
+              </span>{" "}
+              to{" "}
+              <span className="font-bold text-gray-800 dark:text-gray-200">
+                {Math.min(currentPage * pageSize, totalFilteredContacts).toLocaleString()}
+              </span>{" "}
+              of{" "}
+              <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                {totalFilteredContacts.toLocaleString()}
+              </span>{" "}
+              contacts • Page{" "}
+              <span className="font-bold text-gray-800 dark:text-gray-200">{currentPage}</span> of{" "}
+              <span className="font-bold text-gray-800 dark:text-gray-200">{totalPages}</span>
+            </div>
+
+            {/* Right: Controls & Page Jumper */}
+            <div className="flex items-center gap-1.5 flex-wrap justify-center">
+              {/* First Page */}
+              <button
+                onClick={() => handlePageChange(1)}
+                disabled={currentPage === 1 || loading}
+                className="p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+                title="First Page"
+              >
+                <ChevronsLeft size={16} />
+              </button>
+
+              {/* Prev Page */}
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1 || loading}
+                className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1 cursor-pointer"
+                title="Previous Page"
+              >
+                <ChevronLeft size={14} />
+                <span className="hidden sm:inline">Prev</span>
+              </button>
+
+              {/* Numbered Page Buttons */}
+              <div className="flex items-center gap-1">
+                {getPageNumbers(currentPage, totalPages).map((p, idx) =>
+                  typeof p === "number" ? (
+                    <button
+                      key={idx}
+                      onClick={() => handlePageChange(p)}
+                      disabled={loading}
+                      className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        currentPage === p
+                          ? "bg-indigo-600 text-white shadow-xs"
+                          : "bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-700"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ) : (
+                    <span key={idx} className="px-1 text-xs text-gray-400 select-none">
+                      ...
+                    </span>
+                  )
+                )}
+              </div>
+
+              {/* Next Page */}
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages || loading}
+                className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1 cursor-pointer"
+                title="Next Page"
+              >
+                <span className="hidden sm:inline">Next</span>
+                <ChevronRight size={14} />
+              </button>
+
+              {/* Last Page */}
+              <button
+                onClick={() => handlePageChange(totalPages)}
+                disabled={currentPage === totalPages || loading}
+                className="p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+                title="Last Page"
+              >
+                <ChevronsRight size={16} />
+              </button>
+
+              {/* Quick Jump Input if more than 3 pages */}
+              {totalPages > 3 && (
+                <form onSubmit={handlePageJump} className="flex items-center gap-1 ml-2 text-xs">
+                  <span className="text-gray-400 text-[11px] hidden md:inline">Go:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={pageJumpInput}
+                    onChange={(e) => setPageJumpInput(e.target.value)}
+                    placeholder={String(currentPage)}
+                    className="w-12 h-8 px-1.5 text-center bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs outline-none focus:ring-1 focus:ring-indigo-500 font-medium"
+                    title={`Enter page 1 to ${totalPages}`}
+                  />
+                  <button
+                    type="submit"
+                    className="h-8 px-2 bg-gray-100 dark:bg-slate-700 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-semibold transition cursor-pointer"
+                  >
+                    Go
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal: Add New Contact */}

@@ -5943,8 +5943,14 @@ export async function getWhatsAppContactsListAction(params?: {
   search?: string;
   crmFilter?: 'ALL' | 'DONE' | 'NOT_DONE';
   tag?: string;
+  page?: number;
+  limit?: number;
 }) {
   try {
+    const page = Math.max(1, Number(params?.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(params?.limit) || 50));
+    const skip = (page - 1) * limit;
+
     const search = params?.search?.trim() || "";
     const crmFilter = params?.crmFilter || "ALL";
     const tagFilter = params?.tag?.trim() || "";
@@ -5960,7 +5966,8 @@ export async function getWhatsAppContactsListAction(params?: {
             { actionDesc: { contains: 'ERP' } }
           ]
         },
-        select: { phone: true }
+        select: { phone: true },
+        take: 2000
       });
       logs.forEach(l => {
         if (l.phone) {
@@ -5971,61 +5978,138 @@ export async function getWhatsAppContactsListAction(params?: {
       });
     } catch (e) {}
 
-    const where: any = {};
+    // Base search and tag filter conditions
+    const baseConditions: any[] = [];
 
     if (search) {
-      where.OR = [
-        { contactPerson: { contains: search, mode: "insensitive" } },
-        { businessName: { contains: search, mode: "insensitive" } },
-        { mobile: { contains: search } },
-        { whatsappNumber: { contains: search } },
-        { tags: { contains: search, mode: "insensitive" } }
-      ];
+      baseConditions.push({
+        OR: [
+          { contactPerson: { contains: search, mode: "insensitive" } },
+          { businessName: { contains: search, mode: "insensitive" } },
+          { mobile: { contains: search } },
+          { whatsappNumber: { contains: search } },
+          { tags: { contains: search, mode: "insensitive" } }
+        ]
+      });
     }
 
     if (tagFilter && tagFilter !== "ALL") {
-      where.tags = { contains: tagFilter, mode: "insensitive" };
+      baseConditions.push({
+        tags: { contains: tagFilter, mode: "insensitive" }
+      });
     }
 
-    const customers = await prisma.customer.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      include: {
-        assignedSalesperson: {
-          select: {
-            id: true,
-            user: { select: { name: true } },
-            team: { select: { id: true, name: true } }
-          }
-        },
-        whatsAppConversations: {
-          select: {
-            id: true,
-            tags: true,
-            lastMessageAt: true,
-            team: { select: { id: true, name: true } },
-            assignedEmployee: {
-              select: {
-                id: true,
-                user: { select: { name: true } }
-              }
+    // CRM criteria for database queries
+    const crmDoneConditions: any[] = [
+      { leadStage: { contains: "crm", mode: "insensitive" } },
+      { leadStage: { contains: "synced", mode: "insensitive" } },
+      { leadStage: { contains: "qualified", mode: "insensitive" } },
+      { leadStage: { contains: "won", mode: "insensitive" } },
+      { leadStage: { contains: "negotiation", mode: "insensitive" } },
+      { leadStage: { contains: "converted", mode: "insensitive" } },
+      { leadStage: { contains: "customer", mode: "insensitive" } },
+      { status: { contains: "crm", mode: "insensitive" } },
+      { status: { contains: "synced", mode: "insensitive" } },
+      { status: { contains: "active", mode: "insensitive" } },
+      { status: { contains: "converted", mode: "insensitive" } },
+      { status: { contains: "customer", mode: "insensitive" } },
+      { status: { contains: "won", mode: "insensitive" } },
+      { notes: { contains: "pushed_to_crm", mode: "insensitive" } },
+      { notes: { contains: "crm", mode: "insensitive" } },
+      { notes: { contains: "erp", mode: "insensitive" } },
+      { source: { contains: "crm", mode: "insensitive" } },
+      { source: { contains: "direct dispatch", mode: "insensitive" } },
+      { orders: { some: {} } },
+      { quotations: { some: {} } },
+      { invoices: { some: {} } },
+      { calls: { some: {} } }
+    ];
+
+    if (pushedPhonesSet.size > 0) {
+      const phoneList = Array.from(pushedPhonesSet);
+      crmDoneConditions.push(
+        { mobile: { in: phoneList } },
+        { whatsappNumber: { in: phoneList } }
+      );
+    }
+
+    const baseWhere: any = baseConditions.length > 0 ? { AND: baseConditions } : {};
+
+    // Specific where clauses for filtering
+    const paginatedConditions = [...baseConditions];
+    if (crmFilter === "DONE") {
+      paginatedConditions.push({ OR: crmDoneConditions });
+    } else if (crmFilter === "NOT_DONE") {
+      paginatedConditions.push({ NOT: { OR: crmDoneConditions } });
+    }
+    const paginatedWhere: any = paginatedConditions.length > 0 ? { AND: paginatedConditions } : {};
+
+    const doneWhere: any = {
+      AND: [...baseConditions, { OR: crmDoneConditions }]
+    };
+
+    // Parallel execution for total counts and paginated customer records
+    const [totalCount, doneCount, customers, activeCrmIntegration] = await Promise.all([
+      prisma.customer.count({ where: baseWhere }),
+      prisma.customer.count({ where: doneWhere }),
+      prisma.customer.findMany({
+        where: paginatedWhere,
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+        include: {
+          assignedSalesperson: {
+            select: {
+              id: true,
+              user: { select: { name: true } },
+              team: { select: { id: true, name: true } }
             }
           },
-          take: 1,
-          orderBy: { updatedAt: "desc" }
-        },
-        _count: {
-          select: {
-            orders: true,
-            quotations: true,
-            invoices: true,
-            calls: true,
-            followUps: true
+          whatsAppConversations: {
+            select: {
+              id: true,
+              tags: true,
+              lastMessageAt: true,
+              team: { select: { id: true, name: true } },
+              assignedEmployee: {
+                select: {
+                  id: true,
+                  user: { select: { name: true } }
+                }
+              }
+            },
+            take: 1,
+            orderBy: { updatedAt: "desc" }
+          },
+          _count: {
+            select: {
+              orders: true,
+              quotations: true,
+              invoices: true,
+              calls: true,
+              followUps: true
+            }
           }
         }
-      },
-      take: 300
-    });
+      }),
+      prisma.whatsAppIntegration.findFirst({
+        where: {
+          isActive: true,
+          NOT: {
+            type: { in: ['META_CAPI', 'PIXEL'] }
+          }
+        }
+      }).catch(() => null)
+    ]);
+
+    const notDoneCount = Math.max(0, totalCount - doneCount);
+    const filteredTotalCount = crmFilter === "DONE"
+      ? doneCount
+      : crmFilter === "NOT_DONE"
+        ? notDoneCount
+        : totalCount;
+
+    const totalPages = Math.max(1, Math.ceil(filteredTotalCount / limit));
 
     const isContactPushed = (c: any): boolean => {
       const cleanPhone = (c.mobile || c.whatsappNumber || "").replace(/\D/g, "");
@@ -6077,7 +6161,7 @@ export async function getWhatsAppContactsListAction(params?: {
       return false;
     };
 
-    let mappedContacts = customers.map((c) => {
+    const mappedContacts = customers.map((c) => {
       const isDone = isContactPushed(c);
 
       // Collect merged tags
@@ -6111,38 +6195,18 @@ export async function getWhatsAppContactsListAction(params?: {
       };
     });
 
-    // Apply CRM Filter if specified
-    if (crmFilter === "DONE") {
-      mappedContacts = mappedContacts.filter(c => c.pushedToCrm);
-    } else if (crmFilter === "NOT_DONE") {
-      mappedContacts = mappedContacts.filter(c => !c.pushedToCrm);
-    }
-
-    // Compute summary stats over all fetched customers
-    const totalCount = customers.length;
-    const doneCount = customers.filter(c => isContactPushed(c)).length;
-    const notDoneCount = Math.max(0, totalCount - doneCount);
-
-    // Check if CRM integration is actively configured and connected
-    let isCrmConnected = false;
-    try {
-      const activeCrmIntegration = await prisma.whatsAppIntegration.findFirst({
-        where: {
-          isActive: true,
-          NOT: {
-            type: { in: ['META_CAPI', 'PIXEL'] }
-          }
-        }
-      });
-      if (activeCrmIntegration && activeCrmIntegration.url && activeCrmIntegration.url.trim().length > 0) {
-        isCrmConnected = true;
-      }
-    } catch (e) {}
+    const isCrmConnected = Boolean(activeCrmIntegration && activeCrmIntegration.url && activeCrmIntegration.url.trim().length > 0);
 
     return {
       success: true,
       contacts: mappedContacts,
       isCrmConnected,
+      pagination: {
+        page,
+        limit,
+        totalCount: filteredTotalCount,
+        totalPages
+      },
       stats: {
         total: totalCount,
         done: doneCount,
@@ -6151,7 +6215,19 @@ export async function getWhatsAppContactsListAction(params?: {
     };
   } catch (error: any) {
     console.error("Error fetching WhatsApp contacts list:", error);
-    return { success: false, error: error.message, contacts: [], isCrmConnected: false, stats: { total: 0, done: 0, notDone: 0 } };
+    return {
+      success: false,
+      error: error.message,
+      contacts: [],
+      isCrmConnected: false,
+      pagination: {
+        page: 1,
+        limit: 50,
+        totalCount: 0,
+        totalPages: 1
+      },
+      stats: { total: 0, done: 0, notDone: 0 }
+    };
   }
 }
 
@@ -7091,7 +7167,7 @@ export async function exportAllWhatsAppContactsAction() {
         tags: true,
         status: true
       },
-      take: 10000
+      take: 100000
     });
 
     return { success: true, contacts: customers };
