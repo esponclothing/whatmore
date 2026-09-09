@@ -481,7 +481,7 @@ export default function WhatsAppContactsComponent() {
       XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions & Guide");
 
       // Trigger download
-      XLSX.writeFile(wb, "espon_contacts_import_template.xlsx");
+      XLSX.writeFile(wb, "whatmore_contacts_template.xlsx");
       showToast("📥 Sample Excel template downloaded with exact format & dummy data!");
     } catch (err: any) {
       showToast("Failed to download template: " + err.message, "error");
@@ -565,7 +565,7 @@ export default function WhatsAppContactsComponent() {
 
       XLSX.utils.book_append_sheet(wb, ws, "WhatsApp Contacts");
       const dateStr = new Date().toISOString().split("T")[0];
-      XLSX.writeFile(wb, `espon_whatsapp_contacts_${dateStr}.xlsx`);
+      XLSX.writeFile(wb, `whatmore_contacts_${dateStr}.xlsx`);
       showToast(`✓ Exported ${exportList.length} contacts to Excel!`);
     } catch (err: any) {
       showToast(err.message || "Failed to export contacts.", "error");
