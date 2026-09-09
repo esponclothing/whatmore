@@ -26,7 +26,8 @@ import {
   createWhatsAppIntegrationAction, 
   updateWhatsAppIntegrationAction, 
   deleteWhatsAppIntegrationAction,
-  testMetaCatalogConnectionAction
+  testMetaCatalogConnectionAction,
+  fetchMetaCatalogsFromTokenAction
 } from "@/app/actions/whatsAppIntegrationActions";
 import WhatsAppAIAutomationComponent from "@/components/whatsapp/WhatsAppAIAutomationComponent";
 
@@ -49,6 +50,9 @@ export default function IntegrationsHubPage() {
   const [capiResultMsg, setCapiResultMsg] = useState<{ success: boolean; text: string } | null>(null);
   const [testingCatalogId, setTestingCatalogId] = useState<string | null>(null);
   const [catalogTestStatus, setCatalogTestStatus] = useState<{ id: string; success: boolean; text: string } | null>(null);
+  const [fetchingCatalogs, setFetchingCatalogs] = useState(false);
+  const [fetchedCatalogs, setFetchedCatalogs] = useState<any[]>([]);
+  const [catalogFetchError, setCatalogFetchError] = useState<string | null>(null);
 
   // Payment Gateway State
   const [pgActiveGateway, setPgActiveGateway] = useState<string | null>(null);
@@ -261,8 +265,43 @@ export default function IntegrationsHubPage() {
       setTestingCatalogId(null);
     }
   };
+
+  const handleAutoFetchCatalogs = async (tokenOverride?: string) => {
+    const t = (tokenOverride !== undefined ? tokenOverride : formData.token) || "";
+    if (!t.trim()) {
+      setCatalogFetchError("Please paste or enter your Permanent Access Token first.");
+      return;
+    }
+    setFetchingCatalogs(true);
+    setCatalogFetchError(null);
+    try {
+      const res = await fetchMetaCatalogsFromTokenAction(t.trim());
+      if (res.success && res.catalogs) {
+        setFetchedCatalogs(res.catalogs);
+        if (res.catalogs.length > 0) {
+          const first = res.catalogs[0];
+          setFormData(prev => ({
+            ...prev,
+            url: first.id,
+            name: prev.name && prev.name !== 'Espon Clothing Catalog' ? prev.name : first.name
+          }));
+        } else {
+          setCatalogFetchError("No product catalogs found assigned to this System User in Meta Business Suite.");
+        }
+      } else {
+        setCatalogFetchError(res.error || "Failed to fetch catalogs from Meta.");
+      }
+    } catch (e: any) {
+      setCatalogFetchError(e.message || "Network error fetching catalogs.");
+    } finally {
+      setFetchingCatalogs(false);
+    }
+  };
   
   const handleOpenModal = (integration?: any) => {
+    setFetchedCatalogs([]);
+    setCatalogFetchError(null);
+    setFetchingCatalogs(false);
     if (integration) {
       setEditingId(integration.id);
       setFormData({ name: integration.name, url: integration.url, token: integration.token || "", type: integration.type || "CRM_LEAD" });
@@ -273,7 +312,14 @@ export default function IntegrationsHubPage() {
     setIsModalOpen(true);
   };
   
-  const handleCloseModal = () => { setIsModalOpen(false); setEditingId(null); setFormData({ name: "", url: "", token: "", type: "CRM_LEAD" }); };
+  const handleCloseModal = () => { 
+    setIsModalOpen(false); 
+    setEditingId(null); 
+    setFormData({ name: "", url: "", token: "", type: "CRM_LEAD" });
+    setFetchedCatalogs([]);
+    setCatalogFetchError(null);
+    setFetchingCatalogs(false);
+  };
   
   const handleSubmitIntegration = async (e: any) => {
     e.preventDefault();
@@ -1328,43 +1374,145 @@ const reloadTeams = async () => {
                   <option value="META_CATALOG">Meta Product Catalog (Commerce API)</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Name</label>
-                <input 
-                  type="text" 
-                  value={formData.name} 
-                  onChange={e => setFormData({...formData, name: e.target.value})} 
-                  required 
-                  className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500" 
-                  placeholder={formData.type === 'META_CATALOG' ? 'e.g. Espon Clothing Catalog' : 'e.g. ERP Push / Pixel 1'} 
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">
-                  {formData.type === 'META_CAPI' ? 'Meta Pixel ID' : formData.type === 'META_CATALOG' ? 'Meta Commerce Catalog ID' : 'Webhook URL'}
-                </label>
-                <input 
-                  type={formData.type === 'META_CAPI' || formData.type === 'META_CATALOG' ? 'text' : 'url'} 
-                  value={formData.url} 
-                  onChange={e => setFormData({...formData, url: e.target.value})} 
-                  required 
-                  className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" 
-                  placeholder={formData.type === 'META_CAPI' ? 'e.g. 1386264563245511' : formData.type === 'META_CATALOG' ? 'e.g. 1320250379153598' : 'https://...'} 
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">
-                  {formData.type === 'META_CAPI' ? 'Meta CAPI Access Token' : formData.type === 'META_CATALOG' ? 'Permanent Catalog Access Token' : 'Auth Token (Optional)'}
-                </label>
-                <input 
-                  type="text" 
-                  value={formData.token} 
-                  onChange={e => setFormData({...formData, token: e.target.value})} 
-                  className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" 
-                  placeholder={formData.type === 'META_CAPI' ? 'EAAI...' : formData.type === 'META_CATALOG' ? 'EAAT...' : 'Bearer ...'} 
-                  required={formData.type === 'META_CAPI' || formData.type === 'META_CATALOG'} 
-                />
-              </div>
+
+              {formData.type === 'META_CATALOG' ? (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Permanent Catalog Access Token</label>
+                    <input 
+                      type="text" 
+                      value={formData.token} 
+                      onChange={e => setFormData({...formData, token: e.target.value})} 
+                      onPaste={e => {
+                        const pasted = e.clipboardData.getData('text');
+                        if (pasted && pasted.trim().startsWith('EAA')) {
+                          handleAutoFetchCatalogs(pasted.trim());
+                        }
+                      }}
+                      className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-purple-500 font-mono" 
+                      placeholder="EAAT..." 
+                      required 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAutoFetchCatalogs()}
+                      disabled={fetchingCatalogs || !formData.token}
+                      className="mt-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs w-full"
+                    >
+                      {fetchingCatalogs ? <RefreshCw size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                      {fetchingCatalogs ? "Auto-Fetching Catalogs from Meta..." : "⚡ Auto-Fetch Catalogs from Token"}
+                    </button>
+                  </div>
+
+                  {catalogFetchError && (
+                    <div className="text-[11.5px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2.5 flex items-center gap-2 font-semibold">
+                      <AlertTriangle size={14} className="text-rose-600 shrink-0" />
+                      <span>{catalogFetchError}</span>
+                    </div>
+                  )}
+
+                  {fetchedCatalogs.length > 0 && (
+                    <div className="bg-purple-50/80 border border-purple-200 rounded-xl p-3.5 flex flex-col gap-2">
+                      <label className="block text-xs font-bold text-purple-950 flex items-center justify-between">
+                        <span>Select Discovered Catalog ({fetchedCatalogs.length} found):</span>
+                        <span className="text-[10px] text-purple-700 font-semibold">Auto-fills below</span>
+                      </label>
+                      <select
+                        value={formData.url}
+                        onChange={e => {
+                          const selectedId = e.target.value;
+                          const cat = fetchedCatalogs.find((c: any) => c.id === selectedId);
+                          if (cat) {
+                            setFormData({
+                              ...formData,
+                              url: cat.id,
+                              name: cat.name
+                            });
+                          }
+                        }}
+                        className="w-full bg-white border border-purple-300 rounded-lg p-2.5 text-xs font-bold text-purple-950 outline-none focus:ring-2 focus:ring-purple-500 shadow-2xs"
+                      >
+                        <option value="">-- Choose a Catalog --</option>
+                        {fetchedCatalogs.map((cat: any) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.name} ({cat.productCount} items) • ID: {cat.id}
+                          </option>
+                        ))}
+                      </select>
+                      {formData.url && (
+                        <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2 flex items-center gap-1.5 font-bold">
+                          <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                          <span>Selected & Ready: ID {formData.url}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Catalog Name</label>
+                    <input 
+                      type="text" 
+                      value={formData.name} 
+                      onChange={e => setFormData({...formData, name: e.target.value})} 
+                      required 
+                      className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500" 
+                      placeholder="e.g. Espon Clothing Catalog" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Meta Commerce Catalog ID</label>
+                    <input 
+                      type="text" 
+                      value={formData.url} 
+                      onChange={e => setFormData({...formData, url: e.target.value})} 
+                      required 
+                      className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" 
+                      placeholder="e.g. 1614642786353172" 
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Name</label>
+                    <input 
+                      type="text" 
+                      value={formData.name} 
+                      onChange={e => setFormData({...formData, name: e.target.value})} 
+                      required 
+                      className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500" 
+                      placeholder="e.g. ERP Push / Pixel 1" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">
+                      {formData.type === 'META_CAPI' ? 'Meta Pixel ID' : 'Webhook URL'}
+                    </label>
+                    <input 
+                      type={formData.type === 'META_CAPI' ? 'text' : 'url'} 
+                      value={formData.url} 
+                      onChange={e => setFormData({...formData, url: e.target.value})} 
+                      required 
+                      className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" 
+                      placeholder={formData.type === 'META_CAPI' ? 'e.g. 1386264563245511' : 'https://...'} 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">
+                      {formData.type === 'META_CAPI' ? 'Meta CAPI Access Token' : 'Auth Token (Optional)'}
+                    </label>
+                    <input 
+                      type="text" 
+                      value={formData.token} 
+                      onChange={e => setFormData({...formData, token: e.target.value})} 
+                      className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 font-mono" 
+                      placeholder={formData.type === 'META_CAPI' ? 'EAAI...' : 'Bearer ...'} 
+                      required={formData.type === 'META_CAPI'} 
+                    />
+                  </div>
+                </>
+              )}
               <div className="flex justify-end gap-2 mt-2">
                 <button type="button" onClick={handleCloseModal} className="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 text-slate-600">Cancel</button>
                 <button type="submit" className="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700">Save</button>

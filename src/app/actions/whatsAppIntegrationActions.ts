@@ -124,15 +124,40 @@ export async function testMetaCatalogConnectionAction(catalogId: string, accessT
     if (!res.ok || data.error) {
       return { success: false, error: data.error?.message || "Failed to verify Meta Catalog" };
     }
-    return {
-      success: true,
-      catalogId: data.id,
-      catalogName: data.name || "Meta Product Catalog",
-      productCount: data.product_count ?? 0,
-      vertical: data.vertical || "commerce"
-    };
+    return { success: true, catalogId: data.id, catalogName: data.name || "Meta Product Catalog", productCount: data.product_count ?? 0, vertical: data.vertical || "commerce" };
   } catch (e: any) {
     return { success: false, error: e.message || "Network error connecting to Meta Graph API" };
+  }
+}
+
+export async function fetchMetaCatalogsFromTokenAction(accessToken: string) {
+  try {
+    if (!accessToken || !accessToken.trim()) {
+      return { success: false, error: "Access Token is required to fetch catalogs" };
+    }
+    const cleanToken = accessToken.trim();
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/me/assigned_product_catalogs?fields=id,name,product_count,vertical&limit=50&access_token=${encodeURIComponent(cleanToken)}`
+    );
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      return { 
+        success: false, 
+        error: data.error?.message || "Failed to fetch catalogs from Meta Graph API" 
+      };
+    }
+    const catalogs = (data.data || []).map((c: any) => ({
+      id: c.id,
+      name: c.name || `Catalog ${c.id}`,
+      productCount: c.product_count ?? 0,
+      vertical: c.vertical || "commerce"
+    }));
+    return {
+      success: true,
+      catalogs
+    };
+  } catch (e: any) {
+    return { success: false, error: e.message || "Network error fetching catalogs from Meta" };
   }
 }
 
