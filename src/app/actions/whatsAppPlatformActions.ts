@@ -2067,6 +2067,111 @@ interface BrandIntelligenceContext {
   cannedFaqs?: string;
 }
 
+export function normalizeApparelName(raw: string): string {
+  let s = (raw || '').trim()
+    .replace(/^(and\s+|also\s+|with\s+|for\s+|include\s+|featuring\s+)/i, '')
+    .trim();
+
+  // Fix common spelling variations and formatting
+  s = s.replace(/\bshors\b/gi, 'Shorts')
+       .replace(/\btrackapnt\b/gi, 'Trackpant')
+       .replace(/\btrack\s*pant\b/gi, 'Trackpant')
+       .replace(/\bco\s*-?\s*rd\b/gi, 'Co-Ord')
+       .replace(/\binnernet\b/gi, 'Inner Net')
+       .replace(/\b4\s*way\b/gi, '4-Way')
+       .replace(/\bns\s*(\d+)%/gi, 'NS $1%');
+
+  // Title Case
+  return s.split(/\s+/)
+    .filter(Boolean)
+    .map(w => {
+      if (/^\d+%?$/i.test(w)) return w;
+      if (/^4-way$/i.test(w)) return '4-Way';
+      if (/^co-ord$/i.test(w)) return 'Co-Ord';
+      if (/^ns$/i.test(w)) return 'NS';
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
+export function extractProductsFromPrompt(prompt: string, activeProducts: any[] = []): any[] {
+  const p = (prompt || '').trim();
+  if (!p) return [];
+  
+  // Find where the product list starts
+  const match = p.match(/(?:for\s+products?|featuring|including|include|products?:?|items?:?|collection\s+of|showcasing)\s+(.+)$/i);
+  const targetText = match ? match[1] : p;
+
+  // Split by comma, semicolon, newline, or bullet
+  const rawSegments = targetText.split(/[,;\n•]+/).map(s => s.trim()).filter(s => s.length >= 3);
+  const extracted: any[] = [];
+
+  for (const seg of rawSegments) {
+    const cleanSeg = seg.replace(/^(we\s+want\s+to\s+create|our\s+carusel\s+campgin\s+for\s+products?|create\s+a\s+carousel\s+for|please\s+add)\s+/i, '').trim();
+    if (cleanSeg.length < 3 || /^(campaign|template|carousel|whatsapp|message|promo|sale)$/i.test(cleanSeg)) continue;
+
+    const normalizedName = normalizeApparelName(cleanSeg);
+    const slug = normalizedName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+    // Check if matching in activeProducts
+    const foundInDb = activeProducts.find(dbProd => {
+      const dbLower = (dbProd.name || '').toLowerCase();
+      const segLower = cleanSeg.toLowerCase();
+      return dbLower.includes(segLower) || segLower.includes(dbLower);
+    });
+
+    if (foundInDb) {
+      extracted.push({
+        ...foundInDb,
+        name: foundInDb.name || normalizedName,
+        handle: foundInDb.handle || slug
+      });
+    } else {
+      // Determine category and realistic pricing/image
+      let category = "Activewear";
+      let price = 999;
+      let mrp = 1999;
+      let img = "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80";
+
+      const low = normalizedName.toLowerCase();
+      if (low.includes("short")) {
+        category = "Shorts";
+        price = 799;
+        mrp = 1449;
+        img = "https://images.unsplash.com/photo-1591195853828-11db59a44f6b?w=800&auto=format&fit=crop&q=80";
+      } else if (low.includes("trackpant") || low.includes("pant") || low.includes("jogger")) {
+        category = "Trackpants";
+        price = 1199;
+        mrp = 2199;
+        img = "https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800&auto=format&fit=crop&q=80";
+      } else if (low.includes("co-ord") || low.includes("set") || low.includes("suit")) {
+        category = "Co-Ord Set";
+        price = 1699;
+        mrp = 2999;
+        img = "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&auto=format&fit=crop&q=80";
+      } else if (low.includes("tee") || low.includes("t-shirt") || low.includes("shirt")) {
+        category = "T-Shirts";
+        price = 699;
+        mrp = 1299;
+        img = "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80";
+      }
+
+      extracted.push({
+        id: `custom_${slug}`,
+        name: normalizedName,
+        category,
+        sellingPrice: price,
+        mrp,
+        primaryImage: img,
+        handle: slug,
+        productUrl: `https://esponsports.com/products/${slug}`
+      });
+    }
+  }
+
+  return extracted;
+}
+
 function generateContextualTemplateFallback(
   prompt: string,
   brand: BrandIntelligenceContext,
@@ -2119,23 +2224,15 @@ function generateContextualTemplateFallback(
     let selectedList: any[] = [];
     if (brand.selectedProducts && brand.selectedProducts.length > 0) {
       selectedList = brand.selectedProducts;
-    } else if (brand.activeProducts && brand.activeProducts.length > 0) {
-      // Fuzzy match active products against prompt text
-      const promptLower = p.toLowerCase();
-      const matched = brand.activeProducts.filter(prod => {
-        const nameLower = (prod.name || '').toLowerCase();
-        const catLower = (prod.category || '').toLowerCase();
-        const subLower = (prod.subCategory || '').toLowerCase();
-        
-        const keywords = nameLower.split(/[\s,|-]+/).filter(w => w.length >= 3);
-        const hasKeywordMatch = keywords.some(kw => promptLower.includes(kw));
-        const hasDirectMatch = promptLower.includes(nameLower) || (catLower && promptLower.includes(catLower)) || (subLower && promptLower.includes(subLower));
-        return hasKeywordMatch || hasDirectMatch;
-      });
-
-      selectedList = matched.length >= 2 ? matched : brand.activeProducts.slice(0, 4);
     } else {
-      selectedList = [p1Obj, p2Obj, p3Obj].filter(Boolean);
+      const extracted = extractProductsFromPrompt(prompt, brand.activeProducts || []);
+      if (extracted.length > 0) {
+        selectedList = extracted;
+      } else if (brand.activeProducts && brand.activeProducts.length > 0) {
+        selectedList = brand.activeProducts.slice(0, 6);
+      } else {
+        selectedList = [p1Obj, p2Obj, p3Obj].filter(Boolean);
+      }
     }
 
     const generatedCards = selectedList.slice(0, 10).map((prod: any, idx: number) => {
@@ -2161,6 +2258,8 @@ function generateContextualTemplateFallback(
       };
     });
 
+    const productsSummaryText = selectedList.slice(0, 3).map(p => p.name).join(', ');
+
     return {
       name: `carousel_${slugPrompt}`,
       category: "MARKETING",
@@ -2168,10 +2267,10 @@ function generateContextualTemplateFallback(
       templateType: "CAROUSEL",
       headerType: "NONE",
       headerContent: "",
-      bodyText: `Hi {{1}}, explore the hottest trending styles at ${brandName}! Swipe through our curated collection below and enjoy {{2}} on your order with code *${defaultCombo}*.`,
+      bodyText: `Hi {{1}}, check out the top trending activewear styles at ${brandName}${productsSummaryText ? ` including ${productsSummaryText}` : ''}! Swipe through the carousel below to shop your favorites and enjoy {{2}} with code *${defaultCombo}*.`,
       footerText: `${brandName} | Official Store: ${brandDomain}`,
       buttons: [
-        { type: "URL", text: "Shop Store", url: `https://${brandDomain}/collections/trending`, urlType: "STATIC" },
+        { type: "URL", text: "Shop Full Store", url: `https://${brandDomain}/collections/all`, urlType: "STATIC" },
         { type: "COPY_CODE", text: "Copy Coupon", code: defaultCombo }
       ],
       variables: [
@@ -2373,11 +2472,22 @@ export async function generateAITemplateAction(prompt: string, context?: {
     const aiSystemRules = settings?.aiSystemPrompt || "Be polite, high-converting, professional, and Meta compliant.";
     const fallbackLanguage = settings?.aiFallbackLanguage || "English";
 
-    const selectedProductsText = context?.selectedProducts && context.selectedProducts.length > 0
-      ? `=== 🎯 USER SELECTED PRODUCTS TO FEATURE (MANDATORY IN CAROUSEL / TEMPLATE) ===
-${context.selectedProducts.map((p, i) => `${i+1}. "${p.name}" | Price: ₹${p.sellingPrice} (MRP: ₹${p.mrp || p.sellingPrice}) | Category: ${p.category || 'Apparel'} | Direct URL: ${p.productUrl || `https://${brandDomain}/products/${p.handle || ''}`} | Image: ${p.primaryImage || (p.images && p.images[0]) || ''}`).join('\n')}
+    const cleanPrompt = (prompt || '').trim();
+    if (!cleanPrompt) {
+      return { success: false, error: "Please enter a prompt describing the template you want to create." };
+    }
 
-MANDATORY INSTRUCTION: You MUST create Carousel Cards (or feature in the body) EXACTLY these selected products with their exact titles, prices, image URLs, and product links!`
+    // Extract products mentioned in the prompt if no pre-selected products provided
+    const promptExtractedProducts = extractProductsFromPrompt(cleanPrompt, activeProducts);
+    const effectiveSelectedProducts = (context?.selectedProducts && context.selectedProducts.length > 0)
+      ? context.selectedProducts
+      : promptExtractedProducts;
+
+    const selectedProductsText = effectiveSelectedProducts && effectiveSelectedProducts.length > 0
+      ? `=== 🎯 MANDATORY PRODUCTS TO FEATURE (IN CAROUSEL / TEMPLATE) ===
+${effectiveSelectedProducts.map((p, i) => `${i+1}. "${p.name}" | Price: ₹${p.sellingPrice} (MRP: ₹${p.mrp || p.sellingPrice}) | Category: ${p.category || 'Apparel'} | Direct URL: ${p.productUrl || `https://${brandDomain}/products/${p.handle || ''}`} | Image: ${p.primaryImage || (p.images && p.images[0]) || ''}`).join('\n')}
+
+MANDATORY INSTRUCTION: You MUST set templateType to "CAROUSEL" with category "MARKETING", and create Carousel Cards EXACTLY for these ${effectiveSelectedProducts.length} selected products with their exact titles, prices, image URLs, and product links!`
       : '';
 
     const productCatalogSummary = activeProducts.length > 0 
@@ -2401,7 +2511,7 @@ MANDATORY INSTRUCTION: You MUST create Carousel Cards (or feature in the body) E
       gstin,
       knowledgeBase: aiKnowledgeBase,
       systemRules: aiSystemRules,
-      selectedProducts: context?.selectedProducts,
+      selectedProducts: effectiveSelectedProducts,
       activeProducts,
       activeCombos,
       cannedFaqs: cannedFaqsSummary
@@ -2410,11 +2520,6 @@ MANDATORY INSTRUCTION: You MUST create Carousel Cards (or feature in the body) E
     let apiKey = process.env.GEMINI_API_KEY || '';
     let preferredModel = settings?.aiModel || "gemini-2.0-flash";
     if (settings?.geminiApiKey) apiKey = settings.geminiApiKey;
-
-    const cleanPrompt = (prompt || '').trim();
-    if (!cleanPrompt) {
-      return { success: false, error: "Please enter a prompt describing the template you want to create." };
-    }
 
     let generatedJson: any = null;
 
@@ -2437,6 +2542,8 @@ ${aiKnowledgeBase}
 - Tone: ${aiSystemRules}
 - Preferred Language: ${fallbackLanguage}
 
+${selectedProductsText}
+
 === 🛍️ LIVE PRODUCT CATALOG SAMPLES (REAL DATA) ===
 ${productCatalogSummary}
 
@@ -2446,27 +2553,23 @@ ${comboDealsSummary}
 ${cannedFaqsSummary ? `=== 💬 FREQUENTLY ASKED QUESTIONS & POLICY SNIPPETS ===\n${cannedFaqsSummary}\n` : ''}
 
 === 🚨 META WHATSAPP TEMPLATE CONSTRAINTS (STRICT COMPLIANCE REQUIRED) ===
-1. "name": lowercase alphanumeric with underscores only (e.g. "festive_sale_2026", "order_tracking_update", "cart_recovery_offer"). Max 512 chars, no spaces, no uppercase, no dashes.
+1. "name": lowercase alphanumeric with underscores only (e.g. "festive_sale_2026", "carousel_top_apparel", "cart_recovery_offer"). Max 512 chars, no spaces, no uppercase, no dashes.
 2. "category": Must be one of "MARKETING", "UTILITY", "AUTHENTICATION".
 3. "language": Standard code ("en_US", "hi", "mr", "gu"). Default "en_US".
-4. "templateType": "STANDARD", "CAROUSEL", "CATALOGUE", "FLOWS", "LTO_COUPON", "ORDER_DETAILS", "ORDER_STATUS".
-5. "headerType": "NONE", "TEXT", "IMAGE", "VIDEO", "DOCUMENT".
-   - If TEXT, provide "headerContent" (max 60 chars).
-   - If IMAGE, provide "headerMediaUrl" (e.g. Unsplash URL).
+4. "templateType": "STANDARD", "CAROUSEL", "CATALOGUE", "FLOWS", "LTO_COUPON", "ORDER_DETAILS", "ORDER_STATUS". If products or carousels are requested, MUST be "CAROUSEL".
+5. "headerType": "NONE", "TEXT", "IMAGE", "VIDEO", "DOCUMENT". (For CAROUSEL, headerType must be "NONE").
 6. "bodyText": Engaging, high-conversion copy tailored to ${brandName}.
    - Dynamic parameters MUST strictly follow sequential numbering {{1}}, {{2}}, {{3}} without skipping numbers.
    - Weave in the real brand name, brand domain, or contact phone when suitable.
    - Maximum 1024 characters.
-7. "footerText": Short footer (max 60 chars, e.g. "${brandName} | Reply STOP to unsubscribe" or "${brandName} | Call ${brandPhone}").
+7. "footerText": Short footer (max 60 chars, e.g. "${brandName} | Official Store: ${brandDomain}").
 8. "buttons": Array of up to 3 interactive buttons:
-   - Dynamic URL: { "type": "URL", "text": "Shop Now", "url": "https://${brandDomain}/shop/{{1}}", "urlType": "DYNAMIC", "urlExample": "https://${brandDomain}/shop/sale" }
-   - Static URL: { "type": "URL", "text": "Visit Website", "url": "https://${brandDomain}", "urlType": "STATIC" }
-   - Copy Code: { "type": "COPY_CODE", "text": "Copy Coupon", "code": "SAVE20" } (Use real combo codes if available)
+   - Static URL: { "type": "URL", "text": "Shop Store", "url": "https://${brandDomain}/collections/all", "urlType": "STATIC" }
+   - Copy Code: { "type": "COPY_CODE", "text": "Copy Coupon", "code": "FLAT30" }
    - Phone Call: { "type": "PHONE_NUMBER", "text": "Call Support", "phone_number": "${brandPhone}" }
-   - Quick Reply: { "type": "QUICK_REPLY", "text": "Inquire" }
 9. "variables": Array of variable descriptors: [{ "param": "{{1}}", "name": "Customer Name", "example": "Rahul", "description": "Customer Name" }]
 10. "couponCode": Coupon code string if applicable (e.g. "FLAT30", "SAVE20").
-11. "carouselCards": If CAROUSEL, provide 2 to 3 cards with id, mediaUrl, headerType, title, bodyText, buttons using real ${brandName} products.
+11. "carouselCards": If CAROUSEL or multiple products requested, provide cards for ALL requested products (up to 10 cards) with id, mediaUrl, headerType ("IMAGE"), title, bodyText (price/features), and buttons ([{"type":"URL","text":"Buy Now","url":"https://${brandDomain}/products/<handle>","urlType":"STATIC"},{"type":"URL","text":"Explore More","url":"https://${brandDomain}/collections/all","urlType":"STATIC"}]).
 12. "explanation": 1-2 sentences explaining how this template addresses the user's specific requirement and utilizes the brand's unique assets.
 13. "complianceChecks": Array of 3-4 Meta compliance guarantee bullet points.
 

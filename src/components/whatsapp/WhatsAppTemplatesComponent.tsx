@@ -357,7 +357,9 @@ export default function WhatsAppTemplatesComponent() {
       });
       if (res.success && res.template) {
         setAiDraft(res);
-        showToast("✨ AI generated your template draft with selected products! Review and click 'Approve & Apply'.", "success");
+        // Auto-apply directly into the Studio Form and Live Smartphone Preview
+        handleApplyAIDraft(res);
+        showToast("✨ AI generated & loaded template into studio and live simulator!", "success");
       } else {
         showToast(res.error || "Failed to generate AI template.", "error");
       }
@@ -1587,6 +1589,48 @@ export default function WhatsAppTemplatesComponent() {
                       {aiDraft.template.footerText && (
                         <div className="text-[11px] text-gray-500 dark:text-gray-400 px-1">
                           <span className="font-bold text-gray-700 dark:text-gray-300">Footer:</span> {aiDraft.template.footerText}
+                        </div>
+                      )}
+
+                      {/* Carousel Cards Preview */}
+                      {aiDraft.template.carouselCards && Array.isArray(aiDraft.template.carouselCards) && aiDraft.template.carouselCards.length > 0 && (
+                        <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-indigo-200 dark:border-slate-700 flex flex-col gap-2 shadow-2xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-indigo-700 dark:text-indigo-300 text-xs flex items-center gap-1.5">
+                              <Layers size={13} />
+                              Swipeable Carousel Cards ({aiDraft.template.carouselCards.length} products attached):
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                              ✓ Live in Phone Simulator
+                            </span>
+                          </div>
+
+                          <div className="flex gap-2.5 overflow-x-auto pb-1.5 pt-1">
+                            {aiDraft.template.carouselCards.map((card: any, cIdx: number) => (
+                              <div
+                                key={card.id || cIdx}
+                                className="min-w-[190px] max-w-[210px] bg-gray-50/80 dark:bg-slate-900/80 border border-gray-200 dark:border-slate-700 rounded-xl p-2.5 flex flex-col gap-1.5 flex-shrink-0"
+                              >
+                                <div className="w-full h-24 rounded-lg overflow-hidden bg-white dark:bg-slate-800 border border-gray-200 flex-shrink-0">
+                                  <img src={card.mediaUrl} alt={card.title} className="w-full h-full object-cover" />
+                                </div>
+                                <div className="font-bold text-xs text-gray-900 dark:text-white truncate" title={card.title}>
+                                  #{cIdx + 1} {card.title}
+                                </div>
+                                <div className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1">{card.bodyText}</div>
+                                <div className="flex flex-col gap-1 mt-auto pt-1">
+                                  {card.buttons?.map((cb: any, cbIdx: number) => (
+                                    <span
+                                      key={cbIdx}
+                                      className="px-2 py-0.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-[10px] font-bold text-indigo-600 dark:text-indigo-400 text-center truncate"
+                                    >
+                                      {cb.text}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
 
