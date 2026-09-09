@@ -236,18 +236,6 @@ export async function POST(req: NextRequest) {
       const fullPhone = fromPhone.replace(/\D/g, '');
       const last10 = fullPhone.slice(-10);
       const cleanPhone = fullPhone.length === 10 ? `91${fullPhone}` : fullPhone;
-      
-      // Feature: WebRTC Call Handling
-      if (msg.type === "interactive" && msg.interactive?.type === "webrtc_call") {
-        const callData = msg.interactive.webrtc_call;
-        console.log(`[WhatsApp Webhook] WebRTC Call event from ${cleanPhone}:`, callData.status);
-        await prisma.whatsAppCall.upsert({
-           where: { id: callData.call_id },
-           create: { id: callData.call_id, phone: cleanPhone, direction: 'inbound', status: callData.status },
-           update: { status: callData.status, ended_at: callData.status === 'ended' ? new Date() : undefined }
-        }).catch(()=>console.warn("Could not save WebRTC state"));
-        return NextResponse.json({ status: "success" });
-      }
 
       const isMedia = ["image", "video", "audio", "document"].includes(msg.type);
       const mediaId = isMedia ? msg[msg.type]?.id : null;
