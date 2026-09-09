@@ -16,7 +16,9 @@ import {
   sendWhatsAppTemplateAction,
   getWhatsAppBrandDetailsAction,
   generateAITemplateAction,
-  getWhatsAppInventoryCatalogAction
+  getWhatsAppInventoryCatalogAction,
+  refreshTemplateStatusAction,
+  resubmitCarouselTemplateAction
 } from "@/app/actions/whatsAppPlatformActions";
 
 // Meta API Constraints
@@ -58,20 +60,25 @@ const getUtilityPresetsList = (brand: string, domain: string) => [
   {
     id: "ORDER_CONFIRMATION",
     label: "📦 Order Confirmation",
-    header: "Order Confirmed!",
-    body: `Hi {{1}}, thank you for shopping with ${brand}! Your order #{{2}} of ₹{{3}} has been confirmed and is being packed with care.`,
-    footer: `${brand} | Need help? Reply to this chat`
+    desc: "Post-purchase customer transactional receipts",
+    type: "STANDARD",
+    category: "UTILITY",
+    headerType: "NONE",
+    body: `Hello {{1}}, your order #{{2}} for {{3}} has been confirmed! Total: ₹{{4}}. Track live: https://${domain}/orders/{{2}}`,
+    footer: `${brand} Official Store`,
+    variables: [
+      { param: "{{1}}", name: "Customer Name", example: "Rohit", description: "Customer's first name" },
+      { param: "{{2}}", name: "Order ID", example: "ESP-9482", description: "Store order reference" },
+      { param: "{{3}}", name: "Items Summary", example: "2x Dry-Fit Tees", description: "Ordered product summary" },
+      { param: "{{4}}", name: "Order Amount", example: "1,499", description: "Total paid amount" }
+    ],
+    buttons: [
+      { type: "URL", text: "Track Order", url: `https://${domain}/track/{{1}}`, urlType: "DYNAMIC", urlExample: `https://${domain}/track/ESP-9482` },
+      { type: "PHONE_NUMBER", text: "Customer Support", phone_number: "+917404388242" }
+    ]
   },
   {
     id: "SHIPPING_UPDATE",
-    label: "🚚 Shipping & Tracking",
-    header: "Your Order is on the Way!",
-    body: `Hi {{1}}, great news! Your order #{{2}} from ${brand} has been dispatched via {{3}}. Track your delivery live here: {{4}}`,
-    footer: `${brand} Logistics`
-  },
-  {
-    id: "PAYMENT_RECEIPT",
-    label: "💳 Payment Receipt",
     header: "Payment Received",
     body: `Hi {{1}}, we have received your payment of ₹{{2}} for invoice #{{3}}. Thank you for choosing ${brand}!`,
     footer: `${brand} Accounts`
@@ -247,7 +254,7 @@ export default function WhatsAppTemplatesComponent() {
       bodyText: "₹1,199 • Zipper pockets & sweat-wicking",
       buttons: [
         { type: "URL", text: "Buy Now", url: "https://esponsports.com/products/shorts", urlType: "STATIC" },
-        { type: "PHONE_NUMBER", text: "Call Us", phone_number: "+917206066878" }
+        { type: "URL", text: "Explore More", url: "https://esponsports.com/collections/all", urlType: "STATIC" }
       ]
     }
   ]);
@@ -255,6 +262,9 @@ export default function WhatsAppTemplatesComponent() {
 
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState("");
+  const [refreshingTemplate, setRefreshingTemplate] = useState<string | null>(null);
+  const [resubmittingTemplate, setResubmittingTemplate] = useState<string | null>(null);
+  const [fastTrackModalTmpl, setFastTrackModalTmpl] = useState<any | null>(null);
 
   // -------------------------------------------------------------
   // AI Template Studio Co-Pilot State & Handlers
@@ -267,6 +277,14 @@ export default function WhatsAppTemplatesComponent() {
   const [aiSelectedProducts, setAiSelectedProducts] = useState<any[]>([]);
   const [aiProductDropdownOpen, setAiProductDropdownOpen] = useState(false);
   const [aiProductSearch, setAiProductSearch] = useState("");
+  const [aiTone, setAiTone] = useState<"Professional" | "Casual" | "Festive" | "Urgent" | "Luxury">("Professional");
+  const [aiTranslating, setAiTranslating] = useState(false);
+  // Compliance Modal State
+  const [showComplianceModal, setShowComplianceModal] = useState(false);
+  // A/B Variants State
+  const [aiVariants, setAiVariants] = useState<any[]>([]);
+  const [aiVariantsLoading, setAiVariantsLoading] = useState(false);
+  const [aiVariantIndex, setAiVariantIndex] = useState(0);
 
   const toggleSelectProductForAI = (p: any) => {
     setAiSelectedProducts((prev) => {
@@ -335,6 +353,10 @@ export default function WhatsAppTemplatesComponent() {
     if (!promptToUse && aiSelectedProducts.length > 0) {
       promptToUse = `Create a high-converting product carousel template for ${brandName} featuring: ${aiSelectedProducts.map(p => p.name).join(", ")}.`;
       setAiPrompt(promptToUse);
+    }
+    // Prepend tone instruction unless it's already a refine/composite prompt
+    if (promptToUse && !customPrompt && aiTone !== "Professional") {
+      promptToUse = `[Tone: ${aiTone}] ${promptToUse}`;
     }
     if (!promptToUse) {
       showToast("Please describe the template or select products to include.", "error");
@@ -417,6 +439,102 @@ export default function WhatsAppTemplatesComponent() {
     const compositePrompt = `Previous Draft: "${aiDraft?.template?.bodyText}". User revision: "${aiRefineInput}". Brand: ${brandName}. Ensure Meta compliance.`;
     setAiRefineInput("");
     await handleGenerateWithAI(compositePrompt);
+  };
+
+  // Translate current template body into another language via AI
+  const handleTranslateTemplate = async (targetLang: string) => {
+    if (!bodyText.trim()) { showToast("Write the body text first before translating.", "error"); return; }
+    setAiTranslating(true);
+    try {
+      const prompt = `Translate the following WhatsApp template body text into ${targetLang} while keeping ALL variable placeholders ({{1}}, {{2}}, etc.) intact, keeping the brand name "${brandName}" unchanged, and keeping it Meta-compliant and high-converting. Return ONLY the translated body text, no extra explanation.\n\nOriginal:\n${bodyText}`;
+      const res = await generateAITemplateAction(prompt, { category, templateType, brandName, brandDomain });
+      if (res.success && res.template?.bodyText) {
+        setBodyText(res.template.bodyText);
+        if (res.template.footerText) setFooterText(res.template.footerText);
+        showToast(`✅ Template translated to ${targetLang}!`, "success");
+      }
+    } catch (e: any) {
+      showToast(e.message || "Translation failed.", "error");
+    } finally {
+      setAiTranslating(false);
+    }
+  };
+
+  // Generate 3 A/B Variants of the same prompt
+  const handleGenerateVariants = async () => {
+    if (!aiPrompt.trim() && aiSelectedProducts.length === 0) {
+      showToast("Enter a prompt or select products first.", "error"); return;
+    }
+    setAiVariantsLoading(true);
+    setAiVariants([]);
+    try {
+      const basePrompt = aiPrompt.trim() || `Create a high-converting product carousel for ${brandName}`;
+      const variantPrompts = [
+        `${basePrompt} — Tone: ${aiTone}. Variant 1: concise and punchy.`,
+        `${basePrompt} — Tone: ${aiTone}. Variant 2: detailed with key features highlighted.`,
+        `${basePrompt} — Tone: ${aiTone}. Variant 3: urgency-driven with limited-time offer framing.`
+      ];
+      const results = await Promise.all(
+        variantPrompts.map(p => generateAITemplateAction(p, { category, templateType: aiSelectedProducts.length > 0 ? "CAROUSEL" : templateType, brandName, brandDomain, selectedProducts: aiSelectedProducts }))
+      );
+      const valid = results.filter(r => r.success && r.template);
+      if (valid.length > 0) {
+        setAiVariants(valid);
+        setAiVariantIndex(0);
+        showToast(`✨ Generated ${valid.length} variants — pick your favorite!`, "success");
+      } else {
+        showToast("Failed to generate variants. Try a more specific prompt.", "error");
+      }
+    } catch (e: any) {
+      showToast(e.message || "Variant generation failed.", "error");
+    } finally {
+      setAiVariantsLoading(false);
+    }
+  };
+
+  // Clone a saved template into the studio editor
+  const handleCloneTemplate = (t: any) => {
+    const clonedName = `${(t.name || 'template').replace(/_v\d+$/, '')}_v${Date.now().toString().slice(-4)}`;
+    setTemplateName(clonedName);
+    setNameError("");
+    setCategory(t.category || "MARKETING");
+    setTemplateType(t.templateType || "STANDARD");
+    setLanguage(t.language || "en_US");
+    setHeaderType(t.headerType || "NONE");
+    setHeaderContent(t.headerContent || "");
+    setBodyText(t.bodyText || "");
+    setFooterText(t.footerText || "");
+    try { const btns = JSON.parse(t.buttons || "[]"); setButtons(Array.isArray(btns) ? btns : []); } catch { setButtons([]); }
+    if (t.templateType === "CAROUSEL" && t.carouselCards) {
+      try { const cards = JSON.parse(t.carouselCards); if (Array.isArray(cards)) setCarouselCards(cards); } catch {}
+    }
+    setViewMode("CREATE");
+    showToast(`📋 Cloned "${t.name}" — edit and save as "${clonedName}"`, "success");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Compliance checks before saving
+  const runComplianceChecks = () => {
+    const issues: { label: string; pass: boolean; message: string }[] = [];
+    issues.push({ label: "Template Name", pass: /^[a-z0-9_]+$/.test(templateName) && templateName.length >= 3, message: "Must be lowercase letters, numbers, underscores. Min 3 chars." });
+    issues.push({ label: "Body Text", pass: bodyText.trim().length >= 10, message: "Body text must be at least 10 characters." });
+    issues.push({ label: "Body Length", pass: bodyText.length <= 1024, message: `Body is ${bodyText.length}/1024 chars.` });
+    issues.push({ label: "Footer Length", pass: !footerText || footerText.length <= 60, message: `Footer is ${footerText.length}/60 chars.` });
+    issues.push({ label: "Button Count", pass: buttons.length <= 3, message: `Max 3 buttons. Currently ${buttons.length}.` });
+    issues.push({ label: "Button Text Length", pass: buttons.every(b => (b.text || "").length <= 25), message: "All button labels must be ≤25 chars." });
+    if (templateType === "CAROUSEL") {
+      issues.push({ label: "Carousel Cards", pass: carouselCards.length >= 2 && carouselCards.length <= 10, message: `Need 2–10 cards. Currently ${carouselCards.length}.` });
+      issues.push({ label: "Card Images", pass: carouselCards.every(c => !!c.mediaUrl), message: "All carousel cards must have an image." });
+    }
+    const varRegex = /\{\{(\d+)\}\}/g;
+    const nums: number[] = []; let m;
+    while ((m = varRegex.exec(bodyText)) !== null) nums.push(parseInt(m[1]));
+    const sorted = [...nums].sort((a,b) => a-b);
+    const sequential = sorted.every((v, i) => v === i + 1);
+    issues.push({ label: "Variable Numbering", pass: nums.length === 0 || sequential, message: "Variables must be sequential: {{1}}, {{2}}, {{3}}..." });
+    const prohibitedWords = /\b(100% free|guaranteed|click here|limited time only)\b/i;
+    issues.push({ label: "Prohibited Phrases", pass: !prohibitedWords.test(bodyText), message: "Avoid phrases like '100% free', 'Guaranteed', 'Click here'." });
+    return issues;
   };
 
   // -------------------------------------------------------------
@@ -984,6 +1102,37 @@ export default function WhatsAppTemplatesComponent() {
     }
   };
 
+  const handleRefreshStatus = async (name: string) => {
+    setRefreshingTemplate(name);
+    const res = await refreshTemplateStatusAction(name);
+    setRefreshingTemplate(null);
+    if (res.success) {
+      if (res.status === "APPROVED") {
+        showToast(`🎉 Meta Approved template "${name}"!`, "success");
+      } else if (res.status === "REJECTED") {
+        showToast(`⚠️ Meta Rejected "${name}": ${res.rejectionReason || "Policy Issue"}`, "error");
+      } else {
+        showToast(`⏳ Template "${name}" status from Meta: ${res.status}`);
+      }
+      fetchTemplates();
+    } else {
+      showToast(res.error || "Failed to check status from Meta.", "error");
+    }
+  };
+
+  const handleFastApproveResubmit = async (templateName: string) => {
+    setResubmittingTemplate(templateName);
+    const res = await resubmitCarouselTemplateAction(templateName);
+    setResubmittingTemplate(null);
+    if (res.success) {
+      showToast(res.message || `✓ 100% compliant version submitted to Meta for 1-5 minute approval!`, "success");
+      setFastTrackModalTmpl(null);
+      fetchTemplates();
+    } else {
+      showToast(res.error || "Fast-track submission failed.", "error");
+    }
+  };
+
   const handleTest = async (t: any) => {
     if (!testPhone) {
       showToast("Enter a test phone number first.", "error");
@@ -1263,6 +1412,15 @@ export default function WhatsAppTemplatesComponent() {
               Reset Form
             </button>
             <button
+              type="button"
+              onClick={() => setShowComplianceModal(true)}
+              disabled={saving || !!nameError || !templateName}
+              className="px-4 py-2 bg-white dark:bg-slate-800 hover:bg-amber-50 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs active:scale-95 disabled:opacity-50 cursor-pointer"
+            >
+              <CheckSquare size={14} />
+              <span>Check Compliance</span>
+            </button>
+            <button
               onClick={handleCreate}
               disabled={saving || !!nameError || !templateName}
               className="px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-black transition flex items-center gap-2 shadow-md shadow-indigo-500/25 active:scale-95 disabled:opacity-50 cursor-pointer"
@@ -1272,6 +1430,64 @@ export default function WhatsAppTemplatesComponent() {
             </button>
           </div>
         </div>
+
+        {/* ===== META COMPLIANCE CHECK MODAL ===== */}
+        {showComplianceModal && (() => {
+          const checks = runComplianceChecks();
+          const allPass = checks.every(c => c.pass);
+          return (
+            <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+              <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-md w-full p-6 flex flex-col gap-5 animate-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${allPass ? "bg-emerald-100 dark:bg-emerald-900/60" : "bg-amber-100 dark:bg-amber-900/60"}`}>
+                      {allPass ? <CheckCircle2 size={22} className="text-emerald-600" /> : <AlertCircle size={22} className="text-amber-600" />}
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black text-gray-900 dark:text-white">Meta Compliance Report</h3>
+                      <p className="text-[11px] text-gray-500">{checks.filter(c => c.pass).length}/{checks.length} checks passed</p>
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setShowComplianceModal(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer p-1">
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
+                  {checks.map((check, i) => (
+                    <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border ${check.pass ? "bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60" : "bg-rose-50/70 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/60"}`}>
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${check.pass ? "bg-emerald-500" : "bg-rose-500"}`}>
+                        {check.pass ? <Check size={11} className="text-white" /> : <X size={11} className="text-white" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className={`text-[11px] font-black ${check.pass ? "text-emerald-800 dark:text-emerald-300" : "text-rose-800 dark:text-rose-300"}`}>{check.label}</div>
+                        <div className={`text-[10px] mt-0.5 ${check.pass ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>{check.message}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className={`p-3 rounded-xl border text-[11px] font-semibold text-center ${allPass ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300" : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300"}`}>
+                  {allPass ? "✅ All compliance checks passed! Your template is ready to submit to Meta." : "⚠️ Fix the issues above before submitting to improve approval chances."}
+                </div>
+
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setShowComplianceModal(false)} className="flex-1 py-2.5 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold transition cursor-pointer">
+                    {allPass ? "Review Again" : "Fix Issues"}
+                  </button>
+                  <button
+                    onClick={(e) => { setShowComplianceModal(false); handleCreate(e as any); }}
+                    disabled={saving}
+                    className="flex-1 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shadow-md active:scale-95 disabled:opacity-50 cursor-pointer"
+                  >
+                    {saving ? <RefreshCw size={13} className="animate-spin" /> : <Send size={13} />}
+                    {allPass ? "Submit to Meta →" : "Submit Anyway →"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* 2-Column Full-Page Studio Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -1549,39 +1765,153 @@ export default function WhatsAppTemplatesComponent() {
                   </div>
 
                   {/* AI Prompt Input Bar */}
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-2.5">
+                    {/* Tone Selector */}
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                        🎨 Tone / Style:
+                      </span>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {(["Professional", "Casual", "Festive", "Urgent", "Luxury"] as const).map(tone => (
+                          <button
+                            key={tone}
+                            type="button"
+                            onClick={() => setAiTone(tone)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer border ${
+                              aiTone === tone
+                                ? tone === "Professional" ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                                : tone === "Casual" ? "bg-sky-500 text-white border-sky-500 shadow-sm"
+                                : tone === "Festive" ? "bg-orange-500 text-white border-orange-500 shadow-sm"
+                                : tone === "Urgent" ? "bg-rose-600 text-white border-rose-600 shadow-sm"
+                                : "bg-amber-500 text-white border-amber-500 shadow-sm"
+                                : "bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-slate-700 hover:border-indigo-300"
+                            }`}
+                          >
+                            {tone === "Professional" ? "💼" : tone === "Casual" ? "😊" : tone === "Festive" ? "🎉" : tone === "Urgent" ? "⚡" : "✨"} {tone}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Prompt Textarea */}
                     <div className="relative">
                       <textarea
                         value={aiPrompt}
                         onChange={(e) => setAiPrompt(e.target.value)}
-                        placeholder={`Explain what you want to create (e.g., "Create a Diwali sale template for ${brandName} with a coupon code, image header, shop now button and phone support")...`}
+                        placeholder={`Explain what you want to create (e.g., "Create a ${aiTone.toLowerCase()} Diwali sale template for ${brandName} with a coupon code, image header, shop now button and phone support")...`}
                         rows={3}
-                        className="w-full px-4 py-3 bg-gray-50/90 dark:bg-slate-900/90 border border-gray-200 dark:border-slate-700 rounded-2xl text-xs text-gray-900 dark:text-white placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                        className="w-full px-4 py-3 bg-gray-50/90 dark:bg-slate-900/90 border border-gray-200 dark:border-slate-700 rounded-2xl text-xs text-gray-900 dark:text-white placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition resize-none"
                       />
+                      <span className={`absolute bottom-2.5 right-3 text-[9px] font-bold ${aiPrompt.length > 400 ? "text-amber-500" : "text-gray-300"}`}>
+                        {aiPrompt.length}/500
+                      </span>
                     </div>
 
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-[11px] text-gray-500 dark:text-gray-400">
-                        {aiGenerating ? (
-                          <span className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-bold animate-pulse">
-                            <RefreshCw size={12} className="animate-spin" />
-                            AI is structuring Meta-compliant template draft...
-                          </span>
-                        ) : (
-                          <span>💡 Be specific about offers, discount codes, or products you want to feature.</span>
-                        )}
+                    {/* Action Buttons Row */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        {/* Multi-Language Translate Dropdown */}
+                        <div className="relative group">
+                          <button
+                            type="button"
+                            disabled={aiTranslating}
+                            className="px-3 py-2 bg-white dark:bg-slate-800 hover:bg-sky-50 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold text-gray-600 dark:text-gray-300 transition flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+                          >
+                            {aiTranslating ? <RefreshCw size={12} className="animate-spin" /> : <span>🌐</span>}
+                            <span>{aiTranslating ? "Translating..." : "Translate"}</span>
+                            <ChevronDown size={11} />
+                          </button>
+                          <div className="absolute left-0 top-full mt-1 z-50 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-150 min-w-[140px]">
+                            {["Hindi", "Hinglish", "Gujarati", "Marathi", "Tamil", "Bengali"].map(lang => (
+                              <button
+                                key={lang}
+                                type="button"
+                                onClick={() => handleTranslateTemplate(lang)}
+                                className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-slate-700 transition cursor-pointer"
+                              >
+                                {lang === "Hindi" ? "🇮🇳" : lang === "Hinglish" ? "🤝" : lang === "Gujarati" ? "🌾" : lang === "Marathi" ? "🏔️" : lang === "Tamil" ? "🌺" : "📚"} {lang}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Generate 3 Variants */}
+                        <button
+                          type="button"
+                          onClick={handleGenerateVariants}
+                          disabled={aiVariantsLoading || aiGenerating}
+                          className="px-3 py-2 bg-white dark:bg-slate-800 hover:bg-purple-50 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold text-purple-600 dark:text-purple-300 transition flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+                        >
+                          {aiVariantsLoading ? <RefreshCw size={12} className="animate-spin" /> : <span>⚡</span>}
+                          <span>{aiVariantsLoading ? "Generating..." : "3 Variants"}</span>
+                        </button>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => handleGenerateWithAI()}
-                        disabled={aiGenerating || !aiPrompt.trim()}
-                        className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-black transition flex items-center gap-2 shadow-md shadow-indigo-500/25 active:scale-95 disabled:opacity-50 cursor-pointer"
-                      >
-                        {aiGenerating ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                        <span>{aiGenerating ? "Generating..." : "Generate with AI ✨"}</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                          {aiGenerating ? (
+                            <span className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-bold animate-pulse">
+                              <RefreshCw size={12} className="animate-spin" />
+                              AI is drafting your template...
+                            </span>
+                          ) : (
+                            <span className="hidden sm:block">💡 Be specific for best results.</span>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateWithAI()}
+                          disabled={aiGenerating || (!aiPrompt.trim() && aiSelectedProducts.length === 0)}
+                          className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-black transition flex items-center gap-2 shadow-md shadow-indigo-500/25 active:scale-95 disabled:opacity-50 cursor-pointer"
+                        >
+                          {aiGenerating ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                          <span>{aiGenerating ? "Generating..." : "Generate with AI ✨"}</span>
+                        </button>
+                      </div>
                     </div>
+
+                    {/* A/B Variants Viewer */}
+                    {aiVariants.length > 0 && (
+                      <div className="mt-1 p-4 bg-purple-50/60 dark:bg-purple-950/20 border-2 border-purple-300 dark:border-purple-800/80 rounded-2xl flex flex-col gap-3 animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-black text-purple-900 dark:text-purple-300 uppercase tracking-wider flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                            A/B Variant Picker ({aiVariantIndex + 1}/{aiVariants.length})
+                          </h4>
+                          <div className="flex items-center gap-1.5">
+                            <button type="button" onClick={() => setAiVariantIndex(i => Math.max(0, i - 1))} disabled={aiVariantIndex === 0} className="p-1 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-600 disabled:opacity-30 cursor-pointer hover:bg-gray-50 transition">
+                              <ChevronLeft size={13} />
+                            </button>
+                            <button type="button" onClick={() => setAiVariantIndex(i => Math.min(aiVariants.length - 1, i + 1))} disabled={aiVariantIndex === aiVariants.length - 1} className="p-1 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-600 disabled:opacity-30 cursor-pointer hover:bg-gray-50 transition">
+                              <ChevronRight size={13} />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex gap-1.5">
+                          {aiVariants.map((_, i) => (
+                            <button key={i} type="button" onClick={() => setAiVariantIndex(i)} className={`px-2.5 py-1 rounded-lg text-[10px] font-black border transition cursor-pointer ${i === aiVariantIndex ? "bg-purple-600 text-white border-purple-600" : "bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-500 hover:border-purple-400"}`}>
+                              Variant {i + 1}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-gray-200 dark:border-slate-700 text-xs text-gray-800 dark:text-gray-100 leading-relaxed">
+                          {aiVariants[aiVariantIndex]?.template?.bodyText}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => { handleApplyAIDraft(aiVariants[aiVariantIndex]); setAiVariants([]); }}
+                            className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                          >
+                            <Check size={13} /> Apply This Variant
+                          </button>
+                          <button type="button" onClick={() => setAiVariants([])} className="px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-gray-500 cursor-pointer hover:bg-gray-50 transition">
+                            Dismiss
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* PROPOSED AI DRAFT CARD & INTERACTIVE APPROVAL */}
@@ -3822,14 +4152,23 @@ export default function WhatsAppTemplatesComponent() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handleDelete(t.name)}
-                      disabled={deleting === t.name}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition cursor-pointer"
-                      title="Delete Template from Meta"
-                    >
-                      {deleting === t.name ? <RefreshCw size={14} className="animate-spin text-red-500" /> : <Trash2 size={15} />}
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleCloneTemplate(t)}
+                        className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-xl transition cursor-pointer"
+                        title="Clone / Duplicate this template"
+                      >
+                        <Copy size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(t.name)}
+                        disabled={deleting === t.name}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition cursor-pointer"
+                        title="Delete Template from Meta"
+                      >
+                        {deleting === t.name ? <RefreshCw size={14} className="animate-spin text-red-500" /> : <Trash2 size={15} />}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Creation Timestamp Badge */}
@@ -3920,28 +4259,166 @@ export default function WhatsAppTemplatesComponent() {
 
                   {/* Test Send Button / Review Status Badge */}
                   {t.status === "APPROVED" ? (
-                    <button
-                      onClick={() => handleTest(t)}
-                      disabled={testingTemplate === t.name}
-                      className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
-                    >
-                      {testingTemplate === t.name ? (
-                        <RefreshCw size={13} className="animate-spin" />
-                      ) : (
-                        <Send size={13} />
-                      )}
-                      <span>{testingTemplate === t.name ? "Sending Test..." : "Send Test to Phone"}</span>
-                    </button>
+                    <div className="flex flex-col gap-1.5">
+                      <button
+                        onClick={() => handleTest(t)}
+                        disabled={testingTemplate === t.name}
+                        className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                      >
+                        {testingTemplate === t.name ? (
+                          <RefreshCw size={13} className="animate-spin" />
+                        ) : (
+                          <Send size={13} />
+                        )}
+                        <span>{testingTemplate === t.name ? "Sending Test..." : "Send Test to Phone"}</span>
+                      </button>
+                      <a
+                        href={`/whatsapp/broadcasts?template=${t.name}`}
+                        className="w-full py-2 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+                      >
+                        <BellRing size={13} />
+                        <span>📣 Launch Broadcast</span>
+                      </a>
+                    </div>
                   ) : (
-                    <div className="w-full py-2 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-1.5 border border-amber-200 dark:border-amber-800/60">
-                      <Clock size={13} className="animate-pulse" />
-                      <span>{t.status === "REJECTED" ? "Template Rejected by Meta" : "Under Review by Meta (Dispatch Locked)"}</span>
+                    <div className="flex flex-col gap-2">
+                      <div className="w-full py-2 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-1.5 border border-amber-200 dark:border-amber-800/60">
+                        <Clock size={13} className="animate-pulse text-amber-600 dark:text-amber-400" />
+                        <span>{t.status === "REJECTED" ? "Template Rejected by Meta" : "Under Review by Meta (1-5 Min Pipeline)"}</span>
+                      </div>
+
+                      {/* Action buttons for Pending / In Review templates */}
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleRefreshStatus(t.name)}
+                          disabled={refreshingTemplate === t.name}
+                          className="py-2 px-2.5 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                          title="Query Meta Graph API directly for real-time approval status"
+                        >
+                          <RefreshCw size={12} className={refreshingTemplate === t.name ? "animate-spin text-indigo-500" : "text-gray-400"} />
+                          <span>{refreshingTemplate === t.name ? "Checking..." : "Sync Status"}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setFastTrackModalTmpl(t)}
+                          className="py-2 px-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+                          title="Fix compliance issues and submit for guaranteed 1-5 minute automated approval"
+                        >
+                          <Zap size={12} className="fill-white" />
+                          <span>⚡ Fast-Track (5 Min)</span>
+                        </button>
+                      </div>
+
+                      {t.rejectionReason && t.rejectionReason !== "NONE" && (
+                        <div className="p-2 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-xl text-[10px] text-rose-700 dark:text-rose-300">
+                          <strong>Meta Rejection Reason:</strong> {t.rejectionReason}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ===== 5-MINUTE FAST-TRACK META APPROVAL MODAL ===== */}
+      {fastTrackModalTmpl && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full p-6 flex flex-col gap-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white shadow-md shadow-orange-500/20">
+                  <Zap size={20} className="fill-white" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-gray-900 dark:text-white">5-Minute Meta Fast-Track Approval</h3>
+                  <p className="text-[11px] text-gray-500">Fix & resubmit "{fastTrackModalTmpl.name}" for instant approval</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFastTrackModalTmpl(null)}
+                className="text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Why it was in review */}
+            <div className="p-3.5 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-2xl flex flex-col gap-1.5">
+              <div className="text-[11px] font-black text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                <AlertCircle size={14} className="text-amber-600 dark:text-amber-400" />
+                <span>Why is Meta taking longer than 5 minutes?</span>
+              </div>
+              <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
+                Meta automatically approves message templates within <strong>1 to 5 minutes</strong> unless flagged for manual compliance review. Common blockers:
+              </p>
+              <ul className="text-[10px] text-amber-700 dark:text-amber-400 list-disc list-inside space-y-0.5 mt-0.5">
+                <li><strong>Mixed Button Types:</strong> Carousel cards cannot mix Quick Reply with Website Links.</li>
+                <li><strong>Generic Test Name:</strong> Names like "testing" get diverted to Meta's 24-48 hr human review queue.</li>
+                <li><strong>Media Sample Handles:</strong> Meta requires fresh 1:1 image upload handles with high-res dimensions.</li>
+              </ul>
+            </div>
+
+            {/* Automatic Fixes Applied */}
+            <div className="p-3.5 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl flex flex-col gap-1.5">
+              <div className="text-[11px] font-black text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                <CheckCircle2 size={14} className="text-emerald-600 dark:text-emerald-400" />
+                <span>Automated Fixes for Instant 1-5 Min Approval:</span>
+              </div>
+              <div className="grid grid-cols-1 gap-1 text-[11px] text-emerald-800 dark:text-emerald-300">
+                <div className="flex items-center gap-1.5">
+                  <Check size={12} className="text-emerald-600 flex-shrink-0" />
+                  <span>Converts all buttons to uniform, high-converting CTAs (<strong>Buy Now</strong> + <strong>Explore More</strong>).</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check size={12} className="text-emerald-600 flex-shrink-0" />
+                  <span>Assigns a clean, production-grade template name (e.g. <code>{fastTrackModalTmpl.name}_v2</code>).</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check size={12} className="text-emerald-600 flex-shrink-0" />
+                  <span>Uploads fresh high-resolution media handles directly via Meta Resumable Upload API.</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check size={12} className="text-emerald-600 flex-shrink-0" />
+                  <span>Strictly caps card bodies to 160 characters and button labels to 25 characters.</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex gap-2.5 mt-1">
+              <button
+                type="button"
+                onClick={() => setFastTrackModalTmpl(null)}
+                className="flex-1 py-2.5 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleFastApproveResubmit(fastTrackModalTmpl.name)}
+                disabled={resubmittingTemplate === fastTrackModalTmpl.name}
+                className="flex-[2] py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-95 disabled:opacity-50 cursor-pointer"
+              >
+                {resubmittingTemplate === fastTrackModalTmpl.name ? (
+                  <>
+                    <RefreshCw size={13} className="animate-spin" />
+                    <span>Uploading Handles & Submitting to Meta...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap size={13} className="fill-white" />
+                    <span>🚀 Submit Clean Version (1-5 Min Approval)</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
