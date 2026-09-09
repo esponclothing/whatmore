@@ -5,7 +5,7 @@ import {
   FileCode, Plus, Search, RefreshCw, CheckCircle2, Clock, AlertCircle,
   X, Send, Trash2, Eye, Info, Calendar, Zap, TrendingUp, Filter, Sparkles,
   ArrowUpDown, CheckCheck, Radio, Check, ArrowLeft, Layers, ShoppingBag,
-  Tag, ChevronLeft, ChevronRight, Image as ImageIcon, Link as LinkIcon,
+  Tag, ChevronLeft, ChevronRight, ChevronDown, Image as ImageIcon, Link as LinkIcon,
   Phone, Copy, Smartphone, Upload, Clipboard, CheckSquare, PackageCheck,
   Truck, CreditCard, BellRing, FileText, Video, FileCheck, ExternalLink
 } from "lucide-react";
@@ -264,20 +264,90 @@ export default function WhatsAppTemplatesComponent() {
   const [aiDraft, setAiDraft] = useState<any | null>(null);
   const [aiIsOpen, setAiIsOpen] = useState(true);
   const [aiRefineInput, setAiRefineInput] = useState("");
+  const [aiSelectedProducts, setAiSelectedProducts] = useState<any[]>([]);
+  const [aiProductDropdownOpen, setAiProductDropdownOpen] = useState(false);
+  const [aiProductSearch, setAiProductSearch] = useState("");
+
+  const toggleSelectProductForAI = (p: any) => {
+    setAiSelectedProducts((prev) => {
+      const exists = prev.some((item) => item.id === p.id || item.handle === p.handle);
+      if (exists) {
+        return prev.filter((item) => item.id !== p.id && item.handle !== p.handle);
+      } else {
+        if (prev.length >= 10) {
+          showToast("Maximum 10 products can be selected for a Carousel.", "error");
+          return prev;
+        }
+        return [...prev, p];
+      }
+    });
+  };
+
+  const handleBuildCarouselFromAiSelected = () => {
+    if (aiSelectedProducts.length === 0) {
+      showToast("Please select at least 1 or 2 products from the dropdown first.", "error");
+      return;
+    }
+    setTemplateType("CAROUSEL");
+    const cards: CarouselCardItem[] = aiSelectedProducts.map((p, idx) => ({
+      id: `card_${idx + 1}_${Date.now()}`,
+      mediaUrl: p.primaryImage || (p.images && p.images[0]) || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80",
+      headerType: "IMAGE",
+      title: p.name,
+      bodyText: `₹${p.sellingPrice} (MRP ₹${p.mrp}) • ${p.category || 'Apparel'}`,
+      buttons: [
+        {
+          type: "URL",
+          text: "Buy Now",
+          url: p.productUrl || `https://${brandDomain}/products/${p.handle || p.sku || 'item'}`,
+          urlType: "STATIC"
+        },
+        idx % 2 === 0
+          ? {
+              type: "URL",
+              text: "Explore More",
+              url: `https://${brandDomain}/collections/all`,
+              urlType: "STATIC"
+            }
+          : {
+              type: "PHONE_NUMBER",
+              text: "Call Us",
+              phone_number: brandPhone
+            }
+      ]
+    }));
+
+    setCarouselCards(cards);
+    const cleanNames = aiSelectedProducts.map(p => p.name).join(", ");
+    setTemplateName(`carousel_${Date.now().toString().slice(-4)}`);
+    setNameError("");
+    setBodyText(`Hi {{1}}, explore our featured collection at ${brandName} including ${cleanNames.slice(0, 80)}! Swipe through the carousel below and use code *${couponCode || 'FLAT30'}* at checkout:`);
+    setFooterText(`${brandName} Store | Official Online Shop`);
+    setButtons([
+      { type: "URL", text: "Shop Full Store", url: `https://${brandDomain}`, urlType: "STATIC" },
+      { type: "COPY_CODE", text: "Copy Coupon", code: couponCode || "FLAT30" }
+    ]);
+    showToast(`✨ Generated ${cards.length} carousel cards from your selected products!`, "success");
+  };
 
   const handleGenerateWithAI = async (customPrompt?: string) => {
-    const promptToUse = (customPrompt || aiPrompt).trim();
+    let promptToUse = (customPrompt || aiPrompt).trim();
+    if (!promptToUse && aiSelectedProducts.length > 0) {
+      promptToUse = `Create a high-converting product carousel template for ${brandName} featuring: ${aiSelectedProducts.map(p => p.name).join(", ")}.`;
+      setAiPrompt(promptToUse);
+    }
     if (!promptToUse) {
-      showToast("Please describe the template you want the AI to create.", "error");
+      showToast("Please describe the template or select products to include.", "error");
       return;
     }
     setAiGenerating(true);
     try {
       const res = await generateAITemplateAction(promptToUse, {
         category,
-        templateType,
+        templateType: aiSelectedProducts.length > 0 ? "CAROUSEL" : templateType,
         brandName,
         brandDomain,
+        selectedProducts: aiSelectedProducts,
         currentDraft: {
           templateName,
           bodyText,
@@ -287,7 +357,7 @@ export default function WhatsAppTemplatesComponent() {
       });
       if (res.success && res.template) {
         setAiDraft(res);
-        showToast("✨ AI generated your template draft! Review and click 'Approve & Apply'.", "success");
+        showToast("✨ AI generated your template draft with selected products! Review and click 'Approve & Apply'.", "success");
       } else {
         showToast(res.error || "Failed to generate AI template.", "error");
       }
@@ -1283,6 +1353,152 @@ export default function WhatsAppTemplatesComponent() {
                         </button>
                       ))}
                     </div>
+                  </div>
+
+                  {/* SPECIFIC PRODUCTS MULTI-SELECT PICKER FOR AI TEMPLATE / CAROUSEL */}
+                  <div className="p-3.5 bg-indigo-50/50 dark:bg-slate-900/60 rounded-2xl border border-indigo-100 dark:border-slate-700/80 flex flex-col gap-2.5">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-black text-indigo-900 dark:text-indigo-200 uppercase tracking-wide flex items-center gap-1.5">
+                          <ShoppingBag size={13} className="text-indigo-600" />
+                          Select Products to Feature in AI Template / Carousel ({aiSelectedProducts.length} selected):
+                        </span>
+                        {aiSelectedProducts.length > 0 && (
+                          <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 rounded-md text-[10px] font-bold">
+                            {aiSelectedProducts.length} items attached
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {aiSelectedProducts.length > 0 && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={handleBuildCarouselFromAiSelected}
+                              className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-bold shadow-2xs transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                            >
+                              <Layers size={11} />
+                              <span>⚡ 1-Click Build Carousel</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAiSelectedProducts([])}
+                              className="text-[10px] text-gray-500 hover:text-red-500 font-semibold cursor-pointer underline"
+                            >
+                              Clear
+                            </button>
+                          </>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => setAiProductDropdownOpen(!aiProductDropdownOpen)}
+                          className="px-3 py-1 bg-white dark:bg-slate-800 hover:bg-indigo-50 border border-indigo-200 dark:border-slate-700 rounded-lg text-xs font-bold text-indigo-700 dark:text-indigo-300 transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                        >
+                          <Plus size={12} />
+                          <span>{aiProductDropdownOpen ? "Close Products List" : "Browse & Select Products"}</span>
+                          <ChevronDown size={12} className={`transition-transform duration-200 ${aiProductDropdownOpen ? "rotate-180" : ""}`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Selected Products Chips Bar */}
+                    {aiSelectedProducts.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {aiSelectedProducts.map((p) => (
+                          <div
+                            key={p.id || p.handle}
+                            className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-slate-700 rounded-xl flex items-center gap-2 text-xs shadow-2xs animate-in zoom-in-95 duration-150"
+                          >
+                            <div className="w-5 h-5 rounded-md overflow-hidden bg-gray-100 flex-shrink-0 border border-gray-200">
+                              <img src={p.primaryImage || p.images?.[0]} alt={p.name} className="w-full h-full object-cover" />
+                            </div>
+                            <span className="font-bold text-gray-800 dark:text-gray-100 truncate max-w-[140px]">{p.name}</span>
+                            <span className="text-[10px] font-bold text-emerald-600">₹{p.sellingPrice}</span>
+                            <button
+                              type="button"
+                              onClick={() => toggleSelectProductForAI(p)}
+                              className="text-gray-400 hover:text-red-500 cursor-pointer ml-0.5"
+                              title="Remove from selection"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Searchable Products Dropdown Modal / Drawer */}
+                    {aiProductDropdownOpen && (
+                      <div className="mt-1 p-3 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-slate-700 rounded-2xl shadow-lg flex flex-col gap-2.5 max-h-72 overflow-y-auto animate-in slide-in-from-top-2 duration-150">
+                        <div className="flex items-center gap-2 pb-2 border-b border-gray-100 dark:border-slate-700">
+                          <Search size={14} className="text-gray-400" />
+                          <input
+                            type="text"
+                            value={aiProductSearch}
+                            onChange={(e) => setAiProductSearch(e.target.value)}
+                            placeholder="Search by product name, category, or fabric (e.g. Lycra, Shorts, Trackpant)..."
+                            className="w-full text-xs bg-transparent outline-none text-gray-800 dark:text-gray-100 placeholder-gray-400 font-medium"
+                          />
+                          {aiProductSearch && (
+                            <button type="button" onClick={() => setAiProductSearch("")} className="text-gray-400 hover:text-gray-600">
+                              <X size={12} />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {inventoryProducts
+                            .filter((p) => {
+                              if (!aiProductSearch) return true;
+                              const s = aiProductSearch.toLowerCase();
+                              return (
+                                p.name?.toLowerCase().includes(s) ||
+                                p.category?.toLowerCase().includes(s) ||
+                                p.fabric?.toLowerCase().includes(s) ||
+                                p.handle?.toLowerCase().includes(s)
+                              );
+                            })
+                            .map((p) => {
+                              const isSelected = aiSelectedProducts.some((item) => item.id === p.id || item.handle === p.handle);
+                              return (
+                                <div
+                                  key={p.id || p.handle}
+                                  onClick={() => toggleSelectProductForAI(p)}
+                                  className={`p-2 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
+                                    isSelected
+                                      ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-500 shadow-2xs"
+                                      : "bg-gray-50/70 dark:bg-slate-900/60 border-gray-200 dark:border-slate-700 hover:border-indigo-300"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => {}}
+                                    className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer pointer-events-none"
+                                  />
+                                  <div className="w-9 h-9 rounded-lg overflow-hidden bg-white dark:bg-slate-800 border border-gray-200 flex-shrink-0">
+                                    <img src={p.primaryImage || p.images?.[0]} alt={p.name} className="w-full h-full object-cover" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-bold text-gray-800 dark:text-gray-100 truncate">{p.name}</div>
+                                    <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                                      <span className="font-bold text-emerald-600">₹{p.sellingPrice}</span>
+                                      {p.mrp > p.sellingPrice && <span className="line-through text-gray-400">₹{p.mrp}</span>}
+                                      {p.stockQuantity > 0 ? (
+                                        <span className="text-emerald-600 font-bold">🟢 {p.stockQuantity} in stock</span>
+                                      ) : (
+                                        <span className="text-amber-500 font-medium">Ready</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* AI Prompt Input Bar */}

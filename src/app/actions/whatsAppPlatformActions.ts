@@ -2061,7 +2061,8 @@ interface BrandIntelligenceContext {
   gstin?: string;
   knowledgeBase?: string;
   systemRules?: string;
-  activeProducts?: Array<{ id?: string; name: string; sellingPrice?: number; mrp?: number; category?: string; images?: string[]; description?: string; sku?: string; stockQuantity?: number }>;
+  selectedProducts?: Array<any>;
+  activeProducts?: Array<{ id?: string; name: string; sellingPrice?: number; mrp?: number; category?: string; images?: string[]; description?: string; sku?: string; stockQuantity?: number; handle?: string; productUrl?: string; primaryImage?: string }>;
   activeCombos?: Array<{ combo_name?: string; combo_price?: number; discount_code?: string }>;
   cannedFaqs?: string;
 }
@@ -2077,68 +2078,89 @@ function generateContextualTemplateFallback(
   const brandName = brand.brandName;
   const brandDomain = brand.brandDomain;
   const brandPhone = brand.brandPhone;
-  const brandEmail = brand.brandEmail;
   
   // Real product names, prices, images & URLs from inventory
   const p1Obj = brand.activeProducts?.[0];
   const p1 = p1Obj?.name || `${brandName} Performance Tee`;
   const p1Price = p1Obj?.sellingPrice ? `₹${p1Obj.sellingPrice}` : '₹899';
-  const p1Img = (p1Obj?.images && p1Obj.images.length > 0 && p1Obj.images[0]) 
-    ? p1Obj.images[0] 
+  const p1Img = (p1Obj?.primaryImage || (p1Obj?.images && p1Obj.images.length > 0 && p1Obj.images[0])) 
+    ? (p1Obj?.primaryImage || p1Obj?.images?.[0]) 
     : "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80";
-  const p1Url = `https://${brandDomain}/products/${encodeURIComponent((p1 || 'item1').toLowerCase().replace(/\s+/g, '-'))}`;
+  const p1Url = p1Obj?.productUrl || `https://${brandDomain}/products/${p1Obj?.handle || encodeURIComponent((p1 || 'item1').toLowerCase().replace(/\s+/g, '-'))}`;
 
   const p2Obj = brand.activeProducts?.[1];
   const p2 = p2Obj?.name || `${brandName} Pro Shorts`;
   const p2Price = p2Obj?.sellingPrice ? `₹${p2Obj.sellingPrice}` : '₹1,199';
-  const p2Img = (p2Obj?.images && p2Obj.images.length > 0 && p2Obj.images[0]) 
-    ? p2Obj.images[0] 
+  const p2Img = (p2Obj?.primaryImage || (p2Obj?.images && p2Obj.images.length > 0 && p2Obj.images[0])) 
+    ? (p2Obj?.primaryImage || p2Obj?.images?.[0]) 
     : "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=800&auto=format&fit=crop&q=80";
-  const p2Url = `https://${brandDomain}/products/${encodeURIComponent((p2 || 'item2').toLowerCase().replace(/\s+/g, '-'))}`;
+  const p2Url = p2Obj?.productUrl || `https://${brandDomain}/products/${p2Obj?.handle || encodeURIComponent((p2 || 'item2').toLowerCase().replace(/\s+/g, '-'))}`;
 
   const p3Obj = brand.activeProducts?.[2];
   const p3 = p3Obj?.name || `${brandName} Gym Trackpant`;
   const p3Price = p3Obj?.sellingPrice ? `₹${p3Obj.sellingPrice}` : '₹1,499';
-  const p3Img = (p3Obj?.images && p3Obj.images.length > 0 && p3Obj.images[0]) 
-    ? p3Obj.images[0] 
+  const p3Img = (p3Obj?.primaryImage || (p3Obj?.images && p3Obj.images.length > 0 && p3Obj.images[0])) 
+    ? (p3Obj?.primaryImage || p3Obj?.images?.[0]) 
     : "https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800&auto=format&fit=crop&q=80";
-  const p3Url = `https://${brandDomain}/products/${encodeURIComponent((p3 || 'item3').toLowerCase().replace(/\s+/g, '-'))}`;
+  const p3Url = p3Obj?.productUrl || `https://${brandDomain}/products/${p3Obj?.handle || encodeURIComponent((p3 || 'item3').toLowerCase().replace(/\s+/g, '-'))}`;
 
   // Real combo code or default
   const defaultCombo = brand.activeCombos?.[0]?.discount_code || 'FLAT30';
   const defaultDiscount = brand.activeCombos?.[0]?.combo_price ? `Special @ ₹${brand.activeCombos[0].combo_price}` : 'FLAT 30% OFF';
 
-  if (/order|track|dispatch|shipped|delivery|invoice|awb/i.test(p)) {
-    return {
-      name: `order_update_${slugPrompt}`,
-      category: "UTILITY",
-      language: "en_US",
-      templateType: "ORDER_STATUS",
-      headerType: "TEXT",
-      headerContent: `🚚 ${brandName} Order Update!`,
-      bodyText: `Hi {{1}}, great news! Your order #{{2}} from ${brandName} has been packed & dispatched. Your tracking ID is {{3}}. Click below to track your shipment live or call our team for delivery assistance.`,
-      footerText: `${brandName} Logistics Desk | ${brandPhone}`,
-      buttons: [
-        { type: "URL", text: "Track Shipment", url: `https://${brandDomain}/track/{{1}}`, urlType: "DYNAMIC", urlExample: `https://${brandDomain}/track/ESP-88294` },
-        { type: "PHONE_NUMBER", text: "Call Logistics", phone_number: brandPhone }
-      ],
-      variables: [
-        { param: "{{1}}", name: "Customer Name", example: "Rahul Sharma", description: "Customer Name" },
-        { param: "{{2}}", name: "Order Number", example: "ESP-99412", description: "Order ID" },
-        { param: "{{3}}", name: "Tracking ID", example: "ICARRY-7721", description: "AWB Number" }
-      ],
-      couponCode: "TRACKNOW",
-      explanation: `Utility order status template dynamically branded for ${brandName} with real-time tracking deep link and direct phone hotline (${brandPhone}).`,
-      complianceChecks: [
-        "✅ Clean snake_case template name compliant with Meta policies",
-        "✅ Utility category approved for non-promotional transactional order updates",
-        "✅ Sequential {{1}}, {{2}}, {{3}} variables with realistic examples provided",
-        "✅ Direct link and click-to-call action buttons with valid destinations"
-      ]
-    };
-  }
+  // 1. CAROUSEL & MULTI-PRODUCT PROMOTIONAL INTENT (HIGHEST PRIORITY)
+  const isCarouselIntent = 
+    preferredType === "CAROUSEL" ||
+    /carusel|carousel|swipe|cards|showcase|collection|multi\s*product|catalog|products/i.test(p) ||
+    (brand.selectedProducts && brand.selectedProducts.length > 0) ||
+    /(shorts|shors|track\s*pant|trackpant|co\s*-?rd|lycra|t-shirt|tee|sublimation|innernet|jogger)/i.test(p);
 
-  if (/carousel|collection|showcase|catalog|products|combo|trio|pack|bestseller/i.test(p)) {
+  if (isCarouselIntent) {
+    let selectedList: any[] = [];
+    if (brand.selectedProducts && brand.selectedProducts.length > 0) {
+      selectedList = brand.selectedProducts;
+    } else if (brand.activeProducts && brand.activeProducts.length > 0) {
+      // Fuzzy match active products against prompt text
+      const promptLower = p.toLowerCase();
+      const matched = brand.activeProducts.filter(prod => {
+        const nameLower = (prod.name || '').toLowerCase();
+        const catLower = (prod.category || '').toLowerCase();
+        const subLower = (prod.subCategory || '').toLowerCase();
+        
+        const keywords = nameLower.split(/[\s,|-]+/).filter(w => w.length >= 3);
+        const hasKeywordMatch = keywords.some(kw => promptLower.includes(kw));
+        const hasDirectMatch = promptLower.includes(nameLower) || (catLower && promptLower.includes(catLower)) || (subLower && promptLower.includes(subLower));
+        return hasKeywordMatch || hasDirectMatch;
+      });
+
+      selectedList = matched.length >= 2 ? matched : brand.activeProducts.slice(0, 4);
+    } else {
+      selectedList = [p1Obj, p2Obj, p3Obj].filter(Boolean);
+    }
+
+    const generatedCards = selectedList.slice(0, 10).map((prod: any, idx: number) => {
+      const pName = prod?.name || `${brandName} Style ${idx + 1}`;
+      const pPrice = prod?.sellingPrice ? `₹${prod.sellingPrice}` : '₹999';
+      const pMrp = prod?.mrp ? ` (MRP ₹${prod.mrp})` : '';
+      const pImg = prod?.primaryImage || (prod?.images && prod.images[0]) || p1Img;
+      const pHandle = prod?.handle || (prod?.subCategory && /^[a-z0-9-_]+$/i.test(prod.subCategory) ? prod.subCategory : encodeURIComponent(pName.toLowerCase().replace(/[^a-z0-9]+/g, '-')));
+      const pUrl = prod?.productUrl || `https://${brandDomain}/products/${pHandle}`;
+
+      return {
+        id: `card_${idx + 1}`,
+        mediaUrl: pImg,
+        headerType: "IMAGE",
+        title: pName,
+        bodyText: `${pPrice}${pMrp} • ${prod?.category || 'Premium Activewear'}`,
+        buttons: [
+          { type: "URL", text: "Buy Now", url: pUrl, urlType: "STATIC" },
+          idx % 2 === 0
+            ? { type: "URL", text: "Explore More", url: `https://${brandDomain}/collections/all`, urlType: "STATIC" }
+            : { type: "PHONE_NUMBER", text: "Call Us", phone_number: brandPhone }
+        ]
+      };
+    });
+
     return {
       name: `carousel_${slugPrompt}`,
       category: "MARKETING",
@@ -2157,7 +2179,7 @@ function generateContextualTemplateFallback(
         { param: "{{2}}", name: "Offer Banner", example: defaultDiscount, description: "Discount percentage or promo" }
       ],
       couponCode: defaultCombo,
-      carouselCards: [
+      carouselCards: generatedCards.length > 0 ? generatedCards : [
         {
           id: "card_1",
           mediaUrl: p1Img,
@@ -2192,9 +2214,9 @@ function generateContextualTemplateFallback(
           ]
         }
       ],
-      explanation: `Multi-card WhatsApp Product Carousel showcasing live inventory items (${p1}, ${p2}, ${p3}) with high-res product photos, direct product Buy Now deep links, Explore More website links, and Call Us support (${brandPhone}).`,
+      explanation: `Multi-card WhatsApp Product Carousel showcasing live inventory items with high-res product photos, direct product Buy Now deep links, Explore More website links, and Call Us support (${brandPhone}).`,
       complianceChecks: [
-        "✅ Meta Multi-Card Carousel layout with 3 interactive product cards",
+        "✅ Meta Multi-Card Carousel layout with interactive product cards",
         "✅ Real high-resolution product inventory photos attached to each card",
         "✅ Individual Buy Now CTA buttons on every product card",
         "✅ Direct website links and call hotline buttons without non-converting quick replies"
@@ -2202,34 +2224,37 @@ function generateContextualTemplateFallback(
     };
   }
 
-  if (/cart|abandoned|checkout|recover|bag/i.test(p)) {
+  // 2. TRANSACTIONAL / UTILITY ORDER TRACKING INTENT (STRICT REGEX)
+  const isOrderTrackingIntent = 
+    preferredCategory === "UTILITY" ||
+    /(order\s*(update|status|confirm|dispatch|placed|detail|shipment)|track\s*(order|shipment|delivery|package|my\s*order|status|id|awb)|tracking\s*(id|link|url|no)|awb\s*no|invoice\s*receipt)/i.test(p);
+
+  if (isOrderTrackingIntent) {
     return {
-      name: `cart_recovery_${slugPrompt}`,
-      category: "MARKETING",
+      name: `order_update_${slugPrompt}`,
+      category: "UTILITY",
       language: "en_US",
-      templateType: "LTO_COUPON",
-      headerType: "IMAGE",
-      headerContent: "",
-      headerMediaUrl: p1Img,
-      bodyText: `Hi {{1}}, you left items in your shopping bag at ${brandName}! Your reserved cart is about to expire. Complete your order today and use code *{{2}}* for an extra *{{3}}* at checkout.`,
-      footerText: `${brandName} | Reserved for 24 Hours • Call ${brandPhone}`,
+      templateType: "ORDER_STATUS",
+      headerType: "TEXT",
+      headerContent: `🚚 ${brandName} Order Update!`,
+      bodyText: `Hi {{1}}, great news! Your order #{{2}} from ${brandName} has been packed & dispatched. Your tracking ID is {{3}}. Click below to track your shipment live or call our team for delivery assistance.`,
+      footerText: `${brandName} Logistics Desk | ${brandPhone}`,
       buttons: [
-        { type: "URL", text: "Checkout Now", url: `https://${brandDomain}/cart/{{1}}`, urlType: "DYNAMIC", urlExample: `https://${brandDomain}/cart/checkout` },
-        { type: "COPY_CODE", text: "Copy Coupon", code: defaultCombo },
-        { type: "PHONE_NUMBER", text: "Order on Call", phone_number: brandPhone }
+        { type: "URL", text: "Track Shipment", url: `https://${brandDomain}/track/{{1}}`, urlType: "DYNAMIC", urlExample: `https://${brandDomain}/track/ESP-88294` },
+        { type: "PHONE_NUMBER", text: "Call Logistics", phone_number: brandPhone }
       ],
       variables: [
-        { param: "{{1}}", name: "Customer Name", example: "Priya Sharma", description: "Customer Name" },
-        { param: "{{2}}", name: "Coupon Code", example: defaultCombo, description: "Promo code" },
-        { param: "{{3}}", name: "Discount Amount", example: defaultDiscount, description: "Discount percentage" }
+        { param: "{{1}}", name: "Customer Name", example: "Rahul Sharma", description: "Customer Name" },
+        { param: "{{2}}", name: "Order Number", example: "ESP-99412", description: "Order ID" },
+        { param: "{{3}}", name: "Tracking ID", example: "ICARRY-7721", description: "AWB Number" }
       ],
-      couponCode: defaultCombo,
-      explanation: `High-urgency abandoned cart recovery template with real inventory visuals, 1-click Copy Coupon (${defaultCombo}), personalized checkout deep link (${brandDomain}), and direct phone call option (${brandPhone}).`,
+      couponCode: "TRACKNOW",
+      explanation: `Utility order status template dynamically branded for ${brandName} with real-time tracking deep link and direct phone hotline (${brandPhone}).`,
       complianceChecks: [
-        "✅ Native Meta Copy Code button for instantaneous 1-tap coupon copying",
-        "✅ Dynamic URL parameter configured for direct cart recovery deep linking",
-        "✅ Meta Marketing guidelines strictly followed for promotional re-engagement",
-        "✅ Sequential {{1}}, {{2}}, {{3}} variables validated"
+        "✅ Clean snake_case template name compliant with Meta policies",
+        "✅ Utility category approved for non-promotional transactional order updates",
+        "✅ Sequential {{1}}, {{2}}, {{3}} variables with realistic examples provided",
+        "✅ Direct link and click-to-call action buttons with valid destinations"
       ]
     };
   }
@@ -2243,40 +2268,38 @@ function generateContextualTemplateFallback(
       headerType: "IMAGE",
       headerContent: "",
       headerMediaUrl: p1Img,
-      bodyText: `Hello {{1}}, welcome to ${brandName} B2B Wholesale! 🏭 Access factory-direct wholesale pricing, GST invoicing, and ready bulk inventory on all apparel collections. Minimum order quantity: {{2}}. View our full catalog below.`,
-      footerText: `${brandName} B2B Desk • GSTIN: ${brand.gstin || 'Verified'}`,
+      bodyText: `Dear {{1}}, grow your retail business with authentic apparel directly from ${brandName} Factory! Avail special wholesale rates with GST invoice, minimum order quantity (MOQ) flexibilities, and priority dispatch.\n\nBrowse catalog or call our B2B desk directly:`,
+      footerText: `${brandName} Wholesale Division | GSTIN: ${brand.gstin || '06AAHCE7721Q1Z4'}`,
       buttons: [
-        { type: "URL", text: "Wholesale Catalog", url: `https://${brandDomain}/wholesale/{{1}}`, urlType: "DYNAMIC", urlExample: `https://${brandDomain}/wholesale/catalog` },
-        { type: "PHONE_NUMBER", text: "Call B2B Manager", phone_number: brandPhone },
-        { type: "QUICK_REPLY", text: "Request Price List" }
+        { type: "URL", text: "Wholesale Catalog", url: `https://${brandDomain}/collections/all`, urlType: "STATIC" },
+        { type: "PHONE_NUMBER", text: "Call B2B Sales", phone_number: brandPhone }
       ],
       variables: [
-        { param: "{{1}}", name: "Business Name", example: "Fashion Hub Retails", description: "Store / Retailer Name" },
-        { param: "{{2}}", name: "MOQ Requirement", example: "50 Pieces per style", description: "Minimum Order Quantity" }
+        { param: "{{1}}", name: "Business Owner", example: "Vikram Mehta", description: "Client Name" }
       ],
-      explanation: `B2B Wholesale outreach template tailored for ${brandName}, highlighting factory pricing, GST invoicing, and a direct line to ${brandPhone}.`,
+      couponCode: "B2BDEAL",
+      explanation: `B2B Wholesale outreach template highlighting direct factory pricing, GST invoicing, official catalog link, and immediate click-to-call B2B sales hotline (${brandPhone}).`,
       complianceChecks: [
-        "✅ B2B compliant copy tailored for wholesale and retail buyers",
-        "✅ Clear parameters with business-oriented example values",
-        "✅ Multi-channel CTA combining digital wholesale portal and direct telephone contact",
-        "✅ Professional tone matching company business policies"
+        "✅ Meta B2B Marketing policy compliant",
+        "✅ Direct click-to-call business development button",
+        "✅ Official website catalog destination"
       ]
     };
   }
 
-  // Default: Festive / Flash Sale / Promotion
+  // Default Promotional Campaign
   return {
-    name: `promo_sale_${slugPrompt}`,
-    category: preferredCategory || "MARKETING",
+    name: `promo_${slugPrompt}`,
+    category: "MARKETING",
     language: "en_US",
-    templateType: preferredType || "LTO_COUPON",
+    templateType: "LTO_COUPON",
     headerType: "IMAGE",
     headerContent: "",
     headerMediaUrl: p1Img,
-    bodyText: `Hi {{1}}, celebrate with ${brandName}! 🔥 Enjoy an exclusive *{{2}}* across our entire collection. Use promo code *{{3}}* at checkout before the offer ends! Need help? Call ${brandPhone}.`,
-    footerText: `${brandName} | Reply STOP to unsubscribe`,
+    bodyText: `Hi {{1}}, step up your everyday style with ${brandName}! Explore our newest premium arrivals and enjoy *{{2}}* on your order today.\n\nUse promo code *{{3}}* at checkout:`,
+    footerText: `${brandName} | Official Online Shop`,
     buttons: [
-      { type: "URL", text: "Shop Offer", url: `https://${brandDomain}/sale/{{1}}`, urlType: "DYNAMIC", urlExample: `https://${brandDomain}/sale/festive` },
+      { type: "URL", text: "Shop New Arrivals", url: `https://${brandDomain}/collections/all`, urlType: "STATIC" },
       { type: "COPY_CODE", text: "Copy Code", code: defaultCombo },
       { type: "PHONE_NUMBER", text: "Call Support", phone_number: brandPhone }
     ],
@@ -2286,7 +2309,7 @@ function generateContextualTemplateFallback(
       { param: "{{3}}", name: "Promo Code", example: defaultCombo, description: "Promo / Coupon code" }
     ],
     couponCode: defaultCombo,
-    explanation: `Engaging promotional template for ${brandName} featuring high-converting Copy Code button (*${defaultCombo}*), dynamic store link (https://${brandDomain}), real inventory photo, and direct customer support hotline (${brandPhone}).`,
+    explanation: `Engaging promotional template for ${brandName} featuring high-converting Copy Code button (*${defaultCombo}*), dynamic store link, real inventory photo, and direct customer support hotline (${brandPhone}).`,
     complianceChecks: [
       "✅ Strictly lowercase snake_case alphanumeric template name",
       "✅ Sequential numbering {{1}}, {{2}}, {{3}} with descriptive sample parameters",
@@ -2301,10 +2324,10 @@ export async function generateAITemplateAction(prompt: string, context?: {
   templateType?: string;
   brandName?: string;
   brandDomain?: string;
+  selectedProducts?: Array<any>;
   currentDraft?: any;
 }) {
   try {
-    // 1. Fetch Dynamic Brand Identity, Contact Details, Knowledge Base & Products
     const [
       settings,
       company,
@@ -2322,7 +2345,7 @@ export async function generateAITemplateAction(prompt: string, context?: {
       prisma.organization.findFirst().catch(() => null),
       prisma.product.findMany({ 
         where: { status: 'Active' }, 
-        take: 25, 
+        take: 30, 
         orderBy: [{ stockQuantity: 'desc' }, { createdAt: 'desc' }],
         select: { id: true, name: true, sku: true, sellingPrice: true, mrp: true, category: true, subCategory: true, images: true, stockQuantity: true, description: true } 
       }).catch(() => []),
@@ -2330,9 +2353,8 @@ export async function generateAITemplateAction(prompt: string, context?: {
       prisma.whatsAppCannedResponse.findMany({ take: 6, select: { title: true, shortcut: true, content: true, category: true } }).catch(() => [])
     ]);
 
-    // Build comprehensive Brand Intelligence Profile
     const brandName = context?.brandName || company?.companyName || organization?.name || account?.name || "Espon Clothing";
-    const brandDomain = context?.brandDomain || (company?.shopifyStoreDomain ? company.shopifyStoreDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : (company?.website ? company.website.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : "www.espon.in"));
+    const brandDomain = context?.brandDomain || (company?.website ? company.website.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() : (company?.shopifyStoreDomain ? (company.shopifyStoreDomain.includes('esponsports') ? 'esponsports.com' : company.shopifyStoreDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim()) : "esponsports.com"));
     const brandPhone = company?.mobile || company?.phone || account?.phoneNumber || "+91 7206066678";
     const brandEmail = company?.email || organization?.email || `support@${brandDomain}`;
     const brandAddress = company?.address 
@@ -2340,7 +2362,6 @@ export async function generateAITemplateAction(prompt: string, context?: {
       : (company?.city || "Rohtak, Haryana, India");
     const gstin = company?.gstin || organization?.gstin || "06AAHCE7721Q1Z4";
 
-    // 2. Aggregate AI Knowledge Base & Business Rules
     const kbPieces: string[] = [];
     if (settings?.aiKnowledgeBase) kbPieces.push(settings.aiKnowledgeBase);
     if (legacySetting?.knowledge_base) kbPieces.push(legacySetting.knowledge_base);
@@ -2352,7 +2373,13 @@ export async function generateAITemplateAction(prompt: string, context?: {
     const aiSystemRules = settings?.aiSystemPrompt || "Be polite, high-converting, professional, and Meta compliant.";
     const fallbackLanguage = settings?.aiFallbackLanguage || "English";
 
-    // Format Catalog & Combos Summaries
+    const selectedProductsText = context?.selectedProducts && context.selectedProducts.length > 0
+      ? `=== 🎯 USER SELECTED PRODUCTS TO FEATURE (MANDATORY IN CAROUSEL / TEMPLATE) ===
+${context.selectedProducts.map((p, i) => `${i+1}. "${p.name}" | Price: ₹${p.sellingPrice} (MRP: ₹${p.mrp || p.sellingPrice}) | Category: ${p.category || 'Apparel'} | Direct URL: ${p.productUrl || `https://${brandDomain}/products/${p.handle || ''}`} | Image: ${p.primaryImage || (p.images && p.images[0]) || ''}`).join('\n')}
+
+MANDATORY INSTRUCTION: You MUST create Carousel Cards (or feature in the body) EXACTLY these selected products with their exact titles, prices, image URLs, and product links!`
+      : '';
+
     const productCatalogSummary = activeProducts.length > 0 
       ? activeProducts.map(p => `• ${p.name} (₹${p.sellingPrice || 'N/A'}) - Category: ${p.category || 'Apparel'}`).join('\n')
       : `• Espon Performance T-Shirts (₹899)\n• Espon Pro Gym Shorts (₹1,199)\n• Espon Active Trackpants (₹1,499)`;
@@ -2374,6 +2401,7 @@ export async function generateAITemplateAction(prompt: string, context?: {
       gstin,
       knowledgeBase: aiKnowledgeBase,
       systemRules: aiSystemRules,
+      selectedProducts: context?.selectedProducts,
       activeProducts,
       activeCombos,
       cannedFaqs: cannedFaqsSummary
