@@ -364,9 +364,25 @@ export default function WhatsAppTemplatesComponent() {
     }
     setAiGenerating(true);
     try {
+      // Smart intent resolution for requested templateType
+      let requestedTemplateType = templateType;
+      if (aiSelectedProducts.length > 0) {
+        requestedTemplateType = "CAROUSEL";
+      } else if (/\b(carousel|carusel|swipeable\s*cards?|product\s*cards?|multi\s*cards?)\b/i.test(promptToUse)) {
+        requestedTemplateType = "CAROUSEL";
+      } else if (/review|feedback|rating|rate\s*(our|the|your)?\s*(order|experience)|testimonial/i.test(promptToUse)) {
+        requestedTemplateType = "STANDARD";
+      } else if (/track|order\s*(status|dispatch|update)|awb/i.test(promptToUse)) {
+        requestedTemplateType = "ORDER_STATUS";
+      } else if (/cart|checkout|abandon/i.test(promptToUse)) {
+        requestedTemplateType = "STANDARD";
+      } else if (templateType === "CAROUSEL" && aiSelectedProducts.length === 0) {
+        requestedTemplateType = "STANDARD";
+      }
+
       const res = await generateAITemplateAction(promptToUse, {
         category,
-        templateType: aiSelectedProducts.length > 0 ? "CAROUSEL" : templateType,
+        templateType: requestedTemplateType,
         brandName,
         brandDomain,
         selectedProducts: aiSelectedProducts,
@@ -404,7 +420,7 @@ export default function WhatsAppTemplatesComponent() {
     if (t.category) setCategory(t.category);
     if (t.language) setLanguage(t.language);
 
-    // Force CAROUSEL type whenever carousel cards are present
+    // Force CAROUSEL type only whenever valid carousel cards are present
     const hasCards = t.carouselCards && Array.isArray(t.carouselCards) && t.carouselCards.length > 0;
     const resolvedType = hasCards ? "CAROUSEL" : (t.templateType || "STANDARD");
     setTemplateType(resolvedType);
@@ -412,10 +428,16 @@ export default function WhatsAppTemplatesComponent() {
     // For carousel, Meta requires headerType NONE at the template level
     if (resolvedType === "CAROUSEL") {
       setHeaderType("NONE");
+      if (hasCards) {
+        setCarouselCards(t.carouselCards);
+        setActiveCarouselCardIndex(0);
+      }
     } else {
-      if (t.headerType) setHeaderType(t.headerType);
-      if (t.headerContent) setHeaderContent(t.headerContent);
-      if (t.headerMediaUrl) setHeaderMediaPreview(t.headerMediaUrl);
+      // Clear carousel cards when switching to standard / utility / non-carousel template
+      setCarouselCards([]);
+      setHeaderType(t.headerType || "NONE");
+      setHeaderContent(t.headerContent || "");
+      setHeaderMediaPreview(t.headerMediaUrl || null);
     }
 
     if (t.bodyText) setBodyText(t.bodyText);
@@ -425,11 +447,6 @@ export default function WhatsAppTemplatesComponent() {
       setButtons(t.buttons);
     }
     if (t.couponCode) setCouponCode(t.couponCode);
-
-    if (hasCards) {
-      setCarouselCards(t.carouselCards);
-      setActiveCarouselCardIndex(0);
-    }
 
     showToast(`🎉 AI Template ${hasCards ? `(${t.carouselCards.length}-card Carousel)` : ''} loaded into Studio & phone simulator!`, "success");
   };
@@ -475,7 +492,15 @@ export default function WhatsAppTemplatesComponent() {
         `${basePrompt} — Tone: ${aiTone}. Variant 3: urgency-driven with limited-time offer framing.`
       ];
       const results = await Promise.all(
-        variantPrompts.map(p => generateAITemplateAction(p, { category, templateType: aiSelectedProducts.length > 0 ? "CAROUSEL" : templateType, brandName, brandDomain, selectedProducts: aiSelectedProducts }))
+        variantPrompts.map(p => {
+          let vType = templateType;
+          if (aiSelectedProducts.length > 0 || /\b(carousel|carusel|swipeable\s*cards?|product\s*cards?)\b/i.test(p)) {
+            vType = "CAROUSEL";
+          } else if (/review|feedback|rating|track|order|cart/i.test(p) || (templateType === "CAROUSEL" && aiSelectedProducts.length === 0)) {
+            vType = "STANDARD";
+          }
+          return generateAITemplateAction(p, { category, templateType: vType, brandName, brandDomain, selectedProducts: aiSelectedProducts });
+        })
       );
       const valid = results.filter(r => r.success && r.template);
       if (valid.length > 0) {

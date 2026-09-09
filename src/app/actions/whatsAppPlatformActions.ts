@@ -2206,18 +2206,30 @@ function normalizeApparelName(raw: string): string {
 function extractProductsFromPrompt(prompt: string, activeProducts: any[] = []): any[] {
   const p = (prompt || '').trim();
   if (!p) return [];
-  
-  // Find where the product list starts
+
+  // If prompt is clearly for non-product/non-carousel use-cases, NEVER extract products
+  if (/review|feedback|rating|rate\s*(our|the|your)?\s*(order|experience)|testimonial|track\s*(order|shipment)|order\s*(status|update|dispatch)|otp|verification|auth\s*code|welcome|cart\s*recovery|abandoned/i.test(p)) {
+    return [];
+  }
+
+  // Only extract if there is explicit product listing or carousel intent
   const match = p.match(/(?:for\s+products?|featuring|including|include|products?:?|items?:?|collection\s+of|showcasing)\s+(.+)$/i);
-  const targetText = match ? match[1] : p;
+  if (!match && !/\b(carousel|carusel|swipeable\s*cards?|product\s*cards?)\b/i.test(p)) {
+    return [];
+  }
+
+  const targetText = match ? match[1] : '';
+  if (!targetText) return [];
 
   // Split by comma, semicolon, newline, or bullet
   const rawSegments = targetText.split(/[,;\n•]+/).map(s => s.trim()).filter(s => s.length >= 3);
   const extracted: any[] = [];
 
   for (const seg of rawSegments) {
-    const cleanSeg = seg.replace(/^(we\s+want\s+to\s+create|our\s+carusel\s+campgin\s+for\s+products?|create\s+a\s+carousel\s+for|please\s+add)\s+/i, '').trim();
-    if (cleanSeg.length < 3 || /^(campaign|template|carousel|whatsapp|message|promo|sale)$/i.test(cleanSeg)) continue;
+    const cleanSeg = seg.replace(/^(we\s+want\s+to\s+create|our\s+carusel\s+campgin\s+for\s+products?|create\s+a\s+carousel\s+for|please\s+add|featuring|showcasing|including)\s+/i, '').trim();
+    // Filter out generic sentence fragments
+    if (cleanSeg.length < 3 || /^(campaign|template|carousel|whatsapp|message|promo|sale|discount|store|clothing|apparel|products?|items?|brand|styles?)$/i.test(cleanSeg)) continue;
+    if (/thanking|customer|providing|quick\s*link|rate|order|feedback|review/i.test(cleanSeg)) continue;
 
     const normalizedName = normalizeApparelName(cleanSeg);
     const slug = normalizedName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -2236,13 +2248,18 @@ function extractProductsFromPrompt(prompt: string, activeProducts: any[] = []): 
         handle: foundInDb.handle || slug
       });
     } else {
-      // Determine category and realistic pricing/image
+      // ONLY allow custom product creation if cleanSeg explicitly contains recognizable apparel category keywords
+      const low = cleanSeg.toLowerCase();
+      const isRecognizedApparel = /\b(shorts?|track\s*pants?|trackpant|pants?|joggers?|co-ord|set|suit|tees?|t-shirts?|shirts?|hoodie|sweatshirt|jacket|leggings?|tights?|vest)\b/i.test(low);
+      if (!isRecognizedApparel) {
+        continue; // Skip generic sentences or phrases!
+      }
+
       let category = "Activewear";
       let price = 999;
       let mrp = 1999;
       let img = "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80";
 
-      const low = normalizedName.toLowerCase();
       if (low.includes("short")) {
         category = "Shorts";
         price = 799;
@@ -2322,117 +2339,36 @@ function generateContextualTemplateFallback(
   const defaultCombo = brand.activeCombos?.[0]?.discount_code || 'FLAT30';
   const defaultDiscount = brand.activeCombos?.[0]?.combo_price ? `Special @ ₹${brand.activeCombos[0].combo_price}` : 'FLAT 30% OFF';
 
-  // 1. CAROUSEL & MULTI-PRODUCT PROMOTIONAL INTENT (HIGHEST PRIORITY)
-  const isCarouselIntent = 
-    preferredType === "CAROUSEL" ||
-    /carusel|carousel|swipe|cards|showcase|collection|multi\s*product|catalog|products/i.test(p) ||
-    (brand.selectedProducts && brand.selectedProducts.length > 0) ||
-    /(shorts|shors|track\s*pant|trackpant|co\s*-?rd|lycra|t-shirt|tee|sublimation|innernet|jogger)/i.test(p);
-
-  if (isCarouselIntent) {
-    let selectedList: any[] = [];
-    if (brand.selectedProducts && brand.selectedProducts.length > 0) {
-      selectedList = brand.selectedProducts;
-    } else {
-      const extracted = extractProductsFromPrompt(prompt, brand.activeProducts || []);
-      if (extracted.length > 0) {
-        selectedList = extracted;
-      } else if (brand.activeProducts && brand.activeProducts.length > 0) {
-        selectedList = brand.activeProducts.slice(0, 6);
-      } else {
-        selectedList = [p1Obj, p2Obj, p3Obj].filter(Boolean);
-      }
-    }
-
-    const generatedCards = selectedList.slice(0, 10).map((prod: any, idx: number) => {
-      const pName = prod?.name || `${brandName} Style ${idx + 1}`;
-      const pPrice = prod?.sellingPrice ? `₹${prod.sellingPrice}` : '₹999';
-      const pMrp = prod?.mrp ? ` (MRP ₹${prod.mrp})` : '';
-      const pImg = prod?.primaryImage || (prod?.images && prod.images[0]) || p1Img;
-      const pHandle = prod?.handle || (prod?.subCategory && /^[a-z0-9-_]+$/i.test(prod.subCategory) ? prod.subCategory : encodeURIComponent(pName.toLowerCase().replace(/[^a-z0-9]+/g, '-')));
-      const pUrl = prod?.productUrl || `https://${brandDomain}/products/${pHandle}`;
-
-      return {
-        id: `card_${idx + 1}`,
-        mediaUrl: pImg,
-        headerType: "IMAGE",
-        title: pName,
-        bodyText: `${pPrice}${pMrp} • ${prod?.category || 'Premium Activewear'}`,
-        buttons: [
-          { type: "URL", text: "Buy Now", url: pUrl, urlType: "STATIC" },
-          idx % 2 === 0
-            ? { type: "URL", text: "Explore More", url: `https://${brandDomain}/collections/all`, urlType: "STATIC" }
-            : { type: "PHONE_NUMBER", text: "Call Us", phone_number: brandPhone }
-        ]
-      };
-    });
-
-    const productsSummaryText = selectedList.slice(0, 3).map(p => p.name).join(', ');
-
+  // 1. CUSTOMER REVIEW & FEEDBACK INTENT (HIGH PRIORITY)
+  const isReviewFeedbackIntent = /review|feedback|rating|rate\s*(our|the|your)?\s*(order|product|service|experience)|testimonial|star\s*rating|customer\s*satisfaction/i.test(p);
+  if (isReviewFeedbackIntent) {
     return {
-      name: `carousel_${slugPrompt}`,
-      category: "MARKETING",
+      name: `customer_review_${slugPrompt}`,
+      category: preferredCategory === "UTILITY" ? "UTILITY" : "MARKETING",
       language: "en_US",
-      templateType: "CAROUSEL",
+      templateType: "STANDARD",
       headerType: "NONE",
       headerContent: "",
-      bodyText: `Hi {{1}}, check out the top trending activewear styles at ${brandName}${productsSummaryText ? ` including ${productsSummaryText}` : ''}! Swipe through the carousel below to shop your favorites and enjoy {{2}} with code *${defaultCombo}*.`,
-      footerText: `${brandName} | Official Store: ${brandDomain}`,
+      bodyText: `Hi {{1}}, thank you for choosing ${brandName}! We hope you love your recent order. Your experience means everything to us.\n\nCould you take 30 seconds to rate your purchase and share your valuable feedback? Tap below to leave your rating:`,
+      footerText: `${brandName} | Customer Care`,
       buttons: [
-        { type: "URL", text: "Shop Full Store", url: `https://${brandDomain}/collections/all`, urlType: "STATIC" },
-        { type: "COPY_CODE", text: "Copy Coupon", code: defaultCombo }
+        { type: "URL", text: "Rate Your Order", url: `https://${brandDomain}/reviews`, urlType: "STATIC" },
+        { type: "PHONE_NUMBER", text: "Customer Support", phone_number: brandPhone }
       ],
       variables: [
-        { param: "{{1}}", name: "Customer Name", example: "Aman Gupta", description: "Customer Name" },
-        { param: "{{2}}", name: "Offer Banner", example: defaultDiscount, description: "Discount percentage or promo" }
+        { param: "{{1}}", name: "Customer Name", example: "Rahul Sharma", description: "Customer Name" }
       ],
-      couponCode: defaultCombo,
-      carouselCards: generatedCards.length > 0 ? generatedCards : [
-        {
-          id: "card_1",
-          mediaUrl: p1Img,
-          headerType: "IMAGE",
-          title: p1,
-          bodyText: `${p1Price} • Breathable 4-Way Stretch Cotton`,
-          buttons: [
-            { type: "URL", text: "Buy Now", url: p1Url, urlType: "STATIC" },
-            { type: "URL", text: "Explore More", url: `https://${brandDomain}/collections/all`, urlType: "STATIC" }
-          ]
-        },
-        {
-          id: "card_2",
-          mediaUrl: p2Img,
-          headerType: "IMAGE",
-          title: p2,
-          bodyText: `${p2Price} • Zipper Pockets & Ultra Comfort`,
-          buttons: [
-            { type: "URL", text: "Buy Now", url: p2Url, urlType: "STATIC" },
-            { type: "PHONE_NUMBER", text: "Call Us", phone_number: brandPhone }
-          ]
-        },
-        {
-          id: "card_3",
-          mediaUrl: p3Img,
-          headerType: "IMAGE",
-          title: p3,
-          bodyText: `${p3Price} • Tapered Fit & Premium Fabric`,
-          buttons: [
-            { type: "URL", text: "Buy Now", url: p3Url, urlType: "STATIC" },
-            { type: "URL", text: "Explore More", url: `https://${brandDomain}`, urlType: "STATIC" }
-          ]
-        }
-      ],
-      explanation: `Multi-card WhatsApp Product Carousel showcasing live inventory items with high-res product photos, direct product Buy Now deep links, Explore More website links, and Call Us support (${brandPhone}).`,
+      couponCode: "FEEDBACK",
+      explanation: `Dedicated customer review and rating collection template for ${brandName} with direct review submission link and customer care phone hotline (${brandPhone}).`,
       complianceChecks: [
-        "✅ Meta Multi-Card Carousel layout with interactive product cards",
-        "✅ Real high-resolution product inventory photos attached to each card",
-        "✅ Individual Buy Now CTA buttons on every product card",
-        "✅ Direct website links and call hotline buttons without non-converting quick replies"
+        "✅ Meta-compliant standard single-message format",
+        "✅ Direct rating URL button without non-compliant redirects",
+        "✅ Clean customer name variable {{1}} with realistic sample"
       ]
     };
   }
 
-  // 2. TRANSACTIONAL / UTILITY ORDER TRACKING INTENT (STRICT REGEX)
+  // 2. TRANSACTIONAL / UTILITY ORDER TRACKING INTENT
   const isOrderTrackingIntent = 
     preferredCategory === "UTILITY" ||
     /(order\s*(update|status|confirm|dispatch|placed|detail|shipment)|track\s*(order|shipment|delivery|package|my\s*order|status|id|awb)|tracking\s*(id|link|url|no)|awb\s*no|invoice\s*receipt)/i.test(p);
@@ -2467,6 +2403,139 @@ function generateContextualTemplateFallback(
     };
   }
 
+  // 3. ABANDONED CART RECOVERY INTENT
+  const isAbandonedCartIntent = /abandon|cart\s*recovery|abandoned\s*cart|left\s*(items?|in\s*cart)|cart\s*reminder|checkout\s*recovery/i.test(p);
+  if (isAbandonedCartIntent) {
+    return {
+      name: `cart_recovery_${slugPrompt}`,
+      category: "MARKETING",
+      language: "en_US",
+      templateType: "STANDARD",
+      headerType: "IMAGE",
+      headerContent: "",
+      headerMediaUrl: p1Img,
+      bodyText: `Hi {{1}}, you left your favorite styles waiting in your cart at ${brandName}!\n\nStocks are moving quickly, but we've reserved your items for a limited time. Complete your order today and use code *{{2}}* at checkout to get an extra {{3}} off:`,
+      footerText: `${brandName} | Official Online Shop`,
+      buttons: [
+        { type: "URL", text: "Complete Checkout", url: `https://${brandDomain}/cart`, urlType: "STATIC" },
+        { type: "COPY_CODE", text: "Copy Coupon", code: "SAVE15" },
+        { type: "PHONE_NUMBER", text: "Call Support", phone_number: brandPhone }
+      ],
+      variables: [
+        { param: "{{1}}", name: "Customer Name", example: "Rahul", description: "Customer Name" },
+        { param: "{{2}}", name: "Promo Code", example: "SAVE15", description: "Discount coupon" },
+        { param: "{{3}}", name: "Discount Offer", example: "15% OFF", description: "Discount banner" }
+      ],
+      couponCode: "SAVE15",
+      explanation: `Abandoned cart recovery template featuring real product image header, one-tap cart checkout URL, copyable coupon button, and direct support hotline.`,
+      complianceChecks: [
+        "✅ Meta Marketing approved single message layout",
+        "✅ Direct link to shop cart checkout",
+        "✅ Copy code quick button for customer convenience"
+      ]
+    };
+  }
+
+  // 4. CAROUSEL & MULTI-CARD INTENT (ONLY WHEN EXPLICITLY REQUESTED)
+  const isCarouselIntent = (
+    (brand.selectedProducts && brand.selectedProducts.length > 0) ||
+    /\b(carusel|carousel|swipeable\s*cards?|product\s*cards?|multi\s*cards?)\b/i.test(p) ||
+    (preferredType === "CAROUSEL" && !isReviewFeedbackIntent && !isOrderTrackingIntent && !isAbandonedCartIntent)
+  );
+
+  if (isCarouselIntent) {
+    let selectedList: any[] = [];
+    if (brand.selectedProducts && brand.selectedProducts.length > 0) {
+      selectedList = brand.selectedProducts;
+    } else {
+      const extracted = extractProductsFromPrompt(prompt, brand.activeProducts || []);
+      if (extracted.length > 0) {
+        selectedList = extracted;
+      } else if (brand.activeProducts && brand.activeProducts.length > 0) {
+        selectedList = brand.activeProducts.slice(0, 4);
+      } else {
+        selectedList = [p1Obj, p2Obj, p3Obj].filter(Boolean);
+      }
+    }
+
+    const generatedCards = selectedList.slice(0, 10).map((prod: any, idx: number) => {
+      const pName = prod?.name || `${brandName} Style ${idx + 1}`;
+      const pPrice = prod?.sellingPrice ? `₹${prod.sellingPrice}` : '₹999';
+      const pMrp = prod?.mrp ? ` (MRP ₹${prod.mrp})` : '';
+      const pImg = prod?.primaryImage || (prod?.images && prod.images[0]) || p1Img;
+      const pHandle = prod?.handle || (prod?.subCategory && /^[a-z0-9-_]+$/i.test(prod.subCategory) ? prod.subCategory : encodeURIComponent(pName.toLowerCase().replace(/[^a-z0-9]+/g, '-')));
+      const pUrl = prod?.productUrl || `https://${brandDomain}/products/${pHandle}`;
+
+      return {
+        id: `card_${idx + 1}`,
+        mediaUrl: pImg,
+        headerType: "IMAGE",
+        title: pName.slice(0, 60),
+        bodyText: `${pPrice}${pMrp} • ${prod?.category || 'Premium Activewear'}`.slice(0, 160),
+        buttons: [
+          { type: "URL", text: "Buy Now", url: pUrl, urlType: "STATIC" },
+          idx % 2 === 0
+            ? { type: "URL", text: "Explore More", url: `https://${brandDomain}/collections/all`, urlType: "STATIC" }
+            : { type: "PHONE_NUMBER", text: "Call Us", phone_number: brandPhone }
+        ]
+      };
+    });
+
+    const productsSummaryText = selectedList.slice(0, 3).map(prod => prod.name).join(', ');
+
+    return {
+      name: `carousel_${slugPrompt}`,
+      category: "MARKETING",
+      language: "en_US",
+      templateType: "CAROUSEL",
+      headerType: "NONE",
+      headerContent: "",
+      bodyText: `Hi {{1}}, check out top trending styles at ${brandName}${productsSummaryText ? ` including ${productsSummaryText}` : ''}! Swipe through the carousel below to shop your favorites and enjoy {{2}} with code *${defaultCombo}*.`,
+      footerText: `${brandName} | Official Store: ${brandDomain}`,
+      buttons: [
+        { type: "URL", text: "Shop Full Store", url: `https://${brandDomain}/collections/all`, urlType: "STATIC" },
+        { type: "COPY_CODE", text: "Copy Coupon", code: defaultCombo }
+      ],
+      variables: [
+        { param: "{{1}}", name: "Customer Name", example: "Aman Gupta", description: "Customer Name" },
+        { param: "{{2}}", name: "Offer Banner", example: defaultDiscount, description: "Discount percentage or promo" }
+      ],
+      couponCode: defaultCombo,
+      carouselCards: generatedCards.length > 0 ? generatedCards : [
+        {
+          id: "card_1",
+          mediaUrl: p1Img,
+          headerType: "IMAGE",
+          title: p1,
+          bodyText: `${p1Price} • Breathable 4-Way Stretch Cotton`,
+          buttons: [
+            { type: "URL", text: "Buy Now", url: p1Url, urlType: "STATIC" },
+            { type: "URL", text: "Explore More", url: `https://${brandDomain}/collections/all`, urlType: "STATIC" }
+          ]
+        },
+        {
+          id: "card_2",
+          mediaUrl: p2Img,
+          headerType: "IMAGE",
+          title: p2,
+          bodyText: `${p2Price} • Zipper Pockets & Ultra Comfort`,
+          buttons: [
+            { type: "URL", text: "Buy Now", url: p2Url, urlType: "STATIC" },
+            { type: "PHONE_NUMBER", text: "Call Us", phone_number: brandPhone }
+          ]
+        }
+      ],
+      explanation: `Multi-card WhatsApp Product Carousel showcasing live inventory items with high-res product photos, direct product Buy Now deep links, Explore More website links, and Call Us support (${brandPhone}).`,
+      complianceChecks: [
+        "✅ Meta Multi-Card Carousel layout with interactive product cards",
+        "✅ Real high-resolution product inventory photos attached to each card",
+        "✅ Individual Buy Now CTA buttons on every product card",
+        "✅ Direct website links and call hotline buttons without non-converting quick replies"
+      ]
+    };
+  }
+
+  // 5. B2B / WHOLESALE INTENT
   if (/b2b|wholesale|bulk|retailer|gst|dealer/i.test(p)) {
     return {
       name: `b2b_wholesale_${slugPrompt}`,
@@ -2495,7 +2564,7 @@ function generateContextualTemplateFallback(
     };
   }
 
-  // Default Promotional Campaign
+  // 6. DEFAULT PROMOTIONAL CAMPAIGN (STANDARD MESSAGE - NOT CAROUSEL)
   return {
     name: `promo_${slugPrompt}`,
     category: "MARKETING",
@@ -2557,13 +2626,13 @@ export async function generateAITemplateAction(prompt: string, context?: {
         orderBy: [{ stockQuantity: 'desc' }, { createdAt: 'desc' }],
         select: { id: true, name: true, sku: true, sellingPrice: true, mrp: true, category: true, subCategory: true, images: true, stockQuantity: true, description: true } 
       }).catch(() => []),
-      prisma.shopifyCombo.findMany({ where: { is_active: true }, take: 6, select: { combo_name: true, combo_price: true, discount_code: true } }).catch(() => []),
+      prisma.shopifyCombo.findMany({ where: { is_active: true }, take: 6, select: { product_title: true, combo_price: true, discount_code: true } }).catch(() => []),
       prisma.whatsAppCannedResponse.findMany({ take: 6, select: { title: true, shortcut: true, content: true, category: true } }).catch(() => [])
     ]);
 
     const brandName = context?.brandName || company?.companyName || organization?.name || account?.name || "Espon Clothing";
     const brandDomain = context?.brandDomain || (company?.website ? company.website.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() : (company?.shopifyStoreDomain ? (company.shopifyStoreDomain.includes('esponsports') ? 'esponsports.com' : company.shopifyStoreDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim()) : "esponsports.com"));
-    const brandPhone = company?.mobile || company?.phone || account?.phoneNumber || "+91 7206066678";
+    const brandPhone = company?.mobile || (company as any)?.phone || account?.phoneNumber || "+91 7206066678";
     const brandEmail = company?.email || organization?.email || `support@${brandDomain}`;
     const brandAddress = company?.address 
       ? `${company.address}, ${company.city || ''}, ${company.state || ''} ${company.pincode || ''}, ${company.country || 'India'}`.replace(/\s+,/g, ',').trim()
@@ -2586,25 +2655,35 @@ export async function generateAITemplateAction(prompt: string, context?: {
       return { success: false, error: "Please enter a prompt describing the template you want to create." };
     }
 
-    // Extract products mentioned in the prompt if no pre-selected products provided
-    const promptExtractedProducts = extractProductsFromPrompt(cleanPrompt, activeProducts);
-    const effectiveSelectedProducts = (context?.selectedProducts && context.selectedProducts.length > 0)
-      ? context.selectedProducts
-      : promptExtractedProducts;
+    // Determine genuine Carousel intent
+    const isExplicitCarouselPrompt = /\b(carousel|carusel|swipeable\s*cards?|product\s*cards?|multi\s*cards?)\b/i.test(cleanPrompt);
+    const hasExplicitSelectedProducts = Boolean(context?.selectedProducts && context.selectedProducts.length > 0);
+    const isReviewOrTrackingOrUtility = /review|feedback|rating|rate\s*(our|the|your)?\s*(order|experience)|testimonial|track\s*(order|shipment)|order\s*(status|update|dispatch)|otp|verification|auth\s*code|welcome|abandon|cart\s*recovery/i.test(cleanPrompt);
 
-    const selectedProductsText = effectiveSelectedProducts && effectiveSelectedProducts.length > 0
+    const shouldBeCarousel = (hasExplicitSelectedProducts || isExplicitCarouselPrompt || (context?.templateType === 'CAROUSEL' && !isReviewOrTrackingOrUtility)) && !isReviewOrTrackingOrUtility;
+
+    let effectiveSelectedProducts: any[] = [];
+    if (hasExplicitSelectedProducts) {
+      effectiveSelectedProducts = context!.selectedProducts!;
+    } else if (shouldBeCarousel) {
+      effectiveSelectedProducts = extractProductsFromPrompt(cleanPrompt, activeProducts);
+    }
+
+    const selectedProductsText = (shouldBeCarousel && effectiveSelectedProducts.length > 0)
       ? `=== 🎯 MANDATORY PRODUCTS TO FEATURE (IN CAROUSEL / TEMPLATE) ===
 ${effectiveSelectedProducts.map((p, i) => `${i+1}. "${p.name}" | Price: ₹${p.sellingPrice} (MRP: ₹${p.mrp || p.sellingPrice}) | Category: ${p.category || 'Apparel'} | Direct URL: ${p.productUrl || `https://${brandDomain}/products/${p.handle || ''}`} | Image: ${p.primaryImage || (p.images && p.images[0]) || ''}`).join('\n')}
 
 MANDATORY INSTRUCTION: You MUST set templateType to "CAROUSEL" with category "MARKETING", and create Carousel Cards EXACTLY for these ${effectiveSelectedProducts.length} selected products with their exact titles, prices, image URLs, and product links!`
-      : '';
+      : (shouldBeCarousel
+          ? `MANDATORY INSTRUCTION: The user wants a CAROUSEL template. Pick 2 to 4 products from the live catalog samples below to create high-quality carousel cards with valid product links and images.`
+          : `MANDATORY INSTRUCTION: The user wants a standard message template. You MUST set templateType to "${isReviewOrTrackingOrUtility && /track|order|dispatch/i.test(cleanPrompt) ? 'ORDER_STATUS' : 'STANDARD'}". Do NOT create a CAROUSEL. Do NOT generate carouselCards.`);
 
     const productCatalogSummary = activeProducts.length > 0 
       ? activeProducts.map(p => `• ${p.name} (₹${p.sellingPrice || 'N/A'}) - Category: ${p.category || 'Apparel'}`).join('\n')
       : `• Espon Performance T-Shirts (₹899)\n• Espon Pro Gym Shorts (₹1,199)\n• Espon Active Trackpants (₹1,499)`;
 
     const comboDealsSummary = activeCombos.length > 0
-      ? activeCombos.map(c => `• ${c.combo_name || 'Combo Pack'} @ ₹${c.combo_price || 'Special'} (Promo Code: ${c.discount_code || 'COMBO'})`).join('\n')
+      ? activeCombos.map((c: any) => `• ${c.product_title || c.combo_name || 'Combo Pack'} @ ₹${c.combo_price || 'Special'} (Promo Code: ${c.discount_code || 'COMBO'})`).join('\n')
       : `• Festive Mega Pack (Promo Code: FLAT30)\n• Buy 2 Get 1 Free (Promo Code: B2G1)`;
 
     const cannedFaqsSummary = cannedResponses.length > 0
@@ -2665,7 +2744,7 @@ ${cannedFaqsSummary ? `=== 💬 FREQUENTLY ASKED QUESTIONS & POLICY SNIPPETS ===
 1. "name": lowercase alphanumeric with underscores only (e.g. "festive_sale_2026", "carousel_top_apparel", "cart_recovery_offer"). Max 512 chars, no spaces, no uppercase, no dashes.
 2. "category": Must be one of "MARKETING", "UTILITY", "AUTHENTICATION".
 3. "language": Standard code ("en_US", "hi", "mr", "gu"). Default "en_US".
-4. "templateType": "STANDARD", "CAROUSEL", "CATALOGUE", "FLOWS", "LTO_COUPON", "ORDER_DETAILS", "ORDER_STATUS". If products or carousels are requested, MUST be "CAROUSEL".
+4. "templateType": "STANDARD", "CAROUSEL", "CATALOGUE", "FLOWS", "LTO_COUPON", "ORDER_DETAILS", "ORDER_STATUS". Set to "CAROUSEL" ONLY if the prompt specifically asks for a carousel or multi-card swipeable layout. For reviews, feedback, order tracking, cart recovery, discounts, or alerts, use "STANDARD", "LTO_COUPON", or "ORDER_STATUS".
 5. "headerType": "NONE", "TEXT", "IMAGE", "VIDEO", "DOCUMENT". (For CAROUSEL, headerType must be "NONE").
 6. "bodyText": Engaging, high-conversion copy tailored to ${brandName}.
    - Dynamic parameters MUST strictly follow sequential numbering {{1}}, {{2}}, {{3}} without skipping numbers.
@@ -2678,7 +2757,7 @@ ${cannedFaqsSummary ? `=== 💬 FREQUENTLY ASKED QUESTIONS & POLICY SNIPPETS ===
    - Phone Call: { "type": "PHONE_NUMBER", "text": "Call Us", "phone_number": "${brandPhone}" }
 9. "variables": Array of variable descriptors: [{ "param": "{{1}}", "name": "Customer Name", "example": "Rahul", "description": "Customer Name" }]
 10. "couponCode": Coupon code string if applicable (e.g. "FLAT30", "SAVE20").
-11. "carouselCards": STRICT RULES FOR EACH CARD OBJECT — read carefully:
+11. "carouselCards": STRICT RULES FOR EACH CARD OBJECT (ONLY if templateType is "CAROUSEL") — read carefully:
 
    ⚠️ FIELD "title": MUST be the SHORT PRODUCT NAME ONLY. Max 60 characters. NO sentences, NO descriptions, NO "Buy Now", NO promo text. ONLY the product name. Example: "Espon Pro Gym Shorts" or "Sublimation Track Pant".
 
@@ -2721,14 +2800,24 @@ RETURN ONLY RAW VALID JSON without markdown ticks if possible or inside \`\`\`js
     }
 
     if (!generatedJson || !generatedJson.bodyText) {
-      generatedJson = generateContextualTemplateFallback(cleanPrompt, brandIntel, context?.category, context?.templateType);
+      generatedJson = generateContextualTemplateFallback(cleanPrompt, brandIntel, context?.category, shouldBeCarousel ? 'CAROUSEL' : 'STANDARD');
+    }
+
+    // Force non-carousel if carousel was not intended
+    if (!shouldBeCarousel && generatedJson) {
+      if (generatedJson.templateType === 'CAROUSEL') {
+        generatedJson.templateType = isReviewOrTrackingOrUtility && /track|order|dispatch/i.test(cleanPrompt) ? 'ORDER_STATUS' : 'STANDARD';
+      }
+      delete generatedJson.carouselCards;
     }
 
     const sanitizedTemplate = {
       name: String(generatedJson.name || 'custom_template').toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 512),
       category: ['MARKETING', 'UTILITY', 'AUTHENTICATION'].includes(generatedJson.category) ? generatedJson.category : (context?.category || 'MARKETING'),
       language: generatedJson.language || 'en_US',
-      templateType: generatedJson.templateType || (generatedJson.carouselCards?.length ? 'CAROUSEL' : 'STANDARD'),
+      templateType: (!shouldBeCarousel && (generatedJson.templateType === 'CAROUSEL' || !generatedJson.templateType))
+        ? (isReviewOrTrackingOrUtility && /track|order|dispatch/i.test(cleanPrompt) ? 'ORDER_STATUS' : 'STANDARD')
+        : (generatedJson.templateType || (generatedJson.carouselCards?.length && shouldBeCarousel ? 'CAROUSEL' : 'STANDARD')),
       headerType: ['NONE', 'TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT'].includes(generatedJson.headerType) ? generatedJson.headerType : (generatedJson.headerMediaUrl ? 'IMAGE' : 'NONE'),
       headerContent: generatedJson.headerContent || '',
       headerMediaUrl: generatedJson.headerMediaUrl || (generatedJson.headerType === 'IMAGE' ? 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800&auto=format&fit=crop&q=80' : ''),
@@ -2742,7 +2831,7 @@ RETURN ONLY RAW VALID JSON without markdown ticks if possible or inside \`\`\`js
         { param: '{{1}}', name: 'Customer Name', example: 'Rahul', description: 'Customer Name' }
       ],
       couponCode: generatedJson.couponCode || 'FLAT30',
-      carouselCards: (() => {
+      carouselCards: shouldBeCarousel ? (() => {
         const rawCards = Array.isArray(generatedJson.carouselCards) && generatedJson.carouselCards.length > 0 ? generatedJson.carouselCards : null;
         if (!rawCards) return undefined;
 
@@ -2810,7 +2899,7 @@ RETURN ONLY RAW VALID JSON without markdown ticks if possible or inside \`\`\`js
             buttons: cleanButtons
           };
         });
-      })(),
+      })() : undefined,
       explanation: generatedJson.explanation || `Template tailored dynamically for ${brandName} with real contact details, product references, and Meta-compliant CTA buttons.`,
       complianceChecks: Array.isArray(generatedJson.complianceChecks) && generatedJson.complianceChecks.length > 0 ? generatedJson.complianceChecks : [
         '✅ Name is strictly lowercase snake_case alphanumeric',
