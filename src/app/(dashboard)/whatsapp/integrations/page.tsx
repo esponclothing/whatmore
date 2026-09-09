@@ -103,6 +103,7 @@ export default function IntegrationsHubPage() {
   const [instaResultMsg, setInstaResultMsg] = useState<{ success: boolean; text: string } | null>(null);
   const [copiedInstaUrl, setCopiedInstaUrl] = useState(false);
   const [copiedInstaToken, setCopiedInstaToken] = useState(false);
+  const [copiedInstaRedirectUrl, setCopiedInstaRedirectUrl] = useState(false);
 
   // Facebook Messenger State
   const [fbPageId, setFbPageId] = useState("");
@@ -266,11 +267,12 @@ export default function IntegrationsHubPage() {
     }).catch(() => {});
   };
 
-  const copyToClipboard = (text: string, type: "insta-url" | "insta-token" | "fb-url" | "fb-token" | "wa-url" | "wa-token") => {
+  const copyToClipboard = (text: string, type: "insta-url" | "insta-token" | "insta-redirect" | "fb-url" | "fb-token" | "wa-url" | "wa-token") => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(text);
       if (type === "insta-url") { setCopiedInstaUrl(true); setTimeout(() => setCopiedInstaUrl(false), 2000); }
       if (type === "insta-token") { setCopiedInstaToken(true); setTimeout(() => setCopiedInstaToken(false), 2000); }
+      if (type === "insta-redirect") { setCopiedInstaRedirectUrl(true); setTimeout(() => setCopiedInstaRedirectUrl(false), 2000); }
       if (type === "fb-url") { setCopiedFbUrl(true); setTimeout(() => setCopiedFbUrl(false), 2000); }
       if (type === "fb-token") { setCopiedFbToken(true); setTimeout(() => setCopiedFbToken(false), 2000); }
       if (type === "wa-url") { setCopiedWaUrl(true); setTimeout(() => setCopiedWaUrl(false), 2000); }
@@ -1007,6 +1009,27 @@ const reloadTeams = async () => {
                               {copiedInstaToken ? <Check size={12} /> : <Copy size={12} />} {copiedInstaToken ? "Copied!" : "Copy"}
                             </button>
                           </div>
+                        </div>
+
+                        {/* Instagram Business Login OAuth Redirect URL */}
+                        <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-pink-200/70 dark:border-slate-700 shadow-2xs md:col-span-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Instagram Business Login Redirect URL (Meta Step 4)</label>
+                            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">OAuth Callback</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <code className="flex-1 text-xs font-mono font-semibold text-gray-900 dark:text-white truncate">
+                              {`${origin}/api/instagram/callback`}
+                            </code>
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(`${origin}/api/instagram/callback`, "insta-redirect")}
+                              className="px-2.5 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 transition-all shadow-2xs"
+                            >
+                              {copiedInstaRedirectUrl ? <Check size={12} /> : <Copy size={12} />} {copiedInstaRedirectUrl ? "Copied!" : "Copy Redirect URL"}
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-gray-400 mt-1 mb-0">Paste this into Meta's &quot;Set up Instagram business login&quot; modal (Step 4 of API setup).</p>
                         </div>
                       </div>
 
