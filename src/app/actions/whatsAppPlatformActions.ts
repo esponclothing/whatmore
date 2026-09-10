@@ -4880,8 +4880,11 @@ export async function createAndPushCatalogProductAction(data: {
   compareAtPrice?: number;
   costPrice?: number;
   variants: Array<{
+    name?: string;
+    label?: string;
     color?: string;
     size?: string;
+    pattern?: string;
     sku: string;
     price: number;
     compareAt?: number;
@@ -4923,10 +4926,18 @@ export async function createAndPushCatalogProductAction(data: {
     ];
 
     for (const v of itemsToCreate) {
-      const vTitleParts: string[] = [];
-      if (v.color) vTitleParts.push(v.color);
-      if (v.size) vTitleParts.push(v.size);
-      const variantName = vTitleParts.length > 0 ? `${title} - ${vTitleParts.join(' / ')}` : title;
+      let variantName = title;
+      if (v.label || v.name) {
+        variantName = `${title} - ${v.label || v.name}`;
+      } else {
+        const vTitleParts: string[] = [];
+        if (v.pattern) vTitleParts.push(v.pattern);
+        if (v.color) vTitleParts.push(v.color);
+        if (v.size) vTitleParts.push(v.size);
+        if (vTitleParts.length > 0) {
+          variantName = `${title} - ${vTitleParts.join(' / ')}`;
+        }
+      }
 
       const pPrice = v.price || sellingPrice || 0;
       const pMrp = v.compareAt || compareAtPrice || pPrice;
@@ -4941,7 +4952,7 @@ export async function createAndPushCatalogProductAction(data: {
           description,
           category,
           color: v.color || null,
-          size: v.size || null,
+          size: v.size || (v.label ? v.label : null),
           sellingPrice: pPrice,
           mrp: pMrp,
           purchasePrice: pCost,
@@ -4956,7 +4967,7 @@ export async function createAndPushCatalogProductAction(data: {
           description,
           category,
           color: v.color || null,
-          size: v.size || null,
+          size: v.size || (v.label ? v.label : null),
           sellingPrice: pPrice,
           mrp: pMrp,
           purchasePrice: pCost,
@@ -4979,10 +4990,18 @@ export async function createAndPushCatalogProductAction(data: {
         const token = integration.token.trim();
 
         const requests = itemsToCreate.map(v => {
-          const vTitleParts: string[] = [];
-          if (v.color) vTitleParts.push(v.color);
-          if (v.size) vTitleParts.push(v.size);
-          const variantName = vTitleParts.length > 0 ? `${title} - ${vTitleParts.join(' / ')}` : title;
+          let variantName = title;
+          if (v.label || v.name) {
+            variantName = `${title} - ${v.label || v.name}`;
+          } else {
+            const vTitleParts: string[] = [];
+            if (v.pattern) vTitleParts.push(v.pattern);
+            if (v.color) vTitleParts.push(v.color);
+            if (v.size) vTitleParts.push(v.size);
+            if (vTitleParts.length > 0) {
+              variantName = `${title} - ${vTitleParts.join(' / ')}`;
+            }
+          }
 
           const pPrice = v.price || sellingPrice || 0;
           const pMrp = v.compareAt || compareAtPrice || pPrice;
@@ -5009,6 +5028,7 @@ export async function createAndPushCatalogProductAction(data: {
           }
           if (v.color) itemData.color = v.color;
           if (v.size) itemData.size = v.size;
+          if (v.pattern) itemData.pattern = v.pattern;
           if (itemsToCreate.length > 1) {
             itemData.item_group_id = baseSku;
           }

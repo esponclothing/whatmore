@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   Search, CheckCircle2, AlertTriangle, RefreshCw, Plus, Store, ExternalLink, 
-  Eye, EyeOff, ShoppingBag, Sparkles, X, Image as ImageIcon, Tag, Layers, ArrowUpRight 
+  Eye, EyeOff, ShoppingBag, Sparkles, X, Image as ImageIcon, Tag, Layers, ArrowUpRight,
+  Upload, Trash2, Check, Sliders, ChevronDown, CheckSquare, Square
 } from "lucide-react";
 import Link from "next/link";
 import { 
@@ -17,10 +18,54 @@ import {
   pushSingleProductToMetaAction
 } from "@/app/actions/whatsAppPlatformActions";
 
-// Default preset chips for quick addition
-const PRESET_COLORS = ["Black", "White", "Navy Blue", "Olive Green", "Charcoal", "Royal Blue", "Maroon", "Heather Grey"];
-const PRESET_SIZES = ["S", "M", "L", "XL", "2XL", "3XL", "Free Size"];
-const PRESET_CATEGORIES = ["T-Shirts", "Activewear", "Track Pants", "Shorts", "Hoodies & Sweatshirts", "Compression Wear", "Polos", "Jackets"];
+// Shopify-style Preset Option Definitions with Quick Value Suggestions
+export const PRESET_OPTION_DEFINITIONS = [
+  { 
+    name: "Color", 
+    suggestions: ["Black", "White", "Navy Blue", "Olive Green", "Charcoal Grey", "Royal Blue", "Maroon", "Beige"] 
+  },
+  { 
+    name: "Size", 
+    suggestions: ["S", "M", "L", "XL", "2XL", "3XL", "Free Size"] 
+  },
+  { 
+    name: "Pack / Pieces", 
+    suggestions: ["1 Pc Sample", "Set of 2 Pcs", "Pack of 3", "Pack of 5", "Box of 10", "Bundle (12 Pcs)", "Master Carton (50 Pcs)"] 
+  },
+  { 
+    name: "Design / Print", 
+    suggestions: ["Solid / Plain", "Striped", "Graphic Print", "Army Camo", "Typography", "Embroidered", "Colorblock"] 
+  },
+  { 
+    name: "Fabric / GSM", 
+    suggestions: ["180 GSM Cotton", "240 GSM Terry", "4-Way Lycra", "NS 100% Polyester", "Dry-Fit Mesh"] 
+  }
+];
+
+export const PRESET_CATEGORIES = [
+  "T-Shirts", "Activewear", "Track Pants", "Shorts", "Hoodies & Sweatshirts", 
+  "Compression Wear", "Polos", "Jackets", "Wholesale Sampler Kits"
+];
+
+export interface ProductOption {
+  id: string;
+  name: string;
+  values: string[];
+  inputValue: string;
+}
+
+export interface VariantMatrixItem {
+  id: string;
+  label: string;
+  sku: string;
+  price: number;
+  compareAt: number;
+  inventory: number;
+  imageUrl?: string;
+  color?: string;
+  size?: string;
+  pattern?: string;
+}
 
 export default function ProductsCommercePage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -62,24 +107,24 @@ export default function ProductsCommercePage() {
     compareAtPrice: "",
     costPrice: "",
     imageUrl: "",
-    pushToMeta: true,
-    colors: [] as string[],
-    sizes: [] as string[],
-    colorInput: "",
-    sizeInput: ""
+    pushToMeta: true
   });
 
+  // Direct Image Upload State
+  const [isUploadingPrimaryImage, setIsUploadingPrimaryImage] = useState(false);
+  const [uploadingVariantSku, setUploadingVariantSku] = useState<string | null>(null);
+  const [showUrlFallback, setShowUrlFallback] = useState(false);
+  const primaryFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Shopify-style Options State ("This product has options, like size or color")
+  const [hasOptions, setHasOptions] = useState(true);
+  const [productOptions, setProductOptions] = useState<ProductOption[]>([
+    { id: "opt_color", name: "Color", values: ["Black", "Navy Blue"], inputValue: "" },
+    { id: "opt_size", name: "Size", values: ["M", "L", "XL"], inputValue: "" }
+  ]);
+
   // Generated variant matrix
-  const [variantsMatrix, setVariantsMatrix] = useState<Array<{
-    id: string;
-    color?: string;
-    size?: string;
-    sku: string;
-    price: number;
-    compareAt: number;
-    inventory: number;
-    imageUrl?: string;
-  }>>([]);
+  const [variantsMatrix, setVariantsMatrix] = useState<VariantMatrixItem[]>([]);
 
   const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
     setToast({ message, type });
@@ -232,119 +277,179 @@ export default function ProductsCommercePage() {
   // -------------------------------------------------------------
   // Variant Matrix Generator for Catalog Maker Modal
   // -------------------------------------------------------------
+  // -------------------------------------------------------------
+  // Direct Image File Upload Handler (Saved to PostgreSQL & Served via HTTPS)
+  // -------------------------------------------------------------
+  const handleImageUpload = async (file: File, variantSku?: string) => {
+    if (!file) return;
+    if (variantSku) {
+      setUploadingVariantSku(variantSku);
+    } else {
+      setIsUploadingPrimaryImage(true);
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/whatsapp/upload-product-image", {
+        method: "POST",
+        body: formData
+      });
+
+      const data = await res.json();
+      if (data.success && data.url) {
+        if (variantSku) {
+          setVariantsMatrix(prev => prev.map(v => v.sku === variantSku ? { ...v, imageUrl: data.url } : v));
+          showToast("Variant photo updated!", "success");
+        } else {
+          setProductForm(prev => ({ ...prev, imageUrl: data.url }));
+          // Also set default image on variants that don't have a custom image yet
+          setVariantsMatrix(prev => prev.map(v => v.imageUrl ? v : { ...v, imageUrl: data.url }));
+          showToast("Product image uploaded successfully!", "success");
+        }
+      } else {
+        showToast(data.error || "Image upload failed.", "error");
+      }
+    } catch (err: any) {
+      showToast("Upload failed: " + err.message, "error");
+    } finally {
+      setIsUploadingPrimaryImage(false);
+      setUploadingVariantSku(null);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // Shopify-Style Variant Matrix Generator
+  // -------------------------------------------------------------
   const recomputeVariantsMatrix = (
-    colors: string[],
-    sizes: string[],
+    options: ProductOption[],
     baseSku: string,
     sPrice: number,
-    cPrice: number
+    cPrice: number,
+    hasOpts: boolean = hasOptions,
+    currentImgUrl: string = productForm.imageUrl
   ) => {
     const cleanSku = (baseSku || "PROD").trim().toUpperCase();
     const cleanPrice = sPrice || 0;
     const cleanCompare = cPrice || cleanPrice;
 
-    if (colors.length === 0 && sizes.length === 0) {
+    if (!hasOpts) {
       setVariantsMatrix([
         {
           id: cleanSku,
+          label: "Default",
           sku: cleanSku,
           price: cleanPrice,
           compareAt: cleanCompare,
-          inventory: 20
+          inventory: 20,
+          imageUrl: currentImgUrl
         }
       ]);
       return;
     }
 
-    const newMatrix: Array<{
-      id: string;
-      color?: string;
-      size?: string;
-      sku: string;
-      price: number;
-      compareAt: number;
-      inventory: number;
-      imageUrl?: string;
-    }> = [];
+    const activeOptions = options.filter(o => o.name.trim() && o.values.length > 0);
 
-    const colorList = colors.length > 0 ? colors : [undefined];
-    const sizeList = sizes.length > 0 ? sizes : [undefined];
-
-    for (const color of colorList) {
-      for (const size of sizeList) {
-        const parts = [cleanSku];
-        if (color) {
-          const colorCode = color.slice(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, "");
-          parts.push(colorCode);
+    if (activeOptions.length === 0) {
+      setVariantsMatrix([
+        {
+          id: cleanSku,
+          label: "Default",
+          sku: cleanSku,
+          price: cleanPrice,
+          compareAt: cleanCompare,
+          inventory: 20,
+          imageUrl: currentImgUrl
         }
-        if (size) {
-          const sizeCode = size.toUpperCase().replace(/[^A-Z0-9]/g, "");
-          parts.push(sizeCode);
-        }
-        const variantSku = parts.join("-");
-        
-        const existing = variantsMatrix.find(v => v.sku === variantSku);
-
-        newMatrix.push({
-          id: variantSku,
-          color,
-          size,
-          sku: variantSku,
-          price: existing?.price ?? cleanPrice,
-          compareAt: existing?.compareAt ?? cleanCompare,
-          inventory: existing?.inventory ?? 20
-        });
-      }
+      ]);
+      return;
     }
+
+    // Cartesian combinations across all active options
+    let combinations: string[][] = [[]];
+    for (const opt of activeOptions) {
+      const next: string[][] = [];
+      for (const prefix of combinations) {
+        for (const val of opt.values) {
+          next.push([...prefix, val]);
+        }
+      }
+      combinations = next;
+    }
+
+    const newMatrix: VariantMatrixItem[] = combinations.map(combo => {
+      const label = combo.join(" / ");
+      const slugSuffix = combo
+        .map(v => v.slice(0, 4).toUpperCase().replace(/[^A-Z0-9]/g, ""))
+        .filter(Boolean)
+        .join("-");
+      const variantSku = slugSuffix ? `${cleanSku}-${slugSuffix}` : cleanSku;
+
+      const existing = variantsMatrix.find(v => v.sku === variantSku || v.label === label);
+
+      let color: string | undefined;
+      let size: string | undefined;
+      let pattern: string | undefined;
+
+      activeOptions.forEach((opt, idx) => {
+        const lower = opt.name.toLowerCase();
+        if (lower.includes("color")) color = combo[idx];
+        else if (lower.includes("size")) size = combo[idx];
+        else if (lower.includes("design") || lower.includes("print") || lower.includes("pattern")) pattern = combo[idx];
+      });
+
+      return {
+        id: variantSku,
+        label,
+        sku: existing?.sku || variantSku,
+        price: existing?.price ?? cleanPrice,
+        compareAt: existing?.compareAt ?? cleanCompare,
+        inventory: existing?.inventory ?? 20,
+        imageUrl: existing?.imageUrl || currentImgUrl,
+        color,
+        size,
+        pattern
+      };
+    });
 
     setVariantsMatrix(newMatrix);
   };
 
-  const handleAddColor = (colorName: string) => {
-    const trimmed = colorName.trim();
-    if (!trimmed || productForm.colors.includes(trimmed)) return;
-    const updated = [...productForm.colors, trimmed];
-    setProductForm({ ...productForm, colors: updated, colorInput: "" });
+  // Shopify-Style Options Actions
+  const handleToggleHasOptions = (enabled: boolean) => {
+    setHasOptions(enabled);
     recomputeVariantsMatrix(
-      updated,
-      productForm.sizes,
+      productOptions,
       productForm.baseSku,
       Number(productForm.sellingPrice) || 0,
-      Number(productForm.compareAtPrice) || 0
+      Number(productForm.compareAtPrice) || 0,
+      enabled
     );
   };
 
-  const handleRemoveColor = (colorToRemove: string) => {
-    const updated = productForm.colors.filter(c => c !== colorToRemove);
-    setProductForm({ ...productForm, colors: updated });
-    recomputeVariantsMatrix(
-      updated,
-      productForm.sizes,
-      productForm.baseSku,
-      Number(productForm.sellingPrice) || 0,
-      Number(productForm.compareAtPrice) || 0
-    );
+  const handleAddOption = () => {
+    if (productOptions.length >= 3) {
+      showToast("Shopify standard supports up to 3 option groups per product.", "info");
+      return;
+    }
+    const unusedPresets = PRESET_OPTION_DEFINITIONS.filter(p => !productOptions.some(o => o.name.toLowerCase() === p.name.toLowerCase()));
+    const nextName = unusedPresets[0]?.name || `Option ${productOptions.length + 1}`;
+
+    const newOpt: ProductOption = {
+      id: `opt_${Date.now()}`,
+      name: nextName,
+      values: [],
+      inputValue: ""
+    };
+    const updated = [...productOptions, newOpt];
+    setProductOptions(updated);
   };
 
-  const handleAddSize = (sizeName: string) => {
-    const trimmed = sizeName.trim();
-    if (!trimmed || productForm.sizes.includes(trimmed)) return;
-    const updated = [...productForm.sizes, trimmed];
-    setProductForm({ ...productForm, sizes: updated, sizeInput: "" });
+  const handleRemoveOption = (optionId: string) => {
+    const updated = productOptions.filter(o => o.id !== optionId);
+    setProductOptions(updated);
     recomputeVariantsMatrix(
-      productForm.colors,
-      updated,
-      productForm.baseSku,
-      Number(productForm.sellingPrice) || 0,
-      Number(productForm.compareAtPrice) || 0
-    );
-  };
-
-  const handleRemoveSize = (sizeToRemove: string) => {
-    const updated = productForm.sizes.filter(s => s !== sizeToRemove);
-    setProductForm({ ...productForm, sizes: updated });
-    recomputeVariantsMatrix(
-      productForm.colors,
       updated,
       productForm.baseSku,
       Number(productForm.sellingPrice) || 0,
@@ -352,12 +457,77 @@ export default function ProductsCommercePage() {
     );
   };
 
+  const handleOptionNameChange = (optionId: string, newName: string) => {
+    const updated = productOptions.map(o => o.id === optionId ? { ...o, name: newName } : o);
+    setProductOptions(updated);
+    recomputeVariantsMatrix(
+      updated,
+      productForm.baseSku,
+      Number(productForm.sellingPrice) || 0,
+      Number(productForm.compareAtPrice) || 0
+    );
+  };
+
+  const handleAddOptionValue = (optionId: string, val: string) => {
+    const trimmed = val.trim();
+    if (!trimmed) return;
+    const targetOpt = productOptions.find(o => o.id === optionId);
+    if (!targetOpt || targetOpt.values.includes(trimmed)) return;
+
+    const updated = productOptions.map(o => o.id === optionId ? {
+      ...o,
+      values: [...o.values, trimmed],
+      inputValue: ""
+    } : o);
+
+    setProductOptions(updated);
+    recomputeVariantsMatrix(
+      updated,
+      productForm.baseSku,
+      Number(productForm.sellingPrice) || 0,
+      Number(productForm.compareAtPrice) || 0
+    );
+  };
+
+  const handleRemoveOptionValue = (optionId: string, valToRemove: string) => {
+    const updated = productOptions.map(o => o.id === optionId ? {
+      ...o,
+      values: o.values.filter(v => v !== valToRemove)
+    } : o);
+
+    setProductOptions(updated);
+    recomputeVariantsMatrix(
+      updated,
+      productForm.baseSku,
+      Number(productForm.sellingPrice) || 0,
+      Number(productForm.compareAtPrice) || 0
+    );
+  };
+
+  // Matrix Row Actions
   const handleMatrixVariantChange = (sku: string, field: string, value: any) => {
     setVariantsMatrix(variantsMatrix.map(v => v.sku === sku ? { ...v, [field]: value } : v));
   };
 
   const handleRemoveVariantRow = (sku: string) => {
     setVariantsMatrix(variantsMatrix.filter(v => v.sku !== sku));
+  };
+
+  const handleAddCustomVariantRow = () => {
+    const customIdx = variantsMatrix.length + 1;
+    const cleanSku = (productForm.baseSku || "PROD").trim().toUpperCase();
+    const customSku = `${cleanSku}-CUSTOM-${customIdx}`;
+    const customItem: VariantMatrixItem = {
+      id: customSku,
+      label: `Custom Option ${customIdx}`,
+      sku: customSku,
+      price: Number(productForm.sellingPrice) || 0,
+      compareAt: Number(productForm.compareAtPrice) || Number(productForm.sellingPrice) || 0,
+      inventory: 20,
+      imageUrl: productForm.imageUrl
+    };
+    setVariantsMatrix([...variantsMatrix, customItem]);
+    showToast("Added custom variant row.", "info");
   };
 
   // Submit Catalog Maker Form
@@ -381,12 +551,16 @@ export default function ProductsCommercePage() {
         compareAtPrice: Number(productForm.compareAtPrice) || Number(productForm.sellingPrice) || 0,
         costPrice: Number(productForm.costPrice) || 0,
         variants: variantsMatrix.map(v => ({
+          name: v.label,
+          label: v.label,
           color: v.color,
           size: v.size,
+          pattern: v.pattern,
           sku: v.sku,
           price: Number(v.price) || Number(productForm.sellingPrice) || 0,
           compareAt: Number(v.compareAt) || Number(productForm.compareAtPrice) || 0,
-          inventory: Number(v.inventory) || 20
+          inventory: Number(v.inventory) || 20,
+          imageUrl: v.imageUrl || productForm.imageUrl
         })),
         pushToMeta: productForm.pushToMeta
       });
@@ -406,11 +580,7 @@ export default function ProductsCommercePage() {
           compareAtPrice: "",
           costPrice: "",
           imageUrl: "",
-          pushToMeta: true,
-          colors: [],
-          sizes: [],
-          colorInput: "",
-          sizeInput: ""
+          pushToMeta: true
         });
         setVariantsMatrix([]);
       } else {
@@ -914,8 +1084,7 @@ export default function ProductsCommercePage() {
                         const val = e.target.value.toUpperCase();
                         setProductForm({ ...productForm, baseSku: val });
                         recomputeVariantsMatrix(
-                          productForm.colors,
-                          productForm.sizes,
+                          productOptions,
                           val,
                           Number(productForm.sellingPrice) || 0,
                           Number(productForm.compareAtPrice) || 0
@@ -980,8 +1149,7 @@ export default function ProductsCommercePage() {
                         const val = e.target.value;
                         setProductForm({ ...productForm, sellingPrice: val });
                         recomputeVariantsMatrix(
-                          productForm.colors,
-                          productForm.sizes,
+                          productOptions,
                           productForm.baseSku,
                           Number(val) || 0,
                           Number(productForm.compareAtPrice) || 0
@@ -1004,8 +1172,7 @@ export default function ProductsCommercePage() {
                         const val = e.target.value;
                         setProductForm({ ...productForm, compareAtPrice: val });
                         recomputeVariantsMatrix(
-                          productForm.colors,
-                          productForm.sizes,
+                          productOptions,
                           productForm.baseSku,
                           Number(productForm.sellingPrice) || 0,
                           Number(val) || 0
@@ -1033,207 +1200,417 @@ export default function ProductsCommercePage() {
                 </div>
               </div>
 
-              {/* Section 3: Media & Image Preview */}
-              <div className="flex flex-col gap-4 pt-4 border-t border-gray-100 dark:border-slate-800">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
-                  <ImageIcon size={13} /> 3. Primary Product Image
-                </h3>
+              {/* Section 3: Media & Direct File Upload (Like Shopify) */}
+              <div className="flex flex-col gap-3 pt-4 border-t border-gray-100 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                    <ImageIcon size={14} /> 3. Primary Product Media & Photos
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowUrlFallback(!showUrlFallback)}
+                    className="text-[11px] text-purple-600 hover:text-purple-800 hover:underline flex items-center gap-1 font-medium"
+                  >
+                    {showUrlFallback ? "Hide URL Input" : "Or enter external URL"}
+                  </button>
+                </div>
+
+                {/* Hidden File Input */}
+                <input
+                  ref={primaryFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImageUpload(file);
+                    e.target.value = "";
+                  }}
+                />
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
-                  <div className="md:col-span-3 flex flex-col gap-2">
-                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
-                      Image URL (CDN / HTTPS)
-                    </label>
-                    <input 
-                      type="url" 
-                      value={productForm.imageUrl} 
-                      onChange={e => setProductForm({ ...productForm, imageUrl: e.target.value })} 
-                      className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 outline-none bg-white dark:bg-slate-800" 
-                      placeholder="https://cdn.shopify.com/.../product.jpg" 
-                    />
-                    <p className="text-[11px] text-gray-400">
-                      Meta Catalog requires publicly accessible HTTPS images (square format 1080x1080 recommended).
-                    </p>
+                  {/* Direct Drop / Browse Area */}
+                  <div
+                    onClick={() => primaryFileInputRef.current?.click()}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) handleImageUpload(file);
+                    }}
+                    className={`md:col-span-3 border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
+                      isUploadingPrimaryImage
+                        ? "border-purple-500 bg-purple-50/60 dark:bg-purple-950/40"
+                        : "border-gray-300 hover:border-purple-500 hover:bg-purple-50/20 bg-gray-50/60 dark:bg-slate-800/40 dark:border-slate-700"
+                    }`}
+                  >
+                    {isUploadingPrimaryImage ? (
+                      <div className="flex flex-col items-center gap-2 py-2">
+                        <RefreshCw size={28} className="animate-spin text-purple-600" />
+                        <span className="text-xs font-bold text-purple-700 dark:text-purple-300">
+                          Uploading & processing image...
+                        </span>
+                        <span className="text-[11px] text-gray-400">Saving securely & generating public HTTPS URL for Meta</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 dark:bg-purple-900/40 flex items-center justify-center shadow-inner">
+                          <Upload size={22} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                            Click to upload or drag & drop image from device
+                          </p>
+                          <p className="text-[11px] text-gray-400 mt-0.5">
+                            PNG, JPG, WEBP up to 10MB • Direct upload stored and pushed to Meta Catalog
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Preview Thumbnail */}
-                  <div className="w-full aspect-square max-w-[120px] rounded-2xl bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 overflow-hidden flex items-center justify-center relative shadow-inner">
+                  {/* Primary Thumbnail Preview */}
+                  <div className="w-full aspect-square max-w-[130px] rounded-2xl bg-white dark:bg-slate-800 border-2 border-gray-200 dark:border-slate-700 overflow-hidden flex flex-col items-center justify-center relative shadow-sm group">
                     {productForm.imageUrl ? (
-                      <img src={productForm.imageUrl} alt="Preview" className="w-full h-full object-cover" onError={(e) => { (e.target as any).style.display = 'none'; }} />
+                      <>
+                        <img 
+                          src={productForm.imageUrl} 
+                          alt="Product" 
+                          className="w-full h-full object-cover" 
+                          onError={(e) => { (e.target as any).style.display = 'none'; }} 
+                        />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-2">
+                          <button
+                            type="button"
+                            onClick={() => primaryFileInputRef.current?.click()}
+                            className="px-2 py-1 bg-white text-gray-800 text-[10px] font-bold rounded-lg shadow-sm hover:bg-gray-100"
+                          >
+                            Change
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setProductForm({ ...productForm, imageUrl: "" })}
+                            className="p-1 bg-red-600 text-white rounded-lg shadow-sm hover:bg-red-700"
+                            title="Remove image"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </>
                     ) : (
                       <div className="text-center text-gray-400 p-2">
-                        <ImageIcon size={24} className="mx-auto mb-1 opacity-50" />
-                        <span className="text-[10px] block">Preview</span>
+                        <ImageIcon size={26} className="mx-auto mb-1 opacity-40" />
+                        <span className="text-[10px] block font-medium">No Image</span>
                       </div>
                     )}
                   </div>
                 </div>
+
+                {/* Optional URL Fallback */}
+                {showUrlFallback && (
+                  <div className="p-3 bg-purple-50/50 dark:bg-slate-800/60 rounded-xl border border-purple-200 dark:border-slate-700 flex flex-col gap-1.5">
+                    <label className="text-[11px] font-bold text-gray-700 dark:text-gray-300">Image URL (Optional Fallback)</label>
+                    <input
+                      type="url"
+                      value={productForm.imageUrl}
+                      onChange={(e) => setProductForm({ ...productForm, imageUrl: e.target.value })}
+                      placeholder="https://cdn.shopify.com/.../image.jpg"
+                      className="w-full px-3 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-900 outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                )}
               </div>
 
-              {/* Section 4: Variants Builder (Colors & Sizes) */}
+              {/* Section 4: Shopify-Style Variants & Option Groups */}
               <div className="flex flex-col gap-4 pt-4 border-t border-gray-100 dark:border-slate-800">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
-                    <Layers size={13} /> 4. Variants Builder (Colors & Sizes)
-                  </h3>
-                  <span className="text-xs font-semibold text-gray-500">
-                    {variantsMatrix.length} variant{variantsMatrix.length !== 1 ? "s" : ""} generated
-                  </span>
-                </div>
-
-                {/* Color Selector */}
-                <div className="bg-gray-50/60 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-gray-200/70 dark:border-slate-700/60 flex flex-col gap-2.5">
-                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
-                    Colors (e.g. Black, Navy Blue, Olive)
-                  </label>
-                  
-                  {/* Preset Quick Chips */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {PRESET_COLORS.map(c => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => handleAddColor(c)}
-                        disabled={productForm.colors.includes(c)}
-                        className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all ${
-                          productForm.colors.includes(c)
-                            ? "bg-purple-600 text-white border-purple-600 shadow-2xs"
-                            : "bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-slate-700 hover:border-purple-400"
-                        }`}
-                      >
-                        + {c}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Selected Color Tags */}
-                  {productForm.colors.length > 0 && (
-                    <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200/50">
-                      {productForm.colors.map(c => (
-                        <span key={c} className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold bg-purple-100 text-purple-900 border border-purple-200">
-                          <span>{c}</span>
-                          <button type="button" onClick={() => handleRemoveColor(c)} className="hover:text-red-600">
-                            <X size={12} />
-                          </button>
-                        </span>
-                      ))}
+                {/* Checkbox: This product has options like size or color */}
+                <div className="flex items-center justify-between bg-gray-50/80 dark:bg-slate-800/60 p-4 rounded-2xl border border-gray-200 dark:border-slate-700">
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={hasOptions}
+                      onChange={(e) => handleToggleHasOptions(e.target.checked)}
+                      className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-gray-300 cursor-pointer"
+                    />
+                    <div>
+                      <span className="text-sm font-bold text-gray-900 dark:text-white block">
+                        This product has options, like size, color, or pieces
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        Create multiple variants with separate SKUs, prices, inventory, and photos (Shopify style).
+                      </span>
                     </div>
+                  </label>
+                  {hasOptions && (
+                    <span className="text-xs font-bold text-purple-700 bg-purple-100 dark:bg-purple-950/60 dark:text-purple-300 px-3 py-1 rounded-full border border-purple-200 dark:border-purple-800">
+                      {variantsMatrix.length} variant{variantsMatrix.length !== 1 ? "s" : ""}
+                    </span>
                   )}
                 </div>
 
-                {/* Size Selector */}
-                <div className="bg-gray-50/60 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-gray-200/70 dark:border-slate-700/60 flex flex-col gap-2.5">
-                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
-                    Sizes (e.g. S, M, L, XL, XXL)
-                  </label>
-                  
-                  {/* Preset Quick Chips */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {PRESET_SIZES.map(s => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => handleAddSize(s)}
-                        disabled={productForm.sizes.includes(s)}
-                        className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all ${
-                          productForm.sizes.includes(s)
-                            ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
-                            : "bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-slate-700 hover:border-indigo-400"
-                        }`}
-                      >
-                        + {s}
-                      </button>
-                    ))}
-                  </div>
+                {hasOptions && (
+                  <div className="flex flex-col gap-4">
+                    {/* Option Groups Cards */}
+                    {productOptions.map((opt, optIndex) => {
+                      const presetDef = PRESET_OPTION_DEFINITIONS.find(p => p.name.toLowerCase() === opt.name.toLowerCase());
+                      const suggestions = presetDef ? presetDef.suggestions : [];
 
-                  {/* Selected Size Tags */}
-                  {productForm.sizes.length > 0 && (
-                    <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200/50">
-                      {productForm.sizes.map(s => (
-                        <span key={s} className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold bg-indigo-100 text-indigo-900 border border-indigo-200">
-                          <span>{s}</span>
-                          <button type="button" onClick={() => handleRemoveSize(s)} className="hover:text-red-600">
-                            <X size={12} />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Generated Variants Table */}
-                {variantsMatrix.length > 0 && (
-                  <div className="overflow-x-auto border border-gray-200 dark:border-slate-700 rounded-2xl">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 font-bold uppercase">
-                        <tr>
-                          <th className="p-3">Variant SKU</th>
-                          <th className="p-3">Color</th>
-                          <th className="p-3">Size</th>
-                          <th className="p-3">Price (₹)</th>
-                          <th className="p-3">MRP (₹)</th>
-                          <th className="p-3">Stock</th>
-                          <th className="p-3 text-center">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
-                        {variantsMatrix.map((v) => (
-                          <tr key={v.sku} className="hover:bg-gray-50/50">
-                            <td className="p-3 font-mono font-bold text-gray-800 dark:text-gray-200">
-                              {v.sku}
-                            </td>
-                            <td className="p-3">
-                              {v.color ? (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                                  {v.color}
-                                </span>
-                              ) : <span className="text-gray-400">-</span>}
-                            </td>
-                            <td className="p-3">
-                              {v.size ? (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                                  {v.size}
-                                </span>
-                              ) : <span className="text-gray-400">-</span>}
-                            </td>
-                            <td className="p-3">
-                              <input 
-                                type="number" 
-                                value={v.price} 
-                                onChange={e => handleMatrixVariantChange(v.sku, "price", Number(e.target.value))}
-                                className="w-20 px-2 py-1 border border-gray-300 dark:border-slate-600 rounded text-xs font-bold outline-none" 
-                              />
-                            </td>
-                            <td className="p-3">
-                              <input 
-                                type="number" 
-                                value={v.compareAt} 
-                                onChange={e => handleMatrixVariantChange(v.sku, "compareAt", Number(e.target.value))}
-                                className="w-20 px-2 py-1 border border-gray-300 dark:border-slate-600 rounded text-xs line-through text-gray-500 outline-none" 
-                              />
-                            </td>
-                            <td className="p-3">
-                              <input 
-                                type="number" 
-                                value={v.inventory} 
-                                onChange={e => handleMatrixVariantChange(v.sku, "inventory", Number(e.target.value))}
-                                className="w-16 px-2 py-1 border border-gray-300 dark:border-slate-600 rounded text-xs font-mono outline-none" 
-                              />
-                            </td>
-                            <td className="p-3 text-center">
-                              <button 
-                                type="button" 
-                                onClick={() => handleRemoveVariantRow(v.sku)} 
-                                className="text-gray-400 hover:text-red-600 p-1"
-                                title="Remove this variant"
+                      return (
+                        <div key={opt.id} className="bg-white dark:bg-slate-800/90 p-4 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-xs flex flex-col gap-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 flex-1">
+                              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                Option {optIndex + 1}:
+                              </span>
+                              {/* Option Name Selector */}
+                              <select
+                                value={PRESET_OPTION_DEFINITIONS.some(p => p.name.toLowerCase() === opt.name.toLowerCase()) ? opt.name : "Custom"}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val !== "Custom") {
+                                    handleOptionNameChange(opt.id, val);
+                                  } else {
+                                    handleOptionNameChange(opt.id, "Custom Option");
+                                  }
+                                }}
+                                className="px-3 py-1.5 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-slate-900 focus:ring-2 focus:ring-purple-500 outline-none"
                               >
-                                <X size={14} />
+                                {PRESET_OPTION_DEFINITIONS.map(p => (
+                                  <option key={p.name} value={p.name}>{p.name}</option>
+                                ))}
+                                <option value="Custom">Custom Option...</option>
+                              </select>
+                              
+                              <input
+                                type="text"
+                                value={opt.name}
+                                onChange={(e) => handleOptionNameChange(opt.id, e.target.value)}
+                                placeholder="Option Name (e.g. Fit, Sleeve, Set)"
+                                className="px-3 py-1.5 border border-gray-200 dark:border-slate-700 rounded-xl text-xs bg-white dark:bg-slate-900 outline-none focus:ring-2 focus:ring-purple-500 font-semibold"
+                              />
+                            </div>
+
+                            {productOptions.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveOption(opt.id)}
+                                className="p-1.5 text-gray-400 hover:text-red-600 transition-colors rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30"
+                                title="Remove this option"
+                              >
+                                <Trash2 size={15} />
                               </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                            )}
+                          </div>
+
+                          {/* Option Values Section */}
+                          <div className="flex flex-col gap-2">
+                            <label className="text-[11px] font-bold text-gray-600 dark:text-gray-400">
+                              Option values for {opt.name || "this option"}:
+                            </label>
+
+                            {/* Tag Input Field */}
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={opt.inputValue}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setProductOptions(productOptions.map(o => o.id === opt.id ? { ...o, inputValue: val } : o));
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === ",") {
+                                    e.preventDefault();
+                                    handleAddOptionValue(opt.id, opt.inputValue);
+                                  }
+                                }}
+                                placeholder={`Type value (e.g. ${suggestions.slice(0, 3).join(", ") || "Value"}) and press Enter...`}
+                                className="flex-1 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-xl text-xs bg-white dark:bg-slate-900 outline-none focus:ring-2 focus:ring-purple-500"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleAddOptionValue(opt.id, opt.inputValue)}
+                                className="px-3 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700 transition-colors"
+                              >
+                                + Add
+                              </button>
+                            </div>
+
+                            {/* Suggestions Chips */}
+                            {suggestions.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                <span className="text-[10px] font-bold text-gray-400 mr-1">Quick Suggestions:</span>
+                                {suggestions.map(s => {
+                                  const isSelected = opt.values.includes(s);
+                                  return (
+                                    <button
+                                      key={s}
+                                      type="button"
+                                      onClick={() => handleAddOptionValue(opt.id, s)}
+                                      disabled={isSelected}
+                                      className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all ${
+                                        isSelected
+                                          ? "bg-purple-600 text-white border-purple-600 shadow-2xs cursor-default"
+                                          : "bg-gray-50 dark:bg-slate-900 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-slate-700 hover:border-purple-400"
+                                      }`}
+                                    >
+                                      + {s}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* Selected Values Pills */}
+                            {opt.values.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 pt-2 border-t border-gray-100 dark:border-slate-700/60">
+                                {opt.values.map(val => (
+                                  <span
+                                    key={val}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-100 text-purple-900 dark:bg-purple-950/60 dark:text-purple-200 border border-purple-200 dark:border-purple-800"
+                                  >
+                                    {val}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveOptionValue(opt.id, val)}
+                                      className="hover:text-red-600 ml-0.5"
+                                    >
+                                      <X size={12} />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Add Another Option Button (Up to 3) */}
+                    {productOptions.length < 3 && (
+                      <button
+                        type="button"
+                        onClick={handleAddOption}
+                        className="self-start text-xs font-bold text-purple-700 dark:text-purple-300 hover:text-purple-900 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 dark:bg-slate-800/60 border border-purple-200 dark:border-slate-700 hover:bg-purple-100 transition-colors"
+                      >
+                        <Plus size={14} /> Add another option (e.g. Pack/Pieces, Design, Fabric)
+                      </button>
+                    )}
+
+                    {/* Variants Matrix Table (Shopify Style) */}
+                    {variantsMatrix.length > 0 && (
+                      <div className="flex flex-col gap-2 mt-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                            Variants Matrix ({variantsMatrix.length} Items)
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={handleAddCustomVariantRow}
+                            className="text-[11px] font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1"
+                          >
+                            <Plus size={12} /> Add custom variant row
+                          </button>
+                        </div>
+
+                        <div className="overflow-x-auto border border-gray-200 dark:border-slate-700 rounded-2xl shadow-xs">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 font-bold uppercase">
+                              <tr>
+                                <th className="p-3 w-12 text-center">Photo</th>
+                                <th className="p-3">Variant</th>
+                                <th className="p-3">SKU</th>
+                                <th className="p-3">Price (₹)</th>
+                                <th className="p-3">MRP (₹)</th>
+                                <th className="p-3">Stock</th>
+                                <th className="p-3 text-center">Remove</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
+                              {variantsMatrix.map((v) => (
+                                <tr key={v.sku} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/30">
+                                  {/* Inline Variant Photo Upload */}
+                                  <td className="p-2.5 text-center">
+                                    <label className="w-9 h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden cursor-pointer hover:border-purple-500 relative mx-auto group">
+                                      {v.imageUrl ? (
+                                        <img src={v.imageUrl} alt={v.label} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <ImageIcon size={14} className="text-gray-400 group-hover:text-purple-600" />
+                                      )}
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) handleImageUpload(file, v.sku);
+                                          e.target.value = "";
+                                        }}
+                                      />
+                                      {uploadingVariantSku === v.sku && (
+                                        <div className="absolute inset-0 bg-white/80 dark:bg-black/80 flex items-center justify-center">
+                                          <RefreshCw size={12} className="animate-spin text-purple-600" />
+                                        </div>
+                                      )}
+                                    </label>
+                                  </td>
+                                  <td className="p-3 font-semibold text-gray-900 dark:text-white">
+                                    <input
+                                      type="text"
+                                      value={v.label}
+                                      onChange={(e) => handleMatrixVariantChange(v.sku, "label", e.target.value)}
+                                      className="px-2 py-1 border border-transparent hover:border-gray-300 focus:border-purple-500 rounded bg-transparent text-xs font-semibold outline-none w-full"
+                                    />
+                                  </td>
+                                  <td className="p-3">
+                                    <input
+                                      type="text"
+                                      value={v.sku}
+                                      onChange={(e) => handleMatrixVariantChange(v.sku, "sku", e.target.value.toUpperCase())}
+                                      className="w-32 px-2 py-1 border border-gray-200 dark:border-slate-700 rounded text-xs font-mono outline-none focus:border-purple-500 bg-white dark:bg-slate-900"
+                                    />
+                                  </td>
+                                  <td className="p-3">
+                                    <input
+                                      type="number"
+                                      value={v.price}
+                                      onChange={(e) => handleMatrixVariantChange(v.sku, "price", Number(e.target.value))}
+                                      className="w-20 px-2 py-1 border border-gray-200 dark:border-slate-700 rounded text-xs font-bold text-emerald-600 outline-none focus:border-purple-500 bg-white dark:bg-slate-900"
+                                    />
+                                  </td>
+                                  <td className="p-3">
+                                    <input
+                                      type="number"
+                                      value={v.compareAt}
+                                      onChange={(e) => handleMatrixVariantChange(v.sku, "compareAt", Number(e.target.value))}
+                                      className="w-20 px-2 py-1 border border-gray-200 dark:border-slate-700 rounded text-xs line-through text-gray-500 outline-none focus:border-purple-500 bg-white dark:bg-slate-900"
+                                    />
+                                  </td>
+                                  <td className="p-3">
+                                    <input
+                                      type="number"
+                                      value={v.inventory}
+                                      onChange={(e) => handleMatrixVariantChange(v.sku, "inventory", Number(e.target.value))}
+                                      className="w-16 px-2 py-1 border border-gray-200 dark:border-slate-700 rounded text-xs font-mono outline-none focus:border-purple-500 bg-white dark:bg-slate-900"
+                                    />
+                                  </td>
+                                  <td className="p-3 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveVariantRow(v.sku)}
+                                      className="text-gray-400 hover:text-red-600 p-1"
+                                      title="Remove variant"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
