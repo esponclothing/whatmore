@@ -5364,6 +5364,406 @@ export async function pushSingleProductToMetaAction(productId: string) {
   }
 }
 
+// -------------------------------------------------------------
+// PRODUCT MANAGEMENT: EDIT, DELETE, IMAGE QUICK-UPDATE & META SYNC
+// -------------------------------------------------------------
+
+async function safelyDeleteOrDeactivateProducts(ids: string[]) {
+  if (!ids || ids.length === 0) return { deleted: 0, deactivated: 0 };
+  
+  const [orders, quotes, pos, bills, notes, credits, invTrans] = await Promise.all([
+    prisma.orderItem.findMany({ where: { productId: { in: ids } }, select: { productId: true } }).catch(() => []),
+    prisma.quotationItem.findMany({ where: { productId: { in: ids } }, select: { productId: true } }).catch(() => []),
+    prisma.purchaseOrderItem.findMany({ where: { productId: { in: ids } }, select: { productId: true } }).catch(() => []),
+    prisma.billItem.findMany({ where: { productId: { in: ids } }, select: { productId: true } }).catch(() => []),
+    prisma.creditNoteItem.findMany({ where: { productId: { in: ids } }, select: { productId: true } }).catch(() => []),
+    prisma.vendorCreditItem.findMany({ where: { productId: { in: ids } }, select: { productId: true } }).catch(() => []),
+    prisma.inventoryTransaction.findMany({ where: { productId: { in: ids } }, select: { productId: true } }).catch(() => [])
+  ]);
+
+  const referencedIds = new Set<string>();
+  for (const item of [...orders, ...quotes, ...pos, ...bills, ...notes, ...credits, ...invTrans]) {
+    if (item.productId) referencedIds.add(item.productId);
+  }
+
+  const toDelete = ids.filter(id => !referencedIds.has(id));
+  const toDeactivate = ids.filter(id => referencedIds.has(id));
+
+  let deletedCount = 0;
+  let deactivatedCount = 0;
+
+  if (toDelete.length > 0) {
+    const delRes = await prisma.product.deleteMany({ where: { id: { in: toDelete } } });
+    deletedCount = delRes.count;
+  }
+  if (toDeactivate.length > 0) {
+    const deactRes = await prisma.product.updateMany({ where: { id: { in: toDeactivate } }, data: { status: "Inactive" } });
+    deactivatedCount = deactRes.count;
+  }
+
+  return { deleted: deletedCount, deactivated: deactivatedCount };
+}
+
+async function sendMetaCatalogBatch(requests: any[]) {
+  if (!requests || requests.length === 0) return { success: true, count: 0 };
+  try {
+    const integration = await prisma.whatsAppIntegration.findFirst({
+      where: { type: 'META_CATALOG', isActive: true }
+    });
+    if (!integration || !integration.url || !integration.token) {
+      return { success: false, error: "Meta Catalog is not connected." };
+    }
+    const catalogId = integration.url.trim();
+    const token = integration.token.trim();
+
+    // Chunk requests into batches of 50
+    const chunkSize = 50;
+    for (let i = 0; i < requests.length; i += chunkSize) {
+      const chunk = requests.slice(i, i + chunkSize);
+      const res = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(catalogId)}/items_batch?access_token=${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          item_type: "PRODUCT_ITEM",
+          requests: chunk
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        return { success: false, error: data.error?.message || "Meta items_batch error" };
+      }
+    }
+    return { success: true, count: requests.length };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function updateProductGroupAction(data: {
+  productIds: string[];
+  name: string;
+  category: string;
+  description: string;
+  primaryImage?: string;
+  variants: Array<{
+    id?: string;
+    sku: string;
+    variantTitle?: string;
+    color?: string;
+    size?: string;
+    price: number;
+    compareAt: number;
+    cost?: number;
+    inventory: number;
+    status?: string;
+    imageUrl?: string;
+    isNew?: boolean;
+    isDeleted?: boolean;
+  }>;
+  syncToMeta?: boolean;
+}) {
+  try {
+    const { productIds, name, category, description, primaryImage, variants, syncToMeta = true } = data;
+    if (!name.trim()) {
+      return { success: false, error: "Product name cannot be empty." };
+    }
+
+    const activeSetting = await prisma.whatsAppIntegration.findFirst({
+      where: { type: 'CATALOG_ACTIVE_SOURCE', isActive: true }
+    });
+    const currentPlatform = activeSetting?.url === 'SHOPIFY' ? 'SHOPIFY' : 'META';
+
+    const metaRequests: any[] = [];
+
+    // 1. Handle deleted variants
+    const deletedVariantIds = variants.filter(v => v.isDeleted && v.id).map(v => v.id!);
+    const remainingVariantIds = new Set(variants.filter(v => !v.isDeleted && v.id).map(v => v.id!));
+    for (const existingId of productIds) {
+      if (!remainingVariantIds.has(existingId) && !deletedVariantIds.includes(existingId)) {
+        deletedVariantIds.push(existingId);
+      }
+    }
+
+    if (deletedVariantIds.length > 0) {
+      const deletedProds = await prisma.product.findMany({
+        where: { id: { in: deletedVariantIds } },
+        select: { id: true, sku: true }
+      });
+      await safelyDeleteOrDeactivateProducts(deletedVariantIds);
+
+      if (syncToMeta) {
+        for (const p of deletedProds) {
+          if (p.sku) {
+            metaRequests.push({
+              method: "DELETE",
+              retailer_id: p.sku,
+              data: { id: p.sku }
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Process remaining & new variants
+    const activeVariants = variants.filter(v => !v.isDeleted);
+    const baseSubCategory = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+    for (const v of activeVariants) {
+      let variantName = name;
+      if (v.variantTitle && v.variantTitle !== "Default Variant" && v.variantTitle !== name) {
+        variantName = `${name} - ${v.variantTitle}`;
+      } else {
+        const parts = [v.color, v.size].filter(Boolean);
+        if (parts.length > 0) {
+          variantName = `${name} - ${parts.join(' / ')}`;
+        }
+      }
+
+      const pPrice = Number(v.price) || 0;
+      const pMrp = Number(v.compareAt) || pPrice;
+      const pCost = Number(v.cost) || Math.round(pPrice * 0.5);
+      const pStock = Number(v.inventory) || 0;
+      const pStatus = v.status || (pStock > 0 ? "Active" : "Out of Stock");
+      const vImage = v.imageUrl || primaryImage || null;
+
+      if (v.id && !v.isNew) {
+        // Update existing variant in DB
+        await prisma.product.update({
+          where: { id: v.id },
+          data: {
+            name: variantName,
+            category: category || "Apparel",
+            description: description || null,
+            color: v.color || null,
+            size: v.size || null,
+            sellingPrice: pPrice,
+            mrp: pMrp,
+            purchasePrice: pCost,
+            stockQuantity: pStock,
+            status: pStatus,
+            images: vImage ? [vImage] : []
+          }
+        });
+
+        if (syncToMeta && v.sku) {
+          const regularPriceCents = Math.round(pMrp * 100);
+          const salePriceCents = pPrice < pMrp ? Math.round(pPrice * 100) : undefined;
+          const itemData: any = {
+            id: v.sku,
+            title: variantName,
+            description: description || name,
+            availability: pStock > 0 ? "in stock" : "out of stock",
+            price: regularPriceCents,
+            image_url: vImage || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800",
+            category: category || "Apparel & Accessories > Clothing"
+          };
+          if (salePriceCents) itemData.sale_price = salePriceCents;
+          if (v.color) itemData.color = v.color;
+          if (v.size) itemData.size = v.size;
+          if (activeVariants.length > 1) itemData.item_group_id = baseSubCategory;
+
+          metaRequests.push({
+            method: "UPDATE",
+            retailer_id: v.sku,
+            data: itemData
+          });
+        }
+      } else {
+        // Create new variant
+        const genSku = v.sku || `${baseSubCategory.toUpperCase().slice(0, 8)}-${Date.now().toString(36).toUpperCase()}`;
+        await prisma.product.create({
+          data: {
+            name: variantName,
+            sku: genSku,
+            subCategory: baseSubCategory,
+            hsnCode: currentPlatform,
+            category: category || "Apparel",
+            description: description || null,
+            color: v.color || null,
+            size: v.size || null,
+            sellingPrice: pPrice,
+            mrp: pMrp,
+            purchasePrice: pCost,
+            stockQuantity: pStock,
+            status: pStatus,
+            images: vImage ? [vImage] : []
+          }
+        });
+
+        if (syncToMeta) {
+          const regularPriceCents = Math.round(pMrp * 100);
+          const salePriceCents = pPrice < pMrp ? Math.round(pPrice * 100) : undefined;
+          const itemData: any = {
+            id: genSku,
+            title: variantName,
+            description: description || name,
+            availability: pStock > 0 ? "in stock" : "out of stock",
+            price: regularPriceCents,
+            condition: "new",
+            url: `https://esponsports.com/products/${baseSubCategory.toLowerCase()}`,
+            image_url: vImage || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800",
+            brand: "Esponsports",
+            category: category || "Apparel & Accessories > Clothing"
+          };
+          if (salePriceCents) itemData.sale_price = salePriceCents;
+          if (v.color) itemData.color = v.color;
+          if (v.size) itemData.size = v.size;
+          if (activeVariants.length > 1) itemData.item_group_id = baseSubCategory;
+
+          metaRequests.push({
+            method: "CREATE",
+            retailer_id: genSku,
+            data: itemData
+          });
+        }
+      }
+    }
+
+    // 3. Push Meta batch updates if requested
+    let metaMessage = "";
+    if (syncToMeta && metaRequests.length > 0) {
+      const metaRes = await sendMetaCatalogBatch(metaRequests);
+      if (metaRes.success) {
+        metaMessage = ` (Synced ${metaRequests.length} changes to Meta Catalog)`;
+      } else {
+        metaMessage = ` (Meta batch notice: ${metaRes.error})`;
+      }
+    }
+
+    revalidatePath("/whatsapp/commerce");
+    return {
+      success: true,
+      message: `Product "${name}" updated successfully!${metaMessage}`
+    };
+  } catch (error: any) {
+    console.error("[Update Product Group Error]:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteProductGroupAction(data: {
+  productIds: string[];
+  skus: string[];
+  deleteFromMeta?: boolean;
+}) {
+  try {
+    const { productIds, skus, deleteFromMeta = true } = data;
+    if (!productIds || productIds.length === 0) {
+      return { success: false, error: "No products specified for deletion." };
+    }
+
+    const { deleted, deactivated } = await safelyDeleteOrDeactivateProducts(productIds);
+
+    let metaMsg = "";
+    if (deleteFromMeta && skus && skus.length > 0) {
+      const deleteRequests = skus.filter(Boolean).map(sku => ({
+        method: "DELETE",
+        retailer_id: sku,
+        data: { id: sku }
+      }));
+      const metaRes = await sendMetaCatalogBatch(deleteRequests);
+      if (metaRes.success) {
+        metaMsg = ` & deleted from Meta Catalog`;
+      } else {
+        metaMsg = ` (Meta Catalog notice: ${metaRes.error})`;
+      }
+    }
+
+    revalidatePath("/whatsapp/commerce");
+    return {
+      success: true,
+      message: `Product deleted successfully (${deleted} deleted, ${deactivated} archived)${metaMsg}.`
+    };
+  } catch (e: any) {
+    console.error("[Delete Product Group Error]:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+export async function deleteSingleProductAction(data: {
+  productId: string;
+  sku: string;
+  deleteFromMeta?: boolean;
+}) {
+  try {
+    const { productId, sku, deleteFromMeta = true } = data;
+    if (!productId) return { success: false, error: "Product ID required" };
+
+    const { deleted, deactivated } = await safelyDeleteOrDeactivateProducts([productId]);
+
+    let metaMsg = "";
+    if (deleteFromMeta && sku) {
+      const metaRes = await sendMetaCatalogBatch([
+        {
+          method: "DELETE",
+          retailer_id: sku,
+          data: { id: sku }
+        }
+      ]);
+      if (metaRes.success) {
+        metaMsg = ` & deleted from Meta Catalog`;
+      }
+    }
+
+    revalidatePath("/whatsapp/commerce");
+    return {
+      success: true,
+      message: `Variant ${deleted > 0 ? 'deleted' : 'archived'}${metaMsg}.`
+    };
+  } catch (e: any) {
+    console.error("[Delete Single Product Error]:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+export async function quickUpdateProductImageAction(data: {
+  productIds: string[];
+  imageUrl: string;
+  syncToMeta?: boolean;
+}) {
+  try {
+    const { productIds, imageUrl, syncToMeta = true } = data;
+    if (!productIds || productIds.length === 0 || !imageUrl) {
+      return { success: false, error: "Missing required product IDs or image URL." };
+    }
+
+    const prods = await prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true, sku: true, name: true }
+    });
+
+    await prisma.product.updateMany({
+      where: { id: { in: productIds } },
+      data: { images: [imageUrl] }
+    });
+
+    let metaMsg = "";
+    if (syncToMeta) {
+      const updateRequests = prods.filter(p => p.sku).map(p => ({
+        method: "UPDATE",
+        retailer_id: p.sku!,
+        data: {
+          id: p.sku!,
+          image_url: imageUrl
+        }
+      }));
+      const metaRes = await sendMetaCatalogBatch(updateRequests);
+      if (metaRes.success) {
+        metaMsg = " & updated in Meta Catalog";
+      }
+    }
+
+    revalidatePath("/whatsapp/commerce");
+    return {
+      success: true,
+      message: `Product image updated successfully${metaMsg}!`
+    };
+  } catch (e: any) {
+    console.error("[Quick Update Image Error]:", e);
+    return { success: false, error: e.message };
+  }
+}
+
 export async function getTeamMembersAction() {
   try {
     const employees = await prisma.employee.findMany({

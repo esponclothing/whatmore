@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Search, CheckCircle2, AlertTriangle, RefreshCw, Plus, Store, ExternalLink, 
   Eye, EyeOff, ShoppingBag, Sparkles, X, Image as ImageIcon, Tag, Layers, ArrowUpRight,
-  Upload, Trash2, Check, Sliders, ChevronDown, CheckSquare, Square
+  Upload, Trash2, Check, Sliders, ChevronDown, CheckSquare, Square, Edit3, Trash
 } from "lucide-react";
 import Link from "next/link";
 import { 
@@ -18,8 +18,61 @@ import {
   pushSingleProductToMetaAction,
   getActiveCatalogPlatformAction,
   switchActiveCatalogPlatformAction,
-  deleteInactiveProductsAction
+  deleteInactiveProductsAction,
+  updateProductGroupAction,
+  deleteProductGroupAction,
+  deleteSingleProductAction,
+  quickUpdateProductImageAction
 } from "@/app/actions/whatsAppPlatformActions";
+
+// Graceful product thumbnail with 404 error suppression and hover device photo upload
+export function ProductThumbnail({ 
+  src, 
+  alt = "", 
+  className = "w-11 h-11", 
+  onQuickUpload 
+}: { 
+  src?: string; 
+  alt?: string; 
+  className?: string; 
+  onQuickUpload?: () => void; 
+}) {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
+
+  return (
+    <div className={`relative group/thumb bg-gray-100 dark:bg-slate-700 rounded-xl flex items-center justify-center overflow-hidden border border-gray-200 dark:border-slate-700 shrink-0 ${className}`}>
+      {src && !hasError ? (
+        <img 
+          src={src} 
+          alt="" 
+          onError={() => setHasError(true)} 
+          className="w-full h-full object-cover" 
+        />
+      ) : (
+        <Store size={18} className="text-gray-400" />
+      )}
+      {onQuickUpload && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onQuickUpload();
+          }}
+          className="absolute inset-0 bg-black/65 opacity-0 group-hover/thumb:opacity-100 flex flex-col items-center justify-center text-white transition-opacity text-[9px] font-bold cursor-pointer"
+          title="Upload new photo from device"
+        >
+          <Upload size={12} />
+          <span className="leading-tight mt-0.5">Upload</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 
 // Shopify-style Preset Option Definitions with Quick Value Suggestions
 export const PRESET_OPTION_DEFINITIONS = [
@@ -137,6 +190,262 @@ export default function ProductsCommercePage() {
 
   // Generated variant matrix
   const [variantsMatrix, setVariantsMatrix] = useState<VariantMatrixItem[]>([]);
+
+  // -------------------------------------------------------------
+  // Product Edit Modal State
+  // -------------------------------------------------------------
+  const [editingGroup, setEditingGroup] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    category: "Apparel",
+    description: "",
+    primaryImage: "",
+    syncToMeta: true
+  });
+  const [editVariants, setEditVariants] = useState<Array<{
+    id?: string;
+    sku: string;
+    variantTitle: string;
+    color: string;
+    size: string;
+    price: number;
+    compareAt: number;
+    cost: number;
+    inventory: number;
+    status: string;
+    imageUrl: string;
+    isNew?: boolean;
+    isDeleted?: boolean;
+  }>>([]);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isUploadingEditPrimaryImage, setIsUploadingEditPrimaryImage] = useState(false);
+  const [uploadingEditVariantSku, setUploadingEditVariantSku] = useState<string | null>(null);
+  const editFileInputRef = useRef<HTMLInputElement | null>(null);
+  const editVariantFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [activeUploadVariantSku, setActiveUploadVariantSku] = useState<string | null>(null);
+
+  // -------------------------------------------------------------
+  // Product Delete Confirmation States
+  // -------------------------------------------------------------
+  const [deletingGroup, setDeletingGroup] = useState<any | null>(null);
+  const [deleteFromMeta, setDeleteFromMeta] = useState(true);
+  const [isDeletingGroup, setIsDeletingGroup] = useState(false);
+
+  const [deletingVariant, setDeletingVariant] = useState<{ group: any; variant: any } | null>(null);
+  const [deleteVariantFromMeta, setDeleteVariantFromMeta] = useState(true);
+  const [isDeletingVariant, setIsDeletingVariant] = useState(false);
+
+  // -------------------------------------------------------------
+  // Quick Image Upload State (from table hover)
+  // -------------------------------------------------------------
+  const [quickUploadGroup, setQuickUploadGroup] = useState<any | null>(null);
+  const quickFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Open Edit Modal for a Product Group
+  const handleOpenEditModal = (group: any) => {
+    setEditingGroup(group);
+    setEditForm({
+      name: group.baseName,
+      category: group.collection || group.variants[0]?.category || "Apparel",
+      description: group.description || "",
+      primaryImage: group.image || "",
+      syncToMeta: metaCatalog.isConnected
+    });
+    setEditVariants(
+      group.variants.map((v: any) => ({
+        id: v.dbId,
+        sku: v.sku || "",
+        variantTitle: v.variantTitle || "Default Variant",
+        color: v.color || "",
+        size: v.size || "",
+        price: v.price || 0,
+        compareAt: v.compareAt || v.price || 0,
+        cost: v.cost || Math.round((v.price || 0) * 0.5),
+        inventory: v.inventory ?? 20,
+        status: v.status || "Active",
+        imageUrl: v.image || group.image || "",
+        isNew: false,
+        isDeleted: false
+      }))
+    );
+  };
+
+  // Edit Variant matrix row updater
+  const handleEditVariantField = (sku: string, field: string, val: any) => {
+    setEditVariants(prev => prev.map(v => v.sku === sku ? { ...v, [field]: val } : v));
+  };
+
+  const handleMarkVariantDeleted = (sku: string) => {
+    const remaining = editVariants.filter(v => !v.isDeleted && v.sku !== sku);
+    if (remaining.length === 0) {
+      showToast("A product must keep at least 1 variant. To delete the whole product, use Delete Product instead.", "error");
+      return;
+    }
+    setEditVariants(prev => prev.map(v => v.sku === sku ? { ...v, isDeleted: true } : v));
+  };
+
+  const handleAddVariantToEdit = () => {
+    const count = editVariants.filter(v => !v.isDeleted).length + 1;
+    const baseClean = editForm.name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || "PROD";
+    const genSku = `${baseClean}-VAR-${Date.now().toString(36).toUpperCase()}-${count}`;
+    const firstActive = editVariants.find(v => !v.isDeleted);
+    
+    setEditVariants(prev => [
+      ...prev,
+      {
+        sku: genSku,
+        variantTitle: `New Variant ${count}`,
+        color: "",
+        size: "",
+        price: firstActive ? firstActive.price : 999,
+        compareAt: firstActive ? firstActive.compareAt : 1999,
+        cost: firstActive ? firstActive.cost : 499,
+        inventory: 20,
+        status: "Active",
+        imageUrl: editForm.primaryImage || "",
+        isNew: true,
+        isDeleted: false
+      }
+    ]);
+  };
+
+  // Direct Image Upload for Edit Modal
+  const handleEditImageUpload = async (file: File, variantSku?: string) => {
+    if (!file) return;
+    if (variantSku) {
+      setUploadingEditVariantSku(variantSku);
+    } else {
+      setIsUploadingEditPrimaryImage(true);
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/whatsapp/upload-product-image", {
+        method: "POST",
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success && data.url) {
+        if (variantSku) {
+          setEditVariants(prev => prev.map(v => v.sku === variantSku ? { ...v, imageUrl: data.url } : v));
+          showToast("Variant photo updated!", "success");
+        } else {
+          setEditForm(prev => ({ ...prev, primaryImage: data.url }));
+          setEditVariants(prev => prev.map(v => v.imageUrl ? v : { ...v, imageUrl: data.url }));
+          showToast("Primary product photo updated!", "success");
+        }
+      } else {
+        showToast(data.error || "Upload failed", "error");
+      }
+    } catch (e: any) {
+      showToast("Image upload error: " + e.message, "error");
+    } finally {
+      setIsUploadingEditPrimaryImage(false);
+      setUploadingEditVariantSku(null);
+    }
+  };
+
+  // Save Edit Product Group changes
+  const handleSaveEditProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editForm.name.trim()) {
+      showToast("Product name cannot be empty.", "error");
+      return;
+    }
+
+    const activeVars = editVariants.filter(v => !v.isDeleted);
+    if (activeVars.length === 0) {
+      showToast("Product must have at least one active variant.", "error");
+      return;
+    }
+
+    setIsSavingEdit(true);
+    try {
+      const productIds = editingGroup.variants.map((v: any) => v.dbId).filter(Boolean);
+      const res = await updateProductGroupAction({
+        productIds,
+        name: editForm.name,
+        category: editForm.category,
+        description: editForm.description,
+        primaryImage: editForm.primaryImage,
+        variants: editVariants,
+        syncToMeta: editForm.syncToMeta
+      });
+
+      if (res.success) {
+        showToast(res.message || "Product updated successfully!", "success");
+        await fetchProducts();
+        setEditingGroup(null);
+      } else {
+        showToast("Update error: " + res.error, "error");
+      }
+    } catch (e: any) {
+      showToast("Failed to update product: " + e.message, "error");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Confirm Delete Product Group
+  const handleConfirmDeleteGroup = async () => {
+    if (!deletingGroup) return;
+    setIsDeletingGroup(true);
+    try {
+      const productIds = deletingGroup.variants.map((v: any) => v.dbId).filter(Boolean);
+      const skus = deletingGroup.variants.map((v: any) => v.sku).filter(Boolean);
+
+      const res = await deleteProductGroupAction({
+        productIds,
+        skus,
+        deleteFromMeta
+      });
+
+      if (res.success) {
+        showToast(res.message || "Product deleted successfully!", "success");
+        await fetchProducts();
+        setDeletingGroup(null);
+      } else {
+        showToast("Delete failed: " + res.error, "error");
+      }
+    } catch (e: any) {
+      showToast("Error deleting product: " + e.message, "error");
+    } finally {
+      setIsDeletingGroup(false);
+    }
+  };
+
+  // Confirm Delete Single Variant
+  const handleConfirmDeleteSingleVariant = async () => {
+    if (!deletingVariant) return;
+    setIsDeletingVariant(true);
+    try {
+      const res = await deleteSingleProductAction({
+        productId: deletingVariant.variant.dbId,
+        sku: deletingVariant.variant.sku,
+        deleteFromMeta: deleteVariantFromMeta
+      });
+
+      if (res.success) {
+        showToast(res.message || "Variant deleted successfully!", "success");
+        await fetchProducts();
+        setDeletingVariant(null);
+      } else {
+        showToast("Delete failed: " + res.error, "error");
+      }
+    } catch (e: any) {
+      showToast("Error deleting variant: " + e.message, "error");
+    } finally {
+      setIsDeletingVariant(false);
+    }
+  };
+
+  // Quick image change trigger from table thumbnail
+  const handleQuickImageClick = (group: any) => {
+    setQuickUploadGroup(group);
+    quickFileInputRef.current?.click();
+  };
 
   const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
     setToast({ message, type });
@@ -1031,18 +1340,18 @@ export default function ProductsCommercePage() {
                         <div className="flex items-center gap-3">
                           <button 
                             onClick={() => toggleGroup(group.baseName)}
-                            className="text-gray-400 hover:text-indigo-600 transition-colors p-1"
+                            className="text-gray-400 hover:text-indigo-600 transition-colors p-1 cursor-pointer"
                             title={isExpanded ? "Collapse variants" : "Expand variants"}
                           >
                             <span className="text-base font-mono">{isExpanded ? "▼" : "▶"}</span>
                           </button>
-                          <div className="w-11 h-11 bg-gray-100 dark:bg-slate-700 rounded-xl flex items-center justify-center overflow-hidden border border-gray-200 dark:border-slate-700 shrink-0">
-                            {group.image ? (
-                              <img src={group.image} alt={group.baseName} className="w-full h-full object-cover" />
-                            ) : (
-                              <Store size={20} className="text-gray-400" />
-                            )}
-                          </div>
+                          
+                          <ProductThumbnail
+                            src={group.image}
+                            alt={group.baseName}
+                            onQuickUpload={() => handleQuickImageClick(group)}
+                          />
+
                           <div>
                             <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                               {group.baseName}
@@ -1100,12 +1409,35 @@ export default function ProductsCommercePage() {
                       </td>
                       <td className="px-6 py-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
+                          {/* Edit Button */}
+                          <button
+                            onClick={() => handleOpenEditModal(group)}
+                            className="inline-flex items-center gap-1 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900/60 px-2.5 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800 transition-colors font-bold shadow-2xs cursor-pointer"
+                            title="Edit product details, photos & variants"
+                          >
+                            <Edit3 size={13} />
+                            <span>Edit</span>
+                          </button>
+
+                          {/* Toggle All Button */}
                           <button
                             onClick={() => handleToggleAllVisibility(group.variants)}
-                            className="text-xs bg-white hover:bg-indigo-50 hover:text-indigo-600 text-gray-700 dark:text-gray-300 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 transition-colors font-bold shadow-2xs"
+                            className="text-xs bg-white hover:bg-slate-100 text-gray-700 dark:text-gray-300 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 transition-colors font-semibold shadow-2xs cursor-pointer"
                             title="Hide or Unhide all variants in this product"
                           >
                             Toggle All
+                          </button>
+
+                          {/* Delete Product Button */}
+                          <button
+                            onClick={() => {
+                              setDeletingGroup(group);
+                              setDeleteFromMeta(group.variants[0]?.platform === 'META');
+                            }}
+                            className="inline-flex items-center gap-1 text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 dark:hover:bg-rose-900/60 p-1.5 rounded-lg border border-rose-200 dark:border-rose-800 transition-colors font-bold shadow-2xs cursor-pointer"
+                            title="Delete this product group and all its variants"
+                          >
+                            <Trash2 size={13} />
                           </button>
                         </div>
                       </td>
@@ -1114,12 +1446,16 @@ export default function ProductsCommercePage() {
                     {/* Variants Child Rows */}
                     {isExpanded && group.variants.map((v) => (
                       <tr key={v.id} className="bg-slate-50/20 dark:bg-slate-900/30 hover:bg-indigo-50/10 dark:hover:bg-slate-800/20 border-b border-gray-100 dark:border-slate-800 transition-colors group">
-                        <td className="px-6 py-3 pl-14">
-                          <div className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0"></div>
+                        <td className="px-6 py-3 pl-12">
+                          <div className="flex items-center gap-2.5">
+                            <ProductThumbnail
+                              src={v.image || group.image}
+                              alt={v.variantTitle}
+                              className="w-8 h-8 rounded-lg"
+                            />
                             <div>
                               <div className="flex items-center gap-2">
-                                <p className="font-semibold text-gray-800 dark:text-gray-200">{v.variantTitle}</p>
+                                <p className="font-semibold text-gray-800 dark:text-gray-200 text-xs">{v.variantTitle}</p>
                                 {v.color && (
                                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
                                     {v.color}
@@ -1218,6 +1554,18 @@ export default function ProductsCommercePage() {
                               title={v.status === "Active" ? "Hide Variant" : "Unhide Variant"}
                             >
                               {v.status === "Active" ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+
+                            {/* Delete Variant */}
+                            <button
+                              onClick={() => {
+                                setDeletingVariant({ group, variant: v });
+                                setDeleteVariantFromMeta(v.platform === 'META');
+                              }}
+                              className="p-1.5 rounded-md text-rose-500 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
+                              title="Delete this variant"
+                            >
+                              <Trash2 size={14} />
                             </button>
                           </div>
                         </td>
@@ -1940,6 +2288,551 @@ export default function ProductsCommercePage() {
           </div>
         </div>
       )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* EDIT PRODUCT & VARIANTS MODAL */}
+      {/* ------------------------------------------------------------- */}
+      {editingGroup && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl border border-gray-100 dark:border-slate-800 my-8 animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center bg-gradient-to-r from-indigo-50/60 via-purple-50/40 to-transparent dark:from-indigo-950/30 dark:to-transparent shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/20">
+                  <Edit3 size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">Edit Product & Variants</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Update product details, photos, prices, stock, and sync live to Meta Catalog
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setEditingGroup(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 flex items-center justify-center text-gray-500 transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form onSubmit={handleSaveEditProduct} className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Section 1: Base Details & Primary Image */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Primary Photo Box */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                    Primary Product Photo
+                  </label>
+                  
+                  <div className="border-2 border-dashed border-gray-200 dark:border-slate-700 rounded-2xl p-3 flex flex-col items-center justify-center gap-2 relative bg-gray-50/50 dark:bg-slate-800/30 min-h-[170px]">
+                    {editForm.primaryImage ? (
+                      <div className="w-full flex flex-col items-center gap-2">
+                        <div className="w-24 h-24 rounded-xl overflow-hidden shadow-sm border border-gray-200 dark:border-slate-700 relative group">
+                          <img 
+                            src={editForm.primaryImage} 
+                            alt="" 
+                            className="w-full h-full object-cover" 
+                            onError={(e) => {
+                              (e.target as any).src = "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800";
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setEditForm({ ...editForm, primaryImage: "" })}
+                            className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                            title="Remove photo"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => editFileInputRef.current?.click()}
+                          disabled={isUploadingEditPrimaryImage}
+                          className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          {isUploadingEditPrimaryImage ? <RefreshCw size={12} className="animate-spin" /> : <Upload size={12} />}
+                          <span>{isUploadingEditPrimaryImage ? "Uploading..." : "Replace from Device"}</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div 
+                        onClick={() => editFileInputRef.current?.click()}
+                        className="flex flex-col items-center justify-center text-center cursor-pointer p-3 w-full"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-1">
+                          {isUploadingEditPrimaryImage ? <RefreshCw size={18} className="animate-spin" /> : <Upload size={18} />}
+                        </div>
+                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                          {isUploadingEditPrimaryImage ? "Uploading..." : "Upload Device Photo"}
+                        </span>
+                        <span className="text-[10px] text-gray-400 mt-0.5">JPG, PNG, WEBP up to 10MB</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Base Product Information */}
+                <div className="md:col-span-2 space-y-4">
+                  <div>
+                    <label className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 block">
+                      Product Name / Title *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      placeholder="e.g. Pro NS Terry Lycra Track Pants"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-gray-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 block">
+                        Category / Collection
+                      </label>
+                      <input
+                        type="text"
+                        value={editForm.category}
+                        onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                        placeholder="e.g. Track Pants"
+                        className="w-full px-3.5 py-2 rounded-xl border border-gray-200 dark:border-slate-700 text-xs bg-white dark:bg-slate-900 outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 block">
+                        Brand
+                      </label>
+                      <input
+                        type="text"
+                        defaultValue="Esponsports"
+                        readOnly
+                        className="w-full px-3.5 py-2 rounded-xl border border-gray-200 dark:border-slate-700 text-xs bg-gray-50 dark:bg-slate-800 text-gray-500 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 block">
+                      Description
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={editForm.description}
+                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                      placeholder="Product features, fabric specification, wash care..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-gray-200 dark:border-slate-700 text-xs bg-white dark:bg-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Variant Matrix Table */}
+              <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      <span>Variants Matrix</span>
+                      <span className="text-xs bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 px-2 py-0.5 rounded-full font-bold">
+                        {editVariants.filter(v => !v.isDeleted).length} active
+                      </span>
+                    </h3>
+                    <p className="text-xs text-gray-500">Edit variant details, individual photos, prices, inventory, or add new variants</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddVariantToEdit}
+                    className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus size={13} />
+                    <span>Add Variant</span>
+                  </button>
+                </div>
+
+                <div className="border border-gray-200 dark:border-slate-800 rounded-2xl overflow-x-auto shadow-2xs">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-gray-50 dark:bg-slate-800/80 text-gray-600 dark:text-gray-400 font-bold border-b border-gray-200 dark:border-slate-800 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-3 py-2.5">Photo</th>
+                        <th className="px-3 py-2.5 min-w-[140px]">Variant Title / Option</th>
+                        <th className="px-3 py-2.5 min-w-[110px]">SKU</th>
+                        <th className="px-3 py-2.5">Price (₹)</th>
+                        <th className="px-3 py-2.5">Compare (₹)</th>
+                        <th className="px-3 py-2.5">Cost (₹)</th>
+                        <th className="px-3 py-2.5">Stock</th>
+                        <th className="px-3 py-2.5">Status</th>
+                        <th className="px-3 py-2.5 text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+                      {editVariants.filter(v => !v.isDeleted).map((v) => (
+                        <tr key={v.sku} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                          {/* Photo picker */}
+                          <td className="px-3 py-2">
+                            <div 
+                              onClick={() => {
+                                setActiveUploadVariantSku(v.sku);
+                                editVariantFileInputRef.current?.click();
+                              }}
+                              className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 overflow-hidden flex items-center justify-center cursor-pointer hover:border-indigo-500 relative group"
+                              title="Click to upload/change photo for this variant"
+                            >
+                              {v.imageUrl ? (
+                                <img 
+                                  src={v.imageUrl} 
+                                  alt="" 
+                                  className="w-full h-full object-cover" 
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLElement).style.display = 'none';
+                                    (e.currentTarget.parentElement?.querySelector('.fallback-icon') as HTMLElement | null)?.classList.remove('hidden');
+                                  }}
+                                />
+                              ) : null}
+                              <ImageIcon size={14} className={`text-gray-400 fallback-icon ${v.imageUrl ? 'hidden' : ''}`} />
+                              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                                <Upload size={11} />
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Variant Title */}
+                          <td className="px-3 py-2">
+                            <input
+                              type="text"
+                              value={v.variantTitle}
+                              onChange={(e) => handleEditVariantField(v.sku, 'variantTitle', e.target.value)}
+                              className="w-full px-2 py-1 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-1 focus:ring-indigo-500 font-semibold"
+                            />
+                          </td>
+
+                          {/* SKU */}
+                          <td className="px-3 py-2 font-mono text-[11px] text-gray-500">
+                            {v.sku}
+                          </td>
+
+                          {/* Price */}
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              value={v.price}
+                              onChange={(e) => handleEditVariantField(v.sku, 'price', Number(e.target.value) || 0)}
+                              className="w-20 px-2 py-1 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-1 focus:ring-indigo-500 font-semibold text-gray-900 dark:text-white"
+                            />
+                          </td>
+
+                          {/* Compare At (MRP) */}
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              value={v.compareAt}
+                              onChange={(e) => handleEditVariantField(v.sku, 'compareAt', Number(e.target.value) || 0)}
+                              className="w-20 px-2 py-1 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-gray-500"
+                            />
+                          </td>
+
+                          {/* Cost */}
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              value={v.cost}
+                              onChange={(e) => handleEditVariantField(v.sku, 'cost', Number(e.target.value) || 0)}
+                              className="w-18 px-2 py-1 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-gray-500"
+                            />
+                          </td>
+
+                          {/* Stock Inventory */}
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              value={v.inventory}
+                              onChange={(e) => handleEditVariantField(v.sku, 'inventory', Number(e.target.value) || 0)}
+                              className="w-16 px-2 py-1 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                            />
+                          </td>
+
+                          {/* Status */}
+                          <td className="px-3 py-2">
+                            <select
+                              value={v.status}
+                              onChange={(e) => handleEditVariantField(v.sku, 'status', e.target.value)}
+                              className="px-2 py-1 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold outline-none cursor-pointer"
+                            >
+                              <option value="Active">Active</option>
+                              <option value="Inactive">Inactive</option>
+                              <option value="Out of Stock">Out of Stock</option>
+                            </select>
+                          </td>
+
+                          {/* Action Delete */}
+                          <td className="px-3 py-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleMarkVariantDeleted(v.sku)}
+                              className="p-1 rounded-lg text-rose-500 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
+                              title="Delete variant"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Section 3: Meta Commerce Catalog Sync Option */}
+              {metaCatalog.isConnected && (
+                <div className="bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-900/40 rounded-2xl p-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0">
+                      <ShoppingBag size={16} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-900 dark:text-white">Sync Changes to Meta Catalog</p>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                        Automatically pushes updated title, prices, inventory and photos to your live WhatsApp Commerce Catalog ({metaCatalog.catalogName}).
+                      </p>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={editForm.syncToMeta}
+                      onChange={(e) => setEditForm({ ...editForm, syncToMeta: e.target.checked })}
+                      className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-purple-900 dark:text-purple-300">Sync Live</span>
+                  </label>
+                </div>
+              )}
+
+              {/* Modal Footer */}
+              <div className="pt-4 border-t border-gray-100 dark:border-slate-800 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeletingGroup(editingGroup);
+                    setDeleteFromMeta(editingGroup.variants[0]?.platform === 'META');
+                    setEditingGroup(null);
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 border border-rose-200 dark:border-rose-900 transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 size={13} />
+                  <span>Delete Entire Product</span>
+                </button>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditingGroup(null)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-slate-800 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingEdit}
+                    className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                  >
+                    {isSavingEdit ? <RefreshCw size={13} className="animate-spin" /> : <Check size={14} />}
+                    <span>{isSavingEdit ? "Saving Changes..." : "Save Product Changes"}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* DELETE PRODUCT GROUP MODAL */}
+      {/* ------------------------------------------------------------- */}
+      {deletingGroup && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-11 h-11 rounded-2xl bg-rose-100 dark:bg-rose-950/60 flex items-center justify-center shrink-0">
+                <Trash2 size={22} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900 dark:text-white">Delete Product</h3>
+                <p className="text-xs text-gray-500">Permanently delete or archive</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+              Are you sure you want to delete <strong className="text-gray-900 dark:text-white">{deletingGroup.baseName}</strong> and all <strong className="text-gray-900 dark:text-white">{deletingGroup.variants.length} variant{deletingGroup.variants.length > 1 ? 's' : ''}</strong>?
+            </p>
+
+            {metaCatalog.isConnected && (
+              <label className="flex items-start gap-2.5 p-3 rounded-xl bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-800/40 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={deleteFromMeta} 
+                  onChange={(e) => setDeleteFromMeta(e.target.checked)} 
+                  className="mt-0.5 rounded text-purple-600 focus:ring-purple-500 cursor-pointer" 
+                />
+                <div className="text-xs">
+                  <span className="font-bold text-purple-900 dark:text-purple-200">Also delete from Meta Commerce Catalog</span>
+                  <p className="text-purple-700/80 dark:text-purple-300/80 mt-0.5 text-[11px]">
+                    Removes these SKUs from your WhatsApp Commerce Catalog immediately.
+                  </p>
+                </div>
+              </label>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setDeletingGroup(null)}
+                disabled={isDeletingGroup}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDeleteGroup}
+                disabled={isDeletingGroup}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/20 flex items-center gap-2 cursor-pointer transition-all disabled:opacity-60"
+              >
+                {isDeletingGroup ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                <span>{isDeletingGroup ? "Deleting..." : "Confirm Delete"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* DELETE SINGLE VARIANT MODAL */}
+      {/* ------------------------------------------------------------- */}
+      {deletingVariant && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 dark:bg-rose-950/60 flex items-center justify-center shrink-0">
+                <Trash2 size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900 dark:text-white">Delete Variant</h3>
+                <p className="text-xs text-gray-500 font-mono">SKU: {deletingVariant.variant.sku}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+              Delete variant <strong className="text-gray-900 dark:text-white">{deletingVariant.variant.variantTitle}</strong> from <strong className="text-gray-900 dark:text-white">{deletingVariant.group.baseName}</strong>?
+            </p>
+
+            {metaCatalog.isConnected && (
+              <label className="flex items-start gap-2.5 p-3 rounded-xl bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-800/40 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={deleteVariantFromMeta} 
+                  onChange={(e) => setDeleteVariantFromMeta(e.target.checked)} 
+                  className="mt-0.5 rounded text-purple-600 focus:ring-purple-500 cursor-pointer" 
+                />
+                <div className="text-xs">
+                  <span className="font-bold text-purple-900 dark:text-purple-200">Also delete from Meta Commerce Catalog</span>
+                </div>
+              </label>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setDeletingVariant(null)}
+                disabled={isDeletingVariant}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDeleteSingleVariant}
+                disabled={isDeletingVariant}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/20 flex items-center gap-2 cursor-pointer transition-all disabled:opacity-60"
+              >
+                {isDeletingVariant ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                <span>{isDeletingVariant ? "Deleting..." : "Confirm Delete"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* HIDDEN FILE INPUTS FOR DIRECT DEVICE IMAGE PICKING */}
+      {/* ------------------------------------------------------------- */}
+      {/* 1. Primary photo upload for Edit Modal */}
+      <input
+        type="file"
+        ref={editFileInputRef}
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleEditImageUpload(file);
+          if (editFileInputRef.current) editFileInputRef.current.value = "";
+        }}
+      />
+
+      {/* 2. Variant photo upload for Edit Modal */}
+      <input
+        type="file"
+        ref={editVariantFileInputRef}
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file && activeUploadVariantSku) {
+            handleEditImageUpload(file, activeUploadVariantSku);
+          }
+          if (editVariantFileInputRef.current) editVariantFileInputRef.current.value = "";
+          setActiveUploadVariantSku(null);
+        }}
+      />
+
+      {/* 3. Quick photo upload directly from table hover */}
+      <input
+        type="file"
+        ref={quickFileInputRef}
+        accept="image/*"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (!file || !quickUploadGroup) return;
+          try {
+            showToast("Uploading replacement photo...", "info");
+            const formData = new FormData();
+            formData.append("file", file);
+            const res = await fetch("/api/whatsapp/upload-product-image", { method: "POST", body: formData });
+            const data = await res.json();
+            if (data.success && data.url) {
+              const productIds = quickUploadGroup.variants.map((v: any) => v.dbId).filter(Boolean);
+              const updRes = await quickUpdateProductImageAction({
+                productIds,
+                imageUrl: data.url,
+                syncToMeta: metaCatalog.isConnected
+              });
+              if (updRes.success) {
+                showToast(updRes.message, "success");
+                await fetchProducts();
+              } else {
+                showToast("Failed to update photo: " + updRes.error, "error");
+              }
+            } else {
+              showToast("Upload failed: " + data.error, "error");
+            }
+          } catch (err: any) {
+            showToast("Error updating photo: " + err.message, "error");
+          } finally {
+            setQuickUploadGroup(null);
+            if (quickFileInputRef.current) quickFileInputRef.current.value = "";
+          }
+        }}
+      />
     </div>
   );
 }
