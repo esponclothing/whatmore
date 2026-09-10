@@ -171,7 +171,7 @@ export default function ProductsCommercePage() {
         dbId: p.id,
         name: p.name,
         sku: p.sku || "",
-        articleNumber: p.articleNumber || "",
+        articleNumber: p.subCategory || p.articleNumber || "",
         price: p.sellingPrice || 0,
         compareAt: p.mrp || 0,
         cost: p.purchasePrice || 0,

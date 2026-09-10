@@ -4826,7 +4826,8 @@ export async function syncMetaCatalogProductsAction() {
         where: { sku },
         update: {
           name: displayName,
-          articleNumber: mp.product_group?.retailer_id || null,
+          articleNumber: null,
+          subCategory: mp.product_group?.retailer_id || null,
           description: mp.description || null,
           category: mp.category || mp.brand || "Meta Catalog",
           color: mp.color || null,
@@ -4841,7 +4842,8 @@ export async function syncMetaCatalogProductsAction() {
         create: {
           name: displayName,
           sku,
-          articleNumber: mp.product_group?.retailer_id || null,
+          articleNumber: null,
+          subCategory: mp.product_group?.retailer_id || null,
           description: mp.description || null,
           category: mp.category || mp.brand || "Meta Catalog",
           color: mp.color || null,
@@ -4948,7 +4950,8 @@ export async function createAndPushCatalogProductAction(data: {
         where: { sku: v.sku },
         update: {
           name: variantName,
-          articleNumber: baseSku,
+          articleNumber: null,
+          subCategory: baseSku,
           description,
           category,
           color: v.color || null,
@@ -4963,7 +4966,8 @@ export async function createAndPushCatalogProductAction(data: {
         create: {
           name: variantName,
           sku: v.sku,
-          articleNumber: baseSku,
+          articleNumber: null,
+          subCategory: baseSku,
           description,
           category,
           color: v.color || null,
@@ -5109,7 +5113,7 @@ export async function pushSingleProductToMetaAction(productId: string) {
       availability: product.stockQuantity > 0 ? "in stock" : "out of stock",
       condition: "new",
       price: regularPriceCents,
-      url: `https://esponsports.com/products/${(product.articleNumber || sku).toLowerCase()}`,
+      url: `https://esponsports.com/products/${(product.subCategory || product.articleNumber || sku).toLowerCase()}`,
       image_url: product.images?.[0] || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800",
       brand: "Esponsports",
       category: product.category || "Apparel & Accessories > Clothing"
@@ -5118,7 +5122,8 @@ export async function pushSingleProductToMetaAction(productId: string) {
     if (salePriceCents) itemData.sale_price = salePriceCents;
     if (product.color) itemData.color = product.color;
     if (product.size) itemData.size = product.size;
-    if (product.articleNumber) itemData.item_group_id = product.articleNumber;
+    const groupIdentifier = product.subCategory || product.articleNumber;
+    if (groupIdentifier) itemData.item_group_id = groupIdentifier;
 
     const batchRes = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(catalogId)}/items_batch?access_token=${encodeURIComponent(token)}`, {
       method: "POST",
