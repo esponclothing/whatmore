@@ -243,6 +243,8 @@ export async function POST(req: NextRequest) {
       const proxyMediaUrl = mediaId ? `/api/whatsapp/media/${mediaId}` : null;
       
       let textContent = "[Message]";
+      let orderMetadata: any = null;
+
       if (msg.text?.body) {
         textContent = msg.text.body;
       } else if (msg.button?.text) {
@@ -270,6 +272,84 @@ export async function POST(req: NextRequest) {
           });
         } catch (_) {
           summary += `Raw response: ${flowReply.response_json}`;
+        }
+        textContent = summary.trim();
+      } else if (msg.type === "order" || msg.order || (msg.interactive && msg.interactive.type === "order_details")) {
+        const orderData = msg.order || msg.interactive?.order_details || {};
+        const catalogId = orderData.catalog_id || "";
+        const customerNote = orderData.text || "";
+        const rawItems = Array.isArray(orderData.product_items) ? orderData.product_items : [];
+
+        // Enrich items with database product info
+        const enrichedItems = await Promise.all(
+          rawItems.map(async (item: any) => {
+            const retailerId = String(item.product_retailer_id || "").trim();
+            const qty = Math.max(1, parseInt(String(item.quantity || "1"), 10) || 1);
+
+            let dbProd = null;
+            if (retailerId) {
+              dbProd = await prisma.product.findFirst({
+                where: {
+                  OR: [
+                    { sku: retailerId },
+                    { articleNumber: retailerId },
+                    { id: retailerId }
+                  ]
+                }
+              });
+            }
+
+            let price = 0;
+            if (item.item_price !== undefined && item.item_price !== null) {
+              const rawP = parseFloat(String(item.item_price));
+              if (dbProd && (rawP === Math.round(dbProd.sellingPrice * 100) || rawP === Math.round(dbProd.mrp * 100))) {
+                price = rawP / 100;
+              } else {
+                price = rawP;
+              }
+            } else if (dbProd) {
+              price = dbProd.sellingPrice || dbProd.mrp || 0;
+            }
+
+            const name = dbProd?.name || (retailerId ? `Item #${retailerId}` : "Catalog Product");
+            const image = dbProd?.images?.[0] || null;
+            const currency = item.currency || "INR";
+            const subtotal = price * qty;
+
+            return {
+              retailerId,
+              productId: dbProd?.id || null,
+              name,
+              sku: dbProd?.sku || retailerId,
+              image,
+              quantity: qty,
+              price,
+              currency,
+              subtotal
+            };
+          })
+        );
+
+        const totalQty = enrichedItems.reduce((acc, it) => acc + it.quantity, 0);
+        const totalAmount = enrichedItems.reduce((acc, it) => acc + it.subtotal, 0);
+        const currency = enrichedItems[0]?.currency || "INR";
+        const symbol = currency === "INR" ? "₹" : "$";
+
+        orderMetadata = {
+          catalogId,
+          customerNote: customerNote || null,
+          totalQuantity: totalQty,
+          totalAmount,
+          currency,
+          items: enrichedItems
+        };
+
+        let summary = `🛍️ Catalog Order (${totalQty} item${totalQty === 1 ? '' : 's'} • ${symbol}${totalAmount.toLocaleString('en-IN')}):\n`;
+        enrichedItems.forEach((it) => {
+          summary += `• ${it.quantity}x ${it.name} (${symbol}${it.price.toLocaleString('en-IN')}) = ${symbol}${it.subtotal.toLocaleString('en-IN')}\n`;
+        });
+        if (customerNote && customerNote.trim()) {
+          summary += `\n💬 Customer Note: "${customerNote.trim()}"`;
         }
         textContent = summary.trim();
       }
@@ -525,6 +605,32 @@ export async function POST(req: NextRequest) {
         } catch (_) {}
       }
 
+      // Combined metadata for message (CTWA ad + Catalog Order details)
+      let combinedMetadata: any = null;
+      if (ctwaMetadata || orderMetadata) {
+        combinedMetadata = {
+          ...(ctwaMetadata ? { ctwa: ctwaMetadata } : {}),
+          ...(orderMetadata ? { order: orderMetadata } : {})
+        };
+      }
+
+      // If Catalog Order received, auto-tag customer
+      if (orderMetadata) {
+        try {
+          const existingTags = (customer.tags || '')
+            .split(',')
+            .map((t: string) => t.trim())
+            .filter(Boolean);
+          const newTags = Array.from(new Set([...existingTags, "Catalog_Order"]));
+          await prisma.customer.update({
+            where: { id: customer.id },
+            data: { 
+              tags: newTags.join(', ')
+            }
+          });
+        } catch (_) {}
+      }
+
       // Step D: Store Incoming Message
       await prisma.whatsAppMessage.create({
         data: {
@@ -537,7 +643,7 @@ export async function POST(req: NextRequest) {
           mediaType: mediaMimeType,
           status: "RECEIVED",
           metaMessageId: msg.id,
-          metadata: ctwaMetadata ? JSON.stringify(ctwaMetadata) : null,
+          metadata: combinedMetadata ? JSON.stringify(combinedMetadata) : null,
           sentAt: messageTimestamp
         }
       });

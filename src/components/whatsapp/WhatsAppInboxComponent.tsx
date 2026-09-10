@@ -435,17 +435,24 @@ export default function WhatsAppInboxComponent() {
     const d = new Date(dateInput);
     if (isNaN(d.getTime())) return "";
     const now = new Date();
-    if (d.toDateString() === now.toDateString()) return "Today";
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-
-    return d.toLocaleDateString("en-IN", {
+    
+    const formattedDate = d.toLocaleDateString("en-IN", {
       weekday: "short",
       day: "numeric",
       month: "short",
       year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined
     });
+
+    if (d.toDateString() === now.toDateString()) {
+      return `📅 Today • ${d.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`;
+    }
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (d.toDateString() === yesterday.toDateString()) {
+      return `📅 Yesterday • ${d.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`;
+    }
+
+    return `📅 ${formattedDate}`;
   };
 
   const formatMessageBubbleTime = (dateInput: string | Date | null | undefined) => {
@@ -454,15 +461,16 @@ export default function WhatsAppInboxComponent() {
     if (isNaN(d.getTime())) return "";
     const now = new Date();
     const timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    
     if (d.toDateString() === now.toDateString()) {
-      return timeStr;
+      return `Today, ${timeStr}`;
     }
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     if (d.toDateString() === yesterday.toDateString()) {
       return `Yesterday, ${timeStr}`;
     }
-    const dateStr = d.toLocaleDateString([], { day: "numeric", month: "short" });
+    const dateStr = d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
     return `${dateStr}, ${timeStr}`;
   };
 
@@ -1644,7 +1652,9 @@ export default function WhatsAppInboxComponent() {
                       </div>
 
                       <div className="conv-snippet-line">
-                        <span className="conv-last-msg">{conv.lastMessageText || "No messages yet"}</span>
+                        <span className="conv-last-msg">
+                          {conv.lastMessageText === "[Message]" ? "🛍️ Catalog Order" : (conv.lastMessageText || "No messages yet")}
+                        </span>
                         {isUnread && <span className="unread-counter-badge">{conv.unreadCount}</span>}
                       </div>
 
@@ -2009,22 +2019,43 @@ export default function WhatsAppInboxComponent() {
                 const showDateDivider = !prevDate || msgDate.toDateString() !== prevDate.toDateString();
 
                 const dateDividerNode = showDateDivider ? (
-                  <div key={`date-div-${msg.id}`} style={{ display: "flex", justifyContent: "center", margin: "16px 0 10px 0", position: "sticky", top: "4px", zIndex: 4 }}>
-                    <span style={{
-                      background: "rgba(255, 255, 255, 0.94)",
-                      backdropFilter: "blur(6px)",
-                      color: "#475569",
-                      boxShadow: "0 1px 4px rgba(0, 0, 0, 0.08)",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "10px",
-                      padding: "3px 14px",
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      letterSpacing: "0.3px",
-                      userSelect: "none"
+                  <div key={`date-div-${msg.id}`} style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    margin: "18px 0 12px 0",
+                    position: "sticky",
+                    top: "4px",
+                    zIndex: 6
+                  }}>
+                    <div style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      width: "100%",
+                      maxWidth: "480px"
                     }}>
-                      {formatChatDividerDate(msg.sentAt)}
-                    </span>
+                      <div style={{ flex: 1, height: "1px", background: "linear-gradient(to right, transparent, #cbd5e1)" }} />
+                      <span style={{
+                        background: "rgba(255, 255, 255, 0.96)",
+                        backdropFilter: "blur(8px)",
+                        color: "#334155",
+                        boxShadow: "0 2px 6px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04)",
+                        border: "1px solid #cbd5e1",
+                        borderRadius: "12px",
+                        padding: "4px 14px",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        letterSpacing: "0.2px",
+                        userSelect: "none",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px"
+                      }}>
+                        {formatChatDividerDate(msg.sentAt)}
+                      </span>
+                      <div style={{ flex: 1, height: "1px", background: "linear-gradient(to left, transparent, #cbd5e1)" }} />
+                    </div>
                   </div>
                 ) : null;
 
@@ -2351,8 +2382,315 @@ export default function WhatsAppInboxComponent() {
                           </div>
                         )}
 
+                        {/* WhatsApp Catalog Order Card Renderer */}
+                        {(msg.messageType === "ORDER" || (() => {
+                          try {
+                            if (msg.metadata) {
+                              const p = typeof msg.metadata === "string" ? JSON.parse(msg.metadata) : msg.metadata;
+                              return Boolean(p.order || p.items);
+                            }
+                          } catch (_) {}
+                          return false;
+                        })()) && (() => {
+                          let orderInfo: any = null;
+                          try {
+                            if (msg.metadata) {
+                              const parsed = typeof msg.metadata === "string" ? JSON.parse(msg.metadata) : msg.metadata;
+                              orderInfo = parsed.order || parsed;
+                            }
+                          } catch (_) {}
+
+                          const items: any[] = Array.isArray(orderInfo?.items) ? orderInfo.items : [];
+                          const totalAmount = orderInfo?.totalAmount ?? 0;
+                          const totalQuantity = orderInfo?.totalQuantity ?? (items.reduce((s: number, i: any) => s + (i.quantity || 1), 0) || 1);
+                          const currencySymbol = (orderInfo?.currency === 'INR' || !orderInfo?.currency) ? '₹' : '$';
+                          const customerNote = orderInfo?.customerNote || orderInfo?.text || '';
+
+                          return (
+                            <div style={{
+                              background: '#f0fdf4',
+                              border: '1px solid #bbf7d0',
+                              borderRadius: '12px',
+                              overflow: 'hidden',
+                              marginTop: '4px',
+                              boxShadow: '0 2px 8px rgba(16, 185, 129, 0.08)',
+                              maxWidth: '380px',
+                              width: '100%'
+                            }}>
+                              {/* Header */}
+                              <div style={{
+                                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                color: '#ffffff',
+                                padding: '10px 14px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '8px'
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <div style={{
+                                    background: 'rgba(255,255,255,0.2)',
+                                    borderRadius: '50%',
+                                    width: '26px',
+                                    height: '26px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}>
+                                    <ShoppingBag size={15} color="#ffffff" />
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '0.2px' }}>
+                                      WhatsApp Catalog Order
+                                    </div>
+                                    <div style={{ fontSize: '10.5px', opacity: 0.9 }}>
+                                      {totalQuantity} {totalQuantity === 1 ? 'Item' : 'Items'} Ordered
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <span style={{
+                                  background: 'rgba(255,255,255,0.22)',
+                                  padding: '3px 8px',
+                                  borderRadius: '12px',
+                                  fontSize: '11px',
+                                  fontWeight: 700
+                                }}>
+                                  Cart Sent
+                                </span>
+                              </div>
+
+                              {/* Items list */}
+                              <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', background: '#ffffff' }}>
+                                {items.length > 0 ? (
+                                  items.map((it: any, idx: number) => (
+                                    <div key={idx} style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '10px',
+                                      paddingBottom: idx === items.length - 1 ? 0 : '10px',
+                                      borderBottom: idx === items.length - 1 ? 'none' : '1px dashed #e2e8f0'
+                                    }}>
+                                      {/* Thumbnail */}
+                                      {it.image ? (
+                                        <img
+                                          src={it.image}
+                                          alt={it.name}
+                                          style={{
+                                            width: '46px',
+                                            height: '46px',
+                                            objectFit: 'cover',
+                                            borderRadius: '8px',
+                                            border: '1px solid #e2e8f0',
+                                            flexShrink: 0
+                                          }}
+                                          onError={(e) => {
+                                            (e.currentTarget as HTMLElement).style.display = 'none';
+                                          }}
+                                        />
+                                      ) : (
+                                        <div style={{
+                                          width: '46px',
+                                          height: '46px',
+                                          borderRadius: '8px',
+                                          background: '#f1f5f9',
+                                          border: '1px solid #e2e8f0',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          flexShrink: 0,
+                                          color: '#64748b'
+                                        }}>
+                                          <ShoppingBag size={20} />
+                                        </div>
+                                      )}
+
+                                      {/* Title & Qty */}
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{
+                                          fontSize: '12.5px',
+                                          fontWeight: 600,
+                                          color: '#1e293b',
+                                          whiteSpace: 'normal',
+                                          lineHeight: '1.3',
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis'
+                                        }}>
+                                          {it.name || `Product SKU: ${it.sku || it.retailerId}`}
+                                        </div>
+                                        <div style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '6px',
+                                          marginTop: '3px',
+                                          fontSize: '11px',
+                                          color: '#64748b'
+                                        }}>
+                                          <span style={{
+                                            background: '#f1f5f9',
+                                            padding: '1px 6px',
+                                            borderRadius: '4px',
+                                            fontWeight: 600,
+                                            color: '#334155'
+                                          }}>
+                                            Qty: {it.quantity || 1}
+                                          </span>
+                                          {it.price > 0 && (
+                                            <span>× {currencySymbol}{Number(it.price).toLocaleString('en-IN')}</span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Subtotal */}
+                                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                        <span style={{ fontSize: '13px', fontWeight: 700, color: '#059669' }}>
+                                          {currencySymbol}{(Number(it.subtotal || (it.price * (it.quantity || 1)))).toLocaleString('en-IN')}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div style={{ fontSize: '12.5px', color: '#334155', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
+                                    {msg.content === '[Message]' ? '🛍️ Customer sent items from the WhatsApp Catalog.' : msg.content}
+                                  </div>
+                                )}
+
+                                {/* Customer Note */}
+                                {customerNote ? (
+                                  <div style={{
+                                    background: '#fffbeb',
+                                    border: '1px solid #fde68a',
+                                    borderRadius: '6px',
+                                    padding: '8px 10px',
+                                    fontSize: '11.5px',
+                                    color: '#92400e',
+                                    display: 'flex',
+                                    gap: '6px',
+                                    alignItems: 'flex-start'
+                                  }}>
+                                    <span>💬</span>
+                                    <div style={{ flex: 1 }}>
+                                      <strong>Customer Note:</strong> {customerNote}
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              {/* Footer Total */}
+                              {totalAmount > 0 && (
+                                <div style={{
+                                  background: '#f8fafc',
+                                  borderTop: '1px solid #e2e8f0',
+                                  padding: '10px 14px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between'
+                                }}>
+                                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>
+                                    Estimated Total
+                                  </span>
+                                  <span style={{ fontSize: '15px', fontWeight: 800, color: '#059669' }}>
+                                    {currencySymbol}{Number(totalAmount).toLocaleString('en-IN')}
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Action Buttons */}
+                              <div style={{
+                                background: '#f8fafc',
+                                borderTop: '1px solid #e2e8f0',
+                                padding: '8px 12px',
+                                display: 'flex',
+                                gap: '6px',
+                                flexWrap: 'wrap'
+                              }}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setMessageInput(`Hello ${activeConvDetail?.customer?.contactPerson || ''}! We received your catalog order of ${totalQuantity} item(s) ${totalAmount > 0 ? `(Total: ${currencySymbol}${Number(totalAmount).toLocaleString('en-IN')})` : ''}. We are preparing your quotation / order confirmation now! 👍`);
+                                  }}
+                                  style={{
+                                    flex: 1,
+                                    background: '#ffffff',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '6px',
+                                    padding: '6px 8px',
+                                    fontSize: '11px',
+                                    fontWeight: 600,
+                                    color: '#334155',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '4px'
+                                  }}
+                                >
+                                  <Sparkles size={12} color="#10b981" /> Reply Confirmation
+                                </button>
+
+                                {totalAmount > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPaymentAmount(totalAmount);
+                                      setPaymentDesc(`Payment for WhatsApp Catalog Order (${totalQuantity} items)`);
+                                      setShowPaymentModal(true);
+                                    }}
+                                    style={{
+                                      background: '#10b981',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      padding: '6px 10px',
+                                      fontSize: '11px',
+                                      fontWeight: 700,
+                                      color: '#ffffff',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '4px'
+                                    }}
+                                    title="Generate Payment Link"
+                                  >
+                                    <CreditCard size={12} /> Payment Link
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const summary = `🛍️ WhatsApp Catalog Order:\n` +
+                                      (items.length > 0
+                                        ? items.map((i: any) => `• ${i.quantity}x ${i.name} - ${currencySymbol}${i.subtotal}`).join('\n')
+                                        : msg.content) +
+                                      (totalAmount > 0 ? `\nTotal: ${currencySymbol}${totalAmount}` : '');
+                                    navigator.clipboard.writeText(summary);
+                                    setToastMsg('✓ Order summary copied to clipboard!');
+                                    setTimeout(() => setToastMsg(null), 2500);
+                                  }}
+                                  style={{
+                                    background: '#ffffff',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '6px',
+                                    padding: '6px 10px',
+                                    fontSize: '11px',
+                                    fontWeight: 600,
+                                    color: '#334155',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                  title="Copy order details"
+                                >
+                                  <FileText size={12} /> Copy
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         {/* Standard Text & Unsupported Format Renderer */}
-                        {msg.messageType !== "DOCUMENT" && msg.messageType !== "IMAGE" && msg.messageType !== "VIDEO" && msg.messageType !== "AUDIO" && msg.messageType !== "PAYMENT_LINK" && msg.messageType !== "BUTTONS" && msg.messageType !== "LIST" && (
+                        {msg.messageType !== "DOCUMENT" && msg.messageType !== "IMAGE" && msg.messageType !== "VIDEO" && msg.messageType !== "AUDIO" && msg.messageType !== "PAYMENT_LINK" && msg.messageType !== "BUTTONS" && msg.messageType !== "LIST" && msg.messageType !== "ORDER" && (
                           <p className="message-text-content" style={msg.isInternalNote ? { color: '#713f12' } : { whiteSpace: 'pre-wrap' }}>
                             {msg.messageType === "UNSUPPORTED" ? (
                               <span style={{ fontStyle: "italic", color: "#64748b", display: "inline-flex", alignItems: "center", gap: "4px" }}>
