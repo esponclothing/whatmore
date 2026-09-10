@@ -694,7 +694,62 @@ export async function retryFailedWhatsAppMessageAction(messageId: string) {
       to: targetPhone
     };
 
-    if (existing.messageType === 'TEXT' || !existing.messageType) {
+    if (existing.messageType === 'BUTTONS' || existing.messageType === 'LIST') {
+      let options: string[] = [];
+      try {
+        if (existing.metadata) {
+          const parsed = JSON.parse(existing.metadata);
+          if (Array.isArray(parsed)) {
+            options = parsed;
+          } else if (parsed && Array.isArray(parsed.options)) {
+            options = parsed.options;
+          }
+        }
+      } catch (_) {}
+
+      if (options.length > 0 && options.length <= 3) {
+        payload.type = 'interactive';
+        payload.interactive = {
+          type: 'button',
+          body: { text: existing.content || 'Please choose an option:' },
+          action: {
+            buttons: options.map((optText, idx) => ({
+              type: 'reply',
+              reply: { id: `btn_retry_${idx}_${Date.now()}`, title: String(optText).slice(0, 20) }
+            }))
+          }
+        };
+        // Only include media header if it's a valid external URL (not dead local/railway media proxies)
+        if (existing.mediaUrl && existing.mediaUrl.startsWith('http') && !existing.mediaUrl.includes('railway.app') && !existing.mediaUrl.includes('localhost')) {
+          payload.interactive.header = {
+            type: 'image',
+            image: { link: existing.mediaUrl }
+          };
+        }
+      } else if (options.length > 3) {
+        payload.type = 'interactive';
+        payload.interactive = {
+          type: 'list',
+          header: { type: 'text', text: 'Options' },
+          body: { text: existing.content || 'Please choose an option:' },
+          action: {
+            button: 'Select Option',
+            sections: [
+              {
+                title: 'Options',
+                rows: options.map((opt, idx) => ({
+                  id: `list_retry_${idx}_${Date.now()}`,
+                  title: String(opt).slice(0, 24)
+                }))
+              }
+            ]
+          }
+        };
+      } else {
+        payload.type = 'text';
+        payload.text = { body: existing.content };
+      }
+    } else if (existing.messageType === 'TEXT' || !existing.messageType) {
       payload.type = 'text';
       payload.text = { body: existing.content };
     } else if (existing.mediaUrl) {
@@ -718,13 +773,27 @@ export async function retryFailedWhatsAppMessageAction(messageId: string) {
     const resData = await response.json();
 
     if (resData.messages?.[0]?.id) {
+      let successMeta: string | null = null;
+      if (existing.messageType === 'BUTTONS' || existing.messageType === 'LIST') {
+        try {
+          if (existing.metadata) {
+            const parsed = JSON.parse(existing.metadata);
+            if (Array.isArray(parsed)) {
+              successMeta = JSON.stringify(parsed);
+            } else if (parsed && Array.isArray(parsed.options)) {
+              successMeta = JSON.stringify(parsed.options);
+            }
+          }
+        } catch (_) {}
+      }
+
       const updated = await prisma.whatsAppMessage.update({
         where: { id: messageId },
         data: {
           status: 'SENT',
           metaMessageId: resData.messages[0].id,
           sentAt: new Date(),
-          metadata: null // Clear previous error metadata on success
+          metadata: successMeta
         }
       });
       revalidatePath('/whatsapp/inbox');
@@ -745,7 +814,14 @@ export async function retryFailedWhatsAppMessageAction(messageId: string) {
 
       let meta: any = {};
       try {
-        meta = existing.metadata ? JSON.parse(existing.metadata) : {};
+        if (existing.metadata) {
+          const parsed = JSON.parse(existing.metadata);
+          if (Array.isArray(parsed)) {
+            meta = { options: parsed };
+          } else if (typeof parsed === 'object' && parsed !== null) {
+            meta = { ...parsed };
+          }
+        }
       } catch {}
       meta.error = errInfo;
 
