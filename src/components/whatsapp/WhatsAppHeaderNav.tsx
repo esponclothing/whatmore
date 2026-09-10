@@ -25,6 +25,7 @@ function urlBase64ToUint8Array(base64String: string) {
 const subNavItems = [
   { name: "Dashboard", path: "/whatsapp/dashboard", icon: LayoutDashboard },
   { name: "Inbox", path: "/whatsapp/inbox", icon: MessageSquare },
+  { name: "Shopify", path: "/whatsapp/shopify", icon: ShoppingBag },
   { name: "WhatsApp", path: "/whatsapp/templates", icon: Bot },
   { name: "Integrations", path: "/whatsapp/integrations", icon: Zap },
   { name: "Products & Prices", path: "/whatsapp/commerce", icon: Box },
@@ -55,6 +56,9 @@ export default function WhatsAppHeaderNav() {
   const isItemActive = (path: string) => {
     if (path === "/whatsapp/inbox" && (pathname === "/whatsapp" || pathname === "/whatsapp/inbox")) {
       return true;
+    }
+    if (path === "/whatsapp/shopify") {
+      return pathname.startsWith("/whatsapp/shopify");
     }
     if (path === "/whatsapp/templates") {
       return (
