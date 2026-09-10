@@ -8572,4 +8572,86 @@ export async function getWhatsAppInventoryCatalogAction(params?: {
   }
 }
 
+/**
+ * Fetch WhatsApp Commerce / Catalog Link status from Meta Graph API
+ */
+export async function getWhatsAppCommerceStatusAction() {
+  try {
+    const account = await prisma.whatsAppAccount.findFirst();
+    if (!account?.accessToken || !account?.phoneId) {
+      return { success: false, error: "WhatsApp account credentials missing" };
+    }
+
+    const res = await fetch(`https://graph.facebook.com/v21.0/${account.phoneId}/whatsapp_commerce_settings`, {
+      headers: { 'Authorization': `Bearer ${account.accessToken}` }
+    });
+    const data = await res.json();
+    const settings = data?.data?.[0] || null;
+
+    return {
+      success: true,
+      phoneId: account.phoneId,
+      phoneNumber: account.phoneNumber,
+      isCatalogVisible: settings?.is_catalog_visible ?? false,
+      isCartEnabled: settings?.is_cart_enabled ?? false,
+      raw: settings
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Programmatically link Meta Catalog to WhatsApp Business Phone Number via Meta Graph API
+ */
+export async function linkMetaCatalogToWhatsAppAction(overrideCatalogId?: string) {
+  try {
+    const account = await prisma.whatsAppAccount.findFirst();
+    if (!account?.accessToken || !account?.phoneId) {
+      return { success: false, error: "WhatsApp account credentials missing" };
+    }
+
+    let targetCatalogId = overrideCatalogId;
+    if (!targetCatalogId) {
+      const integration = await prisma.whatsAppIntegration.findFirst({
+        where: { type: "META_CATALOG", isActive: true }
+      });
+      targetCatalogId = integration?.url?.trim();
+    }
+
+    if (!targetCatalogId) {
+      return { success: false, error: "No active Meta Catalog integration found" };
+    }
+
+    const res = await fetch(`https://graph.facebook.com/v21.0/${account.phoneId}/whatsapp_commerce_settings`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${account.accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        is_catalog_visible: true,
+        is_cart_enabled: true,
+        catalog_id: targetCatalogId
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data.error?.message || "Failed to link catalog to WhatsApp" };
+    }
+
+    return { 
+      success: true, 
+      catalogId: targetCatalogId,
+      phoneId: account.phoneId,
+      phoneNumber: account.phoneNumber,
+      data 
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+
 

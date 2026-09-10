@@ -22,7 +22,9 @@ import {
   updateProductGroupAction,
   deleteProductGroupAction,
   deleteSingleProductAction,
-  quickUpdateProductImageAction
+  quickUpdateProductImageAction,
+  linkMetaCatalogToWhatsAppAction,
+  getWhatsAppCommerceStatusAction
 } from "@/app/actions/whatsAppPlatformActions";
 
 // Graceful product thumbnail with 404 error suppression and hover device photo upload
@@ -234,6 +236,10 @@ export default function ProductsCommercePage() {
   const [deletingVariant, setDeletingVariant] = useState<{ group: any; variant: any } | null>(null);
   const [deleteVariantFromMeta, setDeleteVariantFromMeta] = useState(true);
   const [isDeletingVariant, setIsDeletingVariant] = useState(false);
+
+  // Catalog Link to WhatsApp State
+  const [linkingCatalog, setLinkingCatalog] = useState(false);
+  const [catalogLinkedStatus, setCatalogLinkedStatus] = useState<{ linked: boolean; phone?: string } | null>(null);
 
   // -------------------------------------------------------------
   // Quick Image Upload State (from table hover)
@@ -535,6 +541,29 @@ export default function ProductsCommercePage() {
         setMetaCatalog({ isConnected: false });
       }
     });
+
+    getWhatsAppCommerceStatusAction().then((res) => {
+      if (res.success) {
+        setCatalogLinkedStatus({ linked: res.isCatalogVisible, phone: res.phoneNumber });
+      }
+    }).catch(() => {});
+  };
+
+  const handleLinkCatalog = async () => {
+    setLinkingCatalog(true);
+    try {
+      const res = await linkMetaCatalogToWhatsAppAction(metaCatalog.catalogId);
+      if (res.success) {
+        setCatalogLinkedStatus({ linked: true, phone: res.phoneNumber });
+        alert(`✓ Success! Linked Meta Catalog (${res.catalogId}) to WhatsApp Number (${res.phoneNumber || "API"}).\nCart and Catalog storefront are now live on your WhatsApp Business API profile!`);
+      } else {
+        alert(`Failed to link catalog: ${res.error}`);
+      }
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setLinkingCatalog(false);
+    }
   };
 
   useEffect(() => {
@@ -1198,12 +1227,39 @@ export default function ProductsCommercePage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleLinkCatalog}
+              disabled={linkingCatalog}
+              className={`text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all shadow-sm ${
+                catalogLinkedStatus?.linked
+                  ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
+                  : "bg-purple-600 hover:bg-purple-700 text-white cursor-pointer"
+              }`}
+            >
+              {linkingCatalog ? (
+                <>
+                  <RefreshCw size={12} className="animate-spin" />
+                  Linking...
+                </>
+              ) : catalogLinkedStatus?.linked ? (
+                <>
+                  <CheckCircle2 size={13} className="text-emerald-600 dark:text-emerald-400" />
+                  Linked to WhatsApp ({catalogLinkedStatus.phone || "API"})
+                </>
+              ) : (
+                <>
+                  <Store size={13} />
+                  Link to WhatsApp Number
+                </>
+              )}
+            </button>
             <Link 
               href="/whatsapp/integrations" 
-              className="text-xs font-bold text-purple-700 dark:text-purple-300 hover:underline flex items-center gap-1"
+              className="text-xs font-bold text-purple-700 dark:text-purple-300 hover:underline flex items-center gap-1 ml-1"
             >
-              Manage Catalog Credentials <ArrowUpRight size={13} />
+              Credentials <ArrowUpRight size={13} />
             </Link>
           </div>
         </div>
@@ -2817,7 +2873,7 @@ export default function ProductsCommercePage() {
                 syncToMeta: metaCatalog.isConnected
               });
               if (updRes.success) {
-                showToast(updRes.message, "success");
+                showToast(updRes.message || "Product photo updated successfully!", "success");
                 await fetchProducts();
               } else {
                 showToast("Failed to update photo: " + updRes.error, "error");
