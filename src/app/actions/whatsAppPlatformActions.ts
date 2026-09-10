@@ -4500,7 +4500,7 @@ export async function deleteWhatsAppCannedResponseAction(id: string) {
 }
 
 // Shopify Product Synchronization and Database CRUD Server Actions
-export async function syncShopifyProductsAction() {
+export async function syncShopifyProductsAction(options?: { cleanupPrevious?: 'deactivate' | 'delete' | 'none' }) {
   try {
     const settings = await prisma.companySettings.findFirst();
     if (!settings || !settings.shopifyStoreDomain || !settings.shopifyAccessToken) {
@@ -4509,6 +4509,46 @@ export async function syncShopifyProductsAction() {
 
     const domain = settings.shopifyStoreDomain;
     const token = settings.shopifyAccessToken;
+
+    // Handle switching away from Meta to Shopify (deactivate or delete previous platform products)
+    const cleanup = options?.cleanupPrevious || 'deactivate';
+    if (cleanup === 'delete') {
+      const referencedQuotes = await prisma.quotationItem.findMany({ select: { productId: true } });
+      const referencedOrders = await prisma.orderItem.findMany({ select: { productId: true } });
+      const safeRefIds = new Set([
+        ...referencedQuotes.map(q => q.productId),
+        ...referencedOrders.map(o => o.productId)
+      ]);
+
+      await prisma.product.deleteMany({
+        where: {
+          OR: [
+            { hsnCode: 'META' },
+            { AND: [{ NOT: { sku: { startsWith: 'SP-' } } }, { OR: [{ fabric: null }, { fabric: 'General' }] }] }
+          ],
+          id: { notIn: Array.from(safeRefIds) }
+        }
+      });
+      await prisma.product.updateMany({
+        where: {
+          OR: [
+            { hsnCode: 'META' },
+            { AND: [{ NOT: { sku: { startsWith: 'SP-' } } }, { OR: [{ fabric: null }, { fabric: 'General' }] }] }
+          ]
+        },
+        data: { status: 'Inactive' }
+      });
+    } else if (cleanup === 'deactivate') {
+      await prisma.product.updateMany({
+        where: {
+          OR: [
+            { hsnCode: 'META' },
+            { AND: [{ NOT: { sku: { startsWith: 'SP-' } } }, { OR: [{ fabric: null }, { fabric: 'General' }] }] }
+          ]
+        },
+        data: { status: 'Inactive' }
+      });
+    }
 
     const gqlQuery = `
       query SyncProducts {
@@ -4596,6 +4636,7 @@ export async function syncShopifyProductsAction() {
             category: sp.productType || "General",
             subCategory: sp.handle,
             fabric: collectionTitles || "General",
+            hsnCode: "SHOPIFY",
             sellingPrice: 0,
             mrp: 0,
             purchasePrice: 0,
@@ -4610,6 +4651,7 @@ export async function syncShopifyProductsAction() {
             category: sp.productType || "General",
             subCategory: sp.handle,
             fabric: collectionTitles || "General",
+            hsnCode: "SHOPIFY",
             sellingPrice: 0,
             mrp: 0,
             purchasePrice: 0,
@@ -4641,6 +4683,7 @@ export async function syncShopifyProductsAction() {
             category: sp.productType || "General",
             subCategory: sp.handle,
             fabric: collectionTitles || "General",
+            hsnCode: "SHOPIFY",
             sellingPrice: price,
             mrp: compareAt,
             purchasePrice: cost,
@@ -4655,6 +4698,7 @@ export async function syncShopifyProductsAction() {
             category: sp.productType || "General",
             subCategory: sp.handle,
             fabric: collectionTitles || "General",
+            hsnCode: "SHOPIFY",
             sellingPrice: price,
             mrp: compareAt,
             purchasePrice: cost,
@@ -4668,9 +4712,18 @@ export async function syncShopifyProductsAction() {
       }
     }
 
+    // Set active platform setting to SHOPIFY
+    await prisma.whatsAppIntegration.upsert({
+      where: { id: 'active-catalog-source-setting' },
+      update: { url: 'SHOPIFY', name: 'Active Catalog Platform', type: 'CATALOG_ACTIVE_SOURCE', isActive: true },
+      create: { id: 'active-catalog-source-setting', url: 'SHOPIFY', name: 'Active Catalog Platform', type: 'CATALOG_ACTIVE_SOURCE', isActive: true }
+    });
+
+    revalidatePath("/whatsapp/commerce");
     return { 
       success: true, 
-      message: `✓ Successfully synced ${createdCount} products/variants and linked collections from Shopify!`,
+      activePlatform: 'SHOPIFY',
+      message: `✓ Successfully synced ${createdCount} products from Shopify! Meta products are now ${cleanup === 'delete' ? 'deleted' : 'inactive'}.`,
       count: createdCount 
     };
   } catch (error: any) {
@@ -4722,6 +4775,110 @@ export async function toggleProductVisibilityAction(id: string, targetStatus: st
   }
 }
 
+export async function getActiveCatalogPlatformAction() {
+  try {
+    const setting = await prisma.whatsAppIntegration.findFirst({
+      where: { type: 'CATALOG_ACTIVE_SOURCE', isActive: true }
+    });
+    return { success: true, activePlatform: setting?.url || 'META' };
+  } catch (e: any) {
+    return { success: true, activePlatform: 'META' };
+  }
+}
+
+export async function switchActiveCatalogPlatformAction(targetPlatform: 'META' | 'SHOPIFY', cleanupMode: 'deactivate' | 'delete' = 'deactivate') {
+  try {
+    const referencedQuotes = await prisma.quotationItem.findMany({ select: { productId: true } });
+    const referencedOrders = await prisma.orderItem.findMany({ select: { productId: true } });
+    const safeRefIds = new Set([
+      ...referencedQuotes.map(q => q.productId),
+      ...referencedOrders.map(o => o.productId)
+    ]);
+
+    if (targetPlatform === 'META') {
+      if (cleanupMode === 'delete') {
+        await prisma.product.deleteMany({
+          where: {
+            OR: [{ hsnCode: 'SHOPIFY' }, { sku: { startsWith: 'SP-' } }],
+            id: { notIn: Array.from(safeRefIds) }
+          }
+        });
+      }
+      // Deactivate Shopify products
+      await prisma.product.updateMany({
+        where: { OR: [{ hsnCode: 'SHOPIFY' }, { sku: { startsWith: 'SP-' } }] },
+        data: { status: 'Inactive' }
+      });
+      // Activate Meta products
+      await prisma.product.updateMany({
+        where: { hsnCode: 'META' },
+        data: { status: 'Active' }
+      });
+    } else {
+      if (cleanupMode === 'delete') {
+        await prisma.product.deleteMany({
+          where: {
+            hsnCode: 'META',
+            id: { notIn: Array.from(safeRefIds) }
+          }
+        });
+      }
+      // Deactivate Meta products
+      await prisma.product.updateMany({
+        where: { hsnCode: 'META' },
+        data: { status: 'Inactive' }
+      });
+      // Activate Shopify products
+      await prisma.product.updateMany({
+        where: { OR: [{ hsnCode: 'SHOPIFY' }, { sku: { startsWith: 'SP-' } }] },
+        data: { status: 'Active' }
+      });
+    }
+
+    await prisma.whatsAppIntegration.upsert({
+      where: { id: 'active-catalog-source-setting' },
+      update: { url: targetPlatform, name: 'Active Catalog Platform', type: 'CATALOG_ACTIVE_SOURCE', isActive: true },
+      create: { id: 'active-catalog-source-setting', url: targetPlatform, name: 'Active Catalog Platform', type: 'CATALOG_ACTIVE_SOURCE', isActive: true }
+    });
+
+    revalidatePath("/whatsapp/commerce");
+    return {
+      success: true,
+      activePlatform: targetPlatform,
+      message: `Active store platform switched to ${targetPlatform === 'META' ? 'Meta Commerce Catalog' : 'Shopify Store'}.`
+    };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function deleteInactiveProductsAction() {
+  try {
+    const referencedQuotes = await prisma.quotationItem.findMany({ select: { productId: true } });
+    const referencedOrders = await prisma.orderItem.findMany({ select: { productId: true } });
+    const safeRefIds = new Set([
+      ...referencedQuotes.map(q => q.productId),
+      ...referencedOrders.map(o => o.productId)
+    ]);
+
+    const res = await prisma.product.deleteMany({
+      where: {
+        status: 'Inactive',
+        id: { notIn: Array.from(safeRefIds) }
+      }
+    });
+
+    revalidatePath("/whatsapp/commerce");
+    return {
+      success: true,
+      count: res.count,
+      message: `Permanently deleted ${res.count} inactive products.`
+    };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
 export async function getMetaCatalogStatusAction() {
   try {
     const integration = await prisma.whatsAppIntegration.findFirst({
@@ -4757,7 +4914,7 @@ export async function getMetaCatalogStatusAction() {
   }
 }
 
-export async function syncMetaCatalogProductsAction() {
+export async function syncMetaCatalogProductsAction(options?: { cleanupPrevious?: 'deactivate' | 'delete' | 'none' }) {
   try {
     const integration = await prisma.whatsAppIntegration.findFirst({
       where: { type: 'META_CATALOG', isActive: true }
@@ -4767,6 +4924,46 @@ export async function syncMetaCatalogProductsAction() {
     }
     const catalogId = integration.url.trim();
     const token = integration.token.trim();
+
+    // Handle switching away from Shopify to Meta (deactivate or delete previous platform products)
+    const cleanup = options?.cleanupPrevious || 'deactivate';
+    if (cleanup === 'delete') {
+      const referencedQuotes = await prisma.quotationItem.findMany({ select: { productId: true } });
+      const referencedOrders = await prisma.orderItem.findMany({ select: { productId: true } });
+      const safeRefIds = new Set([
+        ...referencedQuotes.map(q => q.productId),
+        ...referencedOrders.map(o => o.productId)
+      ]);
+
+      await prisma.product.deleteMany({
+        where: {
+          OR: [
+            { hsnCode: 'SHOPIFY' },
+            { sku: { startsWith: 'SP-' } }
+          ],
+          id: { notIn: Array.from(safeRefIds) }
+        }
+      });
+      await prisma.product.updateMany({
+        where: {
+          OR: [
+            { hsnCode: 'SHOPIFY' },
+            { sku: { startsWith: 'SP-' } }
+          ]
+        },
+        data: { status: 'Inactive' }
+      });
+    } else if (cleanup === 'deactivate') {
+      await prisma.product.updateMany({
+        where: {
+          OR: [
+            { hsnCode: 'SHOPIFY' },
+            { sku: { startsWith: 'SP-' } }
+          ]
+        },
+        data: { status: 'Inactive' }
+      });
+    }
 
     let allMetaProducts: any[] = [];
     let nextUrl: string | null = `https://graph.facebook.com/v21.0/${encodeURIComponent(catalogId)}/products?fields=id,retailer_id,name,description,price,currency,image_url,url,availability,color,size,brand,category,sale_price,product_group&limit=100&access_token=${encodeURIComponent(token)}`;
@@ -4828,6 +5025,7 @@ export async function syncMetaCatalogProductsAction() {
           name: displayName,
           articleNumber: null,
           subCategory: mp.product_group?.retailer_id || null,
+          hsnCode: "META",
           description: mp.description || null,
           category: mp.category || mp.brand || "Meta Catalog",
           color: mp.color || null,
@@ -4844,6 +5042,7 @@ export async function syncMetaCatalogProductsAction() {
           sku,
           articleNumber: null,
           subCategory: mp.product_group?.retailer_id || null,
+          hsnCode: "META",
           description: mp.description || null,
           category: mp.category || mp.brand || "Meta Catalog",
           color: mp.color || null,
@@ -4859,11 +5058,19 @@ export async function syncMetaCatalogProductsAction() {
       syncedCount++;
     }
 
+    // Set active platform setting to META
+    await prisma.whatsAppIntegration.upsert({
+      where: { id: 'active-catalog-source-setting' },
+      update: { url: 'META', name: 'Active Catalog Platform', type: 'CATALOG_ACTIVE_SOURCE', isActive: true },
+      create: { id: 'active-catalog-source-setting', url: 'META', name: 'Active Catalog Platform', type: 'CATALOG_ACTIVE_SOURCE', isActive: true }
+    });
+
     revalidatePath("/whatsapp/commerce");
     return {
       success: true,
+      activePlatform: 'META',
       count: syncedCount,
-      message: `Successfully synced ${syncedCount} products from Meta Catalog!`
+      message: `✓ Successfully synced ${syncedCount} products from Meta Catalog! Shopify products are now ${cleanup === 'delete' ? 'deleted' : 'inactive'}.`
     };
   } catch (e: any) {
     console.error("[Meta Catalog Sync Error]:", e.message);
@@ -4927,6 +5134,11 @@ export async function createAndPushCatalogProductAction(data: {
       }
     ];
 
+    const activeSetting = await prisma.whatsAppIntegration.findFirst({
+      where: { type: 'CATALOG_ACTIVE_SOURCE', isActive: true }
+    });
+    const currentPlatform = activeSetting?.url === 'SHOPIFY' ? 'SHOPIFY' : 'META';
+
     for (const v of itemsToCreate) {
       let variantName = title;
       if (v.label || v.name) {
@@ -4952,6 +5164,7 @@ export async function createAndPushCatalogProductAction(data: {
           name: variantName,
           articleNumber: null,
           subCategory: baseSku,
+          hsnCode: currentPlatform,
           description,
           category,
           color: v.color || null,
@@ -4968,6 +5181,7 @@ export async function createAndPushCatalogProductAction(data: {
           sku: v.sku,
           articleNumber: null,
           subCategory: baseSku,
+          hsnCode: currentPlatform,
           description,
           category,
           color: v.color || null,

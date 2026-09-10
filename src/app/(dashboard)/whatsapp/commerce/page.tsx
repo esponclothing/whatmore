@@ -15,7 +15,10 @@ import {
   getMetaCatalogStatusAction,
   syncMetaCatalogProductsAction,
   createAndPushCatalogProductAction,
-  pushSingleProductToMetaAction
+  pushSingleProductToMetaAction,
+  getActiveCatalogPlatformAction,
+  switchActiveCatalogPlatformAction,
+  deleteInactiveProductsAction
 } from "@/app/actions/whatsAppPlatformActions";
 
 // Shopify-style Preset Option Definitions with Quick Value Suggestions
@@ -88,6 +91,15 @@ export default function ProductsCommercePage() {
   }>({ isConnected: false });
   const [isSyncingMeta, setIsSyncingMeta] = useState(false);
   const [pushingProductId, setPushingProductId] = useState<string | null>(null);
+
+  // Active Catalog Platform State & Filtering
+  const [activePlatform, setActivePlatform] = useState<'META' | 'SHOPIFY'>('META');
+  const [selectedPlatformTab, setSelectedPlatformTab] = useState<'ACTIVE_PLATFORM' | 'INACTIVE' | 'ALL'>('ACTIVE_PLATFORM');
+  const [showSwitchModal, setShowSwitchModal] = useState(false);
+  const [pendingTargetPlatform, setPendingTargetPlatform] = useState<'META' | 'SHOPIFY' | null>(null);
+  const [switchCleanupOption, setSwitchCleanupOption] = useState<'deactivate' | 'delete'>('deactivate');
+  const [isSwitchingPlatform, setIsSwitchingPlatform] = useState(false);
+  const [isPurgingInactive, setIsPurgingInactive] = useState(false);
 
   // Toast / Status notification banner
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
@@ -172,6 +184,7 @@ export default function ProductsCommercePage() {
         name: p.name,
         sku: p.sku || "",
         articleNumber: p.subCategory || p.articleNumber || "",
+        platform: p.hsnCode || (p.sku?.startsWith("SP-") ? "SHOPIFY" : "META"),
         price: p.sellingPrice || 0,
         compareAt: p.mrp || 0,
         cost: p.purchasePrice || 0,
@@ -188,6 +201,12 @@ export default function ProductsCommercePage() {
   };
 
   const checkIntegrations = async () => {
+    getActiveCatalogPlatformAction().then((res) => {
+      if (res.success && (res.activePlatform === 'SHOPIFY' || res.activePlatform === 'META')) {
+        setActivePlatform(res.activePlatform);
+      }
+    });
+
     getShopifyCredentialsAction().then((res) => {
       if (res.success && res.credentials?.shopifyAccessToken) {
         setIsShopifyConnected(true);
@@ -222,14 +241,63 @@ export default function ProductsCommercePage() {
     if (!price || !cost) return "0%";
     return (((price - cost) / price) * 100).toFixed(1) + "%";
   };
+
+  // Initiate Platform Switch modal
+  const handleInitiateSwitchPlatform = (target: 'META' | 'SHOPIFY') => {
+    if (target === activePlatform) return;
+    setPendingTargetPlatform(target);
+    setShowSwitchModal(true);
+  };
+
+  // Confirm Platform Switch
+  const handleConfirmSwitchPlatform = async () => {
+    if (!pendingTargetPlatform) return;
+    setIsSwitchingPlatform(true);
+    try {
+      const res = await switchActiveCatalogPlatformAction(pendingTargetPlatform, switchCleanupOption);
+      if (res.success) {
+        setActivePlatform(pendingTargetPlatform);
+        showToast(res.message || `Switched active platform to ${pendingTargetPlatform}`, "success");
+        await fetchProducts();
+        setShowSwitchModal(false);
+        setPendingTargetPlatform(null);
+      } else {
+        showToast("Failed to switch platform: " + res.error, "error");
+      }
+    } catch (err: any) {
+      showToast("Error switching platform: " + err.message, "error");
+    } finally {
+      setIsSwitchingPlatform(false);
+    }
+  };
+
+  // Delete all inactive products
+  const handleDeleteInactive = async () => {
+    if (!confirm("Are you sure you want to permanently delete all inactive products from the database? This cannot be undone.")) return;
+    setIsPurgingInactive(true);
+    try {
+      const res = await deleteInactiveProductsAction();
+      if (res.success) {
+        showToast(res.message || "Inactive products deleted!", "success");
+        await fetchProducts();
+      } else {
+        showToast("Delete Failed: " + res.error, "error");
+      }
+    } catch (e: any) {
+      showToast("Error deleting: " + e.message, "error");
+    } finally {
+      setIsPurgingInactive(false);
+    }
+  };
   
   // Sync live from Meta Catalog
-  const handleSyncMetaCatalog = async () => {
+  const handleSyncMetaCatalog = async (cleanup: 'deactivate' | 'delete' = 'deactivate') => {
     setIsSyncingMeta(true);
     setToast(null);
     try {
-      const res = await syncMetaCatalogProductsAction();
+      const res = await syncMetaCatalogProductsAction({ cleanupPrevious: cleanup });
       if (res.success) {
+        setActivePlatform('META');
         showToast(res.message || `Successfully synced ${res.count} products from Meta!`, "success");
         await fetchProducts();
         await checkIntegrations();
@@ -244,16 +312,23 @@ export default function ProductsCommercePage() {
   };
 
   // Sync from Shopify
-  const handleFetchShopify = async () => {
+  const handleFetchShopify = async (cleanup: 'deactivate' | 'delete' = 'deactivate') => {
     setIsFetchingShopify(true);
-    const res = await syncShopifyProductsAction();
-    if (res.success) {
-      showToast(res.message || "Shopify synced successfully!", "success");
-      await fetchProducts();
-    } else {
-      showToast("Shopify Sync Failed: " + res.error, "error");
+    try {
+      const res = await syncShopifyProductsAction({ cleanupPrevious: cleanup });
+      if (res.success) {
+        setActivePlatform('SHOPIFY');
+        showToast(res.message || "Shopify synced successfully!", "success");
+        await fetchProducts();
+        await checkIntegrations();
+      } else {
+        showToast("Shopify Sync Failed: " + res.error, "error");
+      }
+    } catch (e: any) {
+      showToast("Error syncing from Shopify: " + e.message, "error");
+    } finally {
+      setIsFetchingShopify(false);
     }
-    setIsFetchingShopify(false);
   };
 
   // Push single product/variant to Meta Catalog
@@ -607,8 +682,20 @@ export default function ProductsCommercePage() {
       p.sku.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCollection = selectedCollection === "all" || 
       String(p.collection || '').split(',').map(s => s.trim().toLowerCase()).includes(selectedCollection.toLowerCase());
-    return matchesSearch && matchesCollection;
+    
+    let matchesTab = true;
+    if (selectedPlatformTab === 'ACTIVE_PLATFORM') {
+      matchesTab = (p.platform === activePlatform || p.platform === 'MANUAL') && p.status === 'Active';
+    } else if (selectedPlatformTab === 'INACTIVE') {
+      matchesTab = p.status === 'Inactive';
+    }
+
+    return matchesSearch && matchesCollection && matchesTab;
   });
+
+  const activePlatformCount = products.filter(p => (p.platform === activePlatform || p.platform === 'MANUAL') && p.status === 'Active').length;
+  const inactiveCount = products.filter(p => p.status === 'Inactive').length;
+  const totalCount = products.length;
 
   // Group products by base name
   const groupedProducts: {
@@ -667,47 +754,51 @@ export default function ProductsCommercePage() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white">Products & Pricing</h1>
-            {metaCatalog.isConnected && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shadow-2xs">
-                <ShoppingBag size={12} /> Meta Catalog Live ({metaCatalog.productCount} items)
-              </span>
-            )}
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border shadow-2xs ${
+              activePlatform === 'META'
+                ? "bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300 border-purple-200 dark:border-purple-800"
+                : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
+            }`}>
+              {activePlatform === 'META' ? <ShoppingBag size={12} /> : <Store size={12} />}
+              Active Store: {activePlatform === 'META' ? 'Meta Commerce Catalog' : 'Shopify Store'} ({activePlatformCount} active items)
+            </span>
           </div>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Manage your store inventory, variant matrix, WhatsApp catalog, and sync products live with Meta Commerce Manager.
+            Manage your store inventory, variant matrix, WhatsApp catalog, and sync products from one platform at a time.
           </p>
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
-          {/* Live Meta Catalog Sync Button */}
-          <button 
-            onClick={handleSyncMetaCatalog}
-            disabled={isSyncingMeta || !metaCatalog.isConnected}
-            title={metaCatalog.isConnected ? "Sync live items directly from Meta Catalog" : "Connect Meta Catalog in Integrations first"}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-60 text-white rounded-xl text-sm font-bold shadow-md shadow-purple-600/20 transition-all cursor-pointer"
-          >
-            <RefreshCw size={16} className={isSyncingMeta ? "animate-spin" : ""} />
-            {isSyncingMeta ? "Syncing Meta Catalog..." : "Sync from Meta Catalog"}
-          </button>
-
-          {/* Shopify Sync Button */}
-          {isShopifyConnected ? (
+          {/* Active Platform Primary Sync Button */}
+          {activePlatform === 'META' ? (
             <button 
-              onClick={handleFetchShopify}
-              disabled={isFetchingShopify}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 hover:bg-gray-50 text-gray-800 dark:text-gray-200 rounded-xl border border-gray-200 dark:border-slate-700 text-sm font-bold shadow-2xs transition-all"
+              onClick={() => handleSyncMetaCatalog('deactivate')}
+              disabled={isSyncingMeta || !metaCatalog.isConnected}
+              title={metaCatalog.isConnected ? "Sync live items directly from Meta Catalog" : "Connect Meta Catalog in Integrations first"}
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-60 text-white rounded-xl text-sm font-bold shadow-md shadow-purple-600/20 transition-all cursor-pointer"
             >
-              <RefreshCw size={15} className={isFetchingShopify ? "animate-spin" : ""} />
-              {isFetchingShopify ? "Syncing..." : "Sync Shopify"}
+              <RefreshCw size={16} className={isSyncingMeta ? "animate-spin" : ""} />
+              {isSyncingMeta ? "Syncing Meta Catalog..." : "Sync from Meta Catalog"}
             </button>
           ) : (
-            <Link 
-              href="/whatsapp/api-settings"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl border border-emerald-200 text-sm font-bold shadow-2xs transition-all"
+            <button 
+              onClick={() => handleFetchShopify('deactivate')}
+              disabled={isFetchingShopify || !isShopifyConnected}
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-60 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
             >
-              <Store size={15} /> Connect Shopify
-            </Link>
+              <RefreshCw size={16} className={isFetchingShopify ? "animate-spin" : ""} />
+              {isFetchingShopify ? "Syncing Shopify..." : "Sync from Shopify"}
+            </button>
           )}
+
+          {/* Switch Platform Button */}
+          <button
+            onClick={() => handleInitiateSwitchPlatform(activePlatform === 'META' ? 'SHOPIFY' : 'META')}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 hover:bg-gray-50 text-gray-700 dark:text-gray-200 rounded-xl border border-gray-200 dark:border-slate-700 text-sm font-bold shadow-2xs transition-all cursor-pointer"
+          >
+            {activePlatform === 'META' ? <Store size={15} className="text-emerald-600" /> : <ShoppingBag size={15} className="text-purple-600" />}
+            Switch to {activePlatform === 'META' ? 'Shopify' : 'Meta Catalog'}
+          </button>
           
           {/* Open Multi-Variant Catalog Maker */}
           <button 
@@ -727,8 +818,60 @@ export default function ProductsCommercePage() {
         </div>
       </div>
 
-      {/* Meta Catalog Banner Info if connected */}
-      {metaCatalog.isConnected && (
+      {/* Active Store Platform Switcher Card */}
+      <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-md ${
+            activePlatform === 'META' ? 'bg-gradient-to-br from-purple-600 to-indigo-600 shadow-purple-600/20' : 'bg-gradient-to-br from-emerald-600 to-teal-600 shadow-emerald-600/20'
+          }`}>
+            {activePlatform === 'META' ? <ShoppingBag size={22} /> : <Store size={22} />}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Single Platform Mode:</span>
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-black tracking-wide ${
+                activePlatform === 'META' 
+                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800' 
+                  : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+              }`}>
+                {activePlatform === 'META' ? '🟣 Meta Commerce Manager (Active)' : '🟢 Shopify Store (Active)'}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Only products from your active platform (<strong>{activePlatform === 'META' ? 'Meta Commerce Catalog' : 'Shopify Store'}</strong>) are live in WhatsApp chats. Switching platform keeps the previous platform's products inactive.
+            </p>
+          </div>
+        </div>
+
+        {/* Platform Toggle Pills */}
+        <div className="flex items-center bg-gray-100 dark:bg-slate-800/90 p-1.5 rounded-xl border border-gray-200 dark:border-slate-700/80 shrink-0">
+          <button
+            onClick={() => handleInitiateSwitchPlatform('META')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activePlatform === 'META'
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <ShoppingBag size={14} /> Meta Catalog
+            {activePlatform === 'META' && <span className="bg-white/20 text-[10px] px-1.5 py-0.5 rounded-full font-bold">ACTIVE</span>}
+          </button>
+          <button
+            onClick={() => handleInitiateSwitchPlatform('SHOPIFY')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activePlatform === 'SHOPIFY'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <Store size={14} /> Shopify
+            {activePlatform === 'SHOPIFY' && <span className="bg-white/20 text-[10px] px-1.5 py-0.5 rounded-full font-bold">ACTIVE</span>}
+          </button>
+        </div>
+      </div>
+
+      {/* Meta Catalog Banner Info if connected and active */}
+      {metaCatalog.isConnected && activePlatform === 'META' && (
         <div className="bg-gradient-to-r from-purple-500/10 via-indigo-500/5 to-transparent border border-purple-200/80 dark:border-purple-800/40 rounded-2xl p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-600/20">
@@ -759,23 +902,82 @@ export default function ProductsCommercePage() {
 
       {/* Main Table Container */}
       <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-        {/* Table Toolbar */}
-        <div className="p-4 border-b border-gray-200 dark:border-slate-700 flex flex-wrap justify-between items-center gap-3 bg-gray-50 dark:bg-slate-800/50">
-          <div className="relative w-72">
-            <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search products, SKU, color..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-            />
+        {/* Table Toolbar with Status & Platform Tabs */}
+        <div className="p-4 border-b border-gray-200 dark:border-slate-700 flex flex-wrap justify-between items-center gap-4 bg-gray-50 dark:bg-slate-800/50">
+          {/* Status Tabs */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setSelectedPlatformTab('ACTIVE_PLATFORM')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                selectedPlatformTab === 'ACTIVE_PLATFORM'
+                  ? activePlatform === 'META'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-900 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-700 hover:bg-gray-100'
+              }`}
+            >
+              <span>Active {activePlatform === 'META' ? 'Meta' : 'Shopify'} Products</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                selectedPlatformTab === 'ACTIVE_PLATFORM' ? 'bg-black/20 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300'
+              }`}>
+                {activePlatformCount}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setSelectedPlatformTab('INACTIVE')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                selectedPlatformTab === 'INACTIVE'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-900 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-700 hover:bg-gray-100'
+              }`}
+            >
+              <span>Inactive Archive</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                selectedPlatformTab === 'INACTIVE' ? 'bg-black/20 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300'
+              }`}>
+                {inactiveCount}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setSelectedPlatformTab('ALL')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                selectedPlatformTab === 'ALL'
+                  ? 'bg-slate-800 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-900 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-700 hover:bg-gray-100'
+              }`}
+            >
+              <span>All ({totalCount})</span>
+            </button>
+
+            {selectedPlatformTab === 'INACTIVE' && inactiveCount > 0 && (
+              <button
+                onClick={handleDeleteInactive}
+                disabled={isPurgingInactive}
+                className="ml-2 inline-flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-lg text-xs font-bold transition-all cursor-pointer"
+              >
+                <Trash2 size={13} />
+                {isPurgingInactive ? "Deleting..." : `Delete ${inactiveCount} Inactive`}
+              </button>
+            )}
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
+              <input 
+                type="text" 
+                placeholder="Search products, SKU, color..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
             <select
               value={selectedCollection}
               onChange={(e) => setSelectedCollection(e.target.value)}
-              className="px-3 py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-200 outline-none cursor-pointer"
+              className="px-3 py-1.5 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-200 outline-none cursor-pointer"
             >
               <option value="all">📁 All Categories ({allCollections.length})</option>
               {allCollections.map(col => (
@@ -847,6 +1049,19 @@ export default function ProductsCommercePage() {
                               <span className="text-xs bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full font-semibold border border-indigo-100 dark:border-indigo-900/30">
                                 {group.variants.length} variant{group.variants.length > 1 ? "s" : ""}
                               </span>
+                              {group.variants[0]?.platform === 'META' ? (
+                                <span className="text-[10px] bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full font-bold border border-purple-200 dark:border-purple-800">
+                                  🟣 Meta
+                                </span>
+                              ) : group.variants[0]?.platform === 'SHOPIFY' ? (
+                                <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-200 dark:border-emerald-800">
+                                  🟢 Shopify
+                                </span>
+                              ) : (
+                                <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold border border-slate-200 dark:border-slate-700">
+                                  ⚪ Manual
+                                </span>
+                              )}
                             </p>
                             {group.description && (
                               <p className="text-xs text-gray-400 max-w-[400px] truncate mt-0.5" title={group.description.replace(/<[^>]*>/g, '').trim()}>
@@ -1653,6 +1868,75 @@ export default function ProductsCommercePage() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Platform Switch Confirmation Modal */}
+      {showSwitchModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
+                <RefreshCw className="text-indigo-600" size={18} /> Switch Active Store Platform
+              </h3>
+              <button onClick={() => setShowSwitchModal(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              You are switching your active store platform to <strong>{pendingTargetPlatform === 'META' ? 'Meta Commerce Catalog' : 'Shopify Store'}</strong>. Only one platform's products can be active on WhatsApp at a time.
+            </p>
+
+            <div className="space-y-3 bg-gray-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-gray-200 dark:border-slate-700/60 text-xs">
+              <div className="font-bold text-gray-700 dark:text-gray-200 mb-2">What to do with products from the previous platform?</div>
+              
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input 
+                  type="radio" 
+                  name="switchCleanup" 
+                  checked={switchCleanupOption === 'deactivate'} 
+                  onChange={() => setSwitchCleanupOption('deactivate')}
+                  className="mt-0.5 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+                <div>
+                  <span className="font-bold text-gray-900 dark:text-white">Deactivate previous products (Recommended)</span>
+                  <p className="text-gray-500 dark:text-gray-400 mt-0.5">Keeps product records and order history safe, but sets their status to Inactive so only {pendingTargetPlatform === 'META' ? 'Meta' : 'Shopify'} products are active.</p>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t border-gray-200 dark:border-slate-700/50">
+                <input 
+                  type="radio" 
+                  name="switchCleanup" 
+                  checked={switchCleanupOption === 'delete'} 
+                  onChange={() => setSwitchCleanupOption('delete')}
+                  className="mt-0.5 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                />
+                <div>
+                  <span className="font-bold text-rose-600 dark:text-rose-400">Permanently delete previous products</span>
+                  <p className="text-gray-500 dark:text-gray-400 mt-0.5">Completely removes unreferenced products of the other platform from your database.</p>
+                </div>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowSwitchModal(false)}
+                className="px-4 py-2 text-xs font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmSwitchPlatform}
+                disabled={isSwitchingPlatform}
+                className="px-5 py-2.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-2"
+              >
+                {isSwitchingPlatform && <RefreshCw size={13} className="animate-spin" />}
+                Confirm & Switch Platform
+              </button>
+            </div>
           </div>
         </div>
       )}
