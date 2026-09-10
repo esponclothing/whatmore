@@ -267,6 +267,7 @@ export default function WhatsAppInboxComponent() {
   const [followUpNotes, setFollowUpNotes] = useState<string>("");
 
   const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
+  const [sendingPayment, setSendingPayment] = useState<boolean>(false);
   const [showAssignModal, setShowAssignModal] = useState<boolean>(false);
   const [assigningLead, setAssigningLead] = useState<boolean>(false);
   const [statusToggleLoading, setStatusToggleLoading] = useState<boolean>(false);
@@ -1368,18 +1369,31 @@ export default function WhatsAppInboxComponent() {
 
   // Handle Send Payment Link Submit
   const handleSendPaymentSubmit = async () => {
-    if (!selectedConvId || !activeConvDetail?.customer?.id) return;
-    const res = await generateWhatsAppPaymentLinkAction({
-      conversationId: selectedConvId,
-      customerId: activeConvDetail.customer.id,
-      amount: paymentAmount,
-      description: paymentDesc,
-      deliveryMethod: paymentDeliveryMethod
-    });
-    if (res.success) {
-      setShowPaymentModal(false);
-      await fetchConversationDetail(selectedConvId, true);
-      await fetchConversationsList(true);
+    if (!selectedConvId || !activeConvDetail?.customer?.id || sendingPayment) return;
+    setSendingPayment(true);
+    try {
+      const res = await generateWhatsAppPaymentLinkAction({
+        conversationId: selectedConvId,
+        customerId: activeConvDetail.customer.id,
+        amount: paymentAmount,
+        description: paymentDesc,
+        deliveryMethod: paymentDeliveryMethod
+      });
+      if (res.success) {
+        setShowPaymentModal(false);
+        setToastMsg(`Payment request sent successfully.`);
+        setTimeout(() => setToastMsg(null), 3000);
+        await fetchConversationDetail(selectedConvId, true);
+        await fetchConversationsList(true);
+      } else {
+        setToastMsg(`Failed to send payment link: ${res.error || "Unknown error"}`);
+        setTimeout(() => setToastMsg(null), 4000);
+      }
+    } catch (err: any) {
+      setToastMsg(`Failed to send payment link: ${err.message || "Network error"}`);
+      setTimeout(() => setToastMsg(null), 4000);
+    } finally {
+      setSendingPayment(false);
     }
   };
 
@@ -2289,18 +2303,131 @@ export default function WhatsAppInboxComponent() {
                         )}
 
                         {/* Payment Link Card Renderer */}
-                        {msg.messageType === "PAYMENT_LINK" && (
-                          <div className="message-payment-card">
-                            <div className="payment-card-header">
-                              <CreditCard size={18} />
-                              <span>WhatsApp Payment Link</span>
+                        {msg.messageType === "PAYMENT_LINK" && (() => {
+                          let payMeta: any = {};
+                          try {
+                            if (msg.metadata) {
+                              payMeta = typeof msg.metadata === "string" ? JSON.parse(msg.metadata) : msg.metadata;
+                            }
+                          } catch (_) {}
+
+                          const qrImg = payMeta.qrImageUrl || (msg.mediaUrl?.includes("create-qr-code") ? msg.mediaUrl : null);
+                          const payUrl = payMeta.paymentUrl || (msg.mediaUrl?.startsWith("http") && !msg.mediaUrl.includes("create-qr-code") ? msg.mediaUrl : null);
+                          const payAmt = payMeta.amount || (msg.content?.match(/₹\s*([0-9,]+)/)?.[1]);
+
+                          return (
+                            <div style={{
+                              background: "#ffffff",
+                              border: "1.5px solid #818cf8",
+                              borderRadius: "14px",
+                              overflow: "hidden",
+                              marginTop: "4px",
+                              maxWidth: "340px",
+                              width: "100%",
+                              boxShadow: "0 4px 14px rgba(79, 70, 229, 0.12)"
+                            }}>
+                              {/* Header */}
+                              <div style={{
+                                background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
+                                color: "#ffffff",
+                                padding: "10px 14px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: "8px"
+                              }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                  <div style={{
+                                    background: "rgba(255,255,255,0.2)",
+                                    borderRadius: "50%",
+                                    width: "26px",
+                                    height: "26px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center"
+                                  }}>
+                                    <CreditCard size={15} color="#ffffff" />
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: "13px", fontWeight: 700, letterSpacing: "0.2px" }}>
+                                      Payment Request
+                                    </div>
+                                    {payAmt && (
+                                      <div style={{ fontSize: "11px", opacity: 0.92, fontWeight: 600 }}>
+                                        ₹{typeof payAmt === "number" ? payAmt.toLocaleString("en-IN") : payAmt}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                <span style={{
+                                  background: "#fef3c7",
+                                  color: "#b45309",
+                                  padding: "3px 8px",
+                                  borderRadius: "12px",
+                                  fontSize: "10px",
+                                  fontWeight: 700
+                                }}>
+                                  PENDING
+                                </span>
+                              </div>
+
+                              {/* Scannable QR Code Image */}
+                              {qrImg && (
+                                <div style={{ padding: "12px", background: "#f8fafc", textAlign: "center", borderBottom: "1px solid #e2e8f0" }}>
+                                  <div style={{ display: "inline-block", background: "#ffffff", padding: "8px", borderRadius: "10px", border: "1px solid #cbd5e1" }}>
+                                    <img
+                                      src={qrImg}
+                                      alt="UPI QR Code"
+                                      referrerPolicy="no-referrer"
+                                      style={{ width: "160px", height: "160px", display: "block" }}
+                                    />
+                                  </div>
+                                  <div style={{ fontSize: "11px", color: "#64748b", marginTop: "6px", fontWeight: 500 }}>
+                                    Scan with Google Pay, PhonePe, Paytm or UPI
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Body Text */}
+                              <div style={{
+                                padding: "12px 14px",
+                                fontSize: "12.5px",
+                                color: "#334155",
+                                lineHeight: "1.5",
+                                whiteSpace: "pre-wrap"
+                              }}>
+                                {msg.content}
+                              </div>
+
+                              {/* Pay Now Button Link */}
+                              {payUrl && (
+                                <div style={{ padding: "0 12px 12px" }}>
+                                  <a
+                                    href={payUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      gap: "6px",
+                                      background: "#4f46e5",
+                                      color: "#ffffff",
+                                      padding: "10px 14px",
+                                      borderRadius: "8px",
+                                      textDecoration: "none",
+                                      fontSize: "12.5px",
+                                      fontWeight: 700,
+                                      boxShadow: "0 2px 4px rgba(79, 70, 229, 0.25)"
+                                    }}
+                                  >
+                                    💳 Pay Now ↗
+                                  </a>
+                                </div>
+                              )}
                             </div>
-                            <div className="payment-card-body">
-                              <p>{msg.content}</p>
-                              <div className="payment-status-pill">Status: PENDING</div>
-                            </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         {/* Interactive Buttons / List Renderer */}
                         {(msg.messageType === "BUTTONS" || msg.messageType === "LIST") && (
@@ -3716,24 +3843,35 @@ export default function WhatsAppInboxComponent() {
 
               <button 
                 onClick={handleSendPaymentSubmit}
+                disabled={sendingPayment || paymentAmount <= 0}
                 style={{
                   marginTop: "8px",
                   padding: "14px",
-                  background: "#4f46e5",
+                  background: sendingPayment ? "#94a3b8" : "#4f46e5",
                   color: "white",
                   border: "none",
                   borderRadius: "8px",
                   fontSize: "14px",
                   fontWeight: 600,
-                  cursor: "pointer",
+                  cursor: sendingPayment ? "not-allowed" : "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   gap: "8px",
-                  boxShadow: "0 4px 6px -1px rgba(79, 70, 229, 0.2), 0 2px 4px -1px rgba(79, 70, 229, 0.1)"
+                  boxShadow: "0 4px 6px -1px rgba(79, 70, 229, 0.2), 0 2px 4px -1px rgba(79, 70, 229, 0.1)",
+                  opacity: sendingPayment ? 0.85 : 1,
+                  transition: "all 0.2s"
                 }}
               >
-                <Send size={16} /> Send Request in Chat
+                {sendingPayment ? (
+                  <>
+                    <RefreshCw size={16} className="animate-spin" /> Sending Payment Request...
+                  </>
+                ) : (
+                  <>
+                    <Send size={16} /> Send Request in Chat
+                  </>
+                )}
               </button>
             </div>
           </div>

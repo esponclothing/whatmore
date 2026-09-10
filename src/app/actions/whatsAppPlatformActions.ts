@@ -428,12 +428,28 @@ export async function sendWhatsAppMessageAction(data: {
            payload.type = 'audio';
            payload.audio = { ...mediaField }; // Audio does not support caption in Meta API
         } else if (data.messageType === 'PAYMENT_LINK' && data.mediaUrl) {
+           let qrImageUrl: string | null = null;
+           let paymentUrl = data.mediaUrl;
+           if (data.metadata) {
+             try {
+               const meta = typeof data.metadata === 'string' ? JSON.parse(data.metadata) : data.metadata;
+               if (meta.qrImageUrl) qrImageUrl = meta.qrImageUrl;
+               if (meta.paymentUrl) paymentUrl = meta.paymentUrl;
+             } catch(e) {}
+           }
            payload.type = 'interactive';
-           payload.interactive = {
+           const interactiveData: any = {
              type: 'cta_url',
              body: { text: data.content },
-             action: { name: 'cta_url', parameters: { display_text: '💳 Pay Now', url: data.mediaUrl } }
+             action: { name: 'cta_url', parameters: { display_text: '💳 Pay Now', url: paymentUrl } }
            };
+           if (qrImageUrl) {
+             interactiveData.header = {
+               type: 'image',
+               image: { link: qrImageUrl }
+             };
+           }
+           payload.interactive = interactiveData;
         } else if (data.messageType === 'INTERACTIVE') {
            payload.type = 'interactive';
            let interactiveData: any = {
@@ -916,6 +932,9 @@ export async function generateWhatsAppPaymentLinkAction(data: {
     const rawContactPhone = customer?.whatsappNumber ? customer.whatsappNumber.replace(/\D/g, '') : (customer?.mobile || '').replace(/\D/g, '') || '9999999999';
     const dynamicContact = rawContactPhone.length === 10 ? `+91${rawContactPhone}` : `+${rawContactPhone}`;
 
+    let qrApiUrl: string | null = null;
+    let upiId: string | null = null;
+
     if (gw === 'RAZORPAY' && creds?.razorpayKeyId && creds?.razorpayKeySecret) {
       const auth = Buffer.from(`${creds.razorpayKeyId}:${creds.razorpayKeySecret}`).toString('base64');
       const rzpRes = await fetch('https://api.razorpay.com/v1/payment_links', {
@@ -941,29 +960,18 @@ export async function generateWhatsAppPaymentLinkAction(data: {
           link_amount: data.amount,
           link_currency: 'INR',
           link_purpose: data.description,
-          customer_details: { customer_phone: contactPhone, customer_name: customer?.contactPerson || 'Customer' }
+          customer_details: { customer_phone: dynamicContact, customer_name: customer?.contactPerson || 'Customer' }
         })
       });
       const cfData = await cfRes.json();
       if (cfData.link_url) paymentUrl = cfData.link_url;
-    } else if (gw === 'UPI' && creds?.merchantUpiId) {
-      const domain = process.env.NEXTAUTH_URL || 'https://whatsapp.esponsports.com';
-      paymentUrl = `${domain}/pay?pa=${encodeURIComponent(creds.merchantUpiId)}&pn=${encodeURIComponent(creds.merchantUpiName || 'Espon')}&am=${data.amount}&tn=${encodeURIComponent(data.description)}`;
+    } else {
+      // Default to UPI Gateway
+      upiId = creds?.merchantUpiId || '9306817689@kotak811';
+      paymentUrl = `${domain}/pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(creds?.merchantUpiName || 'Espon')}&am=${data.amount}&tn=${encodeURIComponent(data.description)}`;
 
-      const upiLink = `upi://pay?pa=${encodeURIComponent(creds.merchantUpiId)}&pn=${encodeURIComponent(creds.merchantUpiName || 'Espon')}&am=${data.amount}&cu=INR&tn=${encodeURIComponent(data.description)}`;
-      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(upiLink)}`;
-      const qrMsgText = `🏦 UPI ID: *${creds.merchantUpiId}*\n\nScan this QR to pay, or click the Pay Now button below.`;
-
-      if (data.deliveryMethod === 'qr' || data.deliveryMethod === 'both' || !data.deliveryMethod) {
-        await sendWhatsAppMessageAction({
-          conversationId: data.conversationId,
-          senderType: 'AGENT',
-          senderName: 'Billing System',
-          messageType: 'IMAGE',
-          content: qrMsgText,
-          mediaUrl: qrApiUrl,
-        });
-      }
+      const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(creds?.merchantUpiName || 'Espon')}&am=${data.amount}&cu=INR&tn=${encodeURIComponent(data.description)}`;
+      qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(upiLink)}`;
     }
     
     const paymentLink = await prisma.whatsAppPaymentLink.create({
@@ -976,16 +984,51 @@ export async function generateWhatsAppPaymentLinkAction(data: {
       }
     });
 
-    // Send Payment Link Message into WhatsApp Chat conditionally
-    if (data.deliveryMethod === 'link' || data.deliveryMethod === 'both' || !data.deliveryMethod) {
+    const metadataPayload = JSON.stringify({
+      paymentLinkId: paymentLink.id,
+      amount: data.amount,
+      paymentUrl,
+      qrImageUrl: qrApiUrl,
+      upiId
+    });
+
+    // Send SINGLE unified message based on delivery method
+    if (data.deliveryMethod === 'qr' && qrApiUrl) {
+      // Send single QR image message
+      await sendWhatsAppMessageAction({
+        conversationId: data.conversationId,
+        senderType: 'AGENT',
+        senderName: 'Billing System',
+        messageType: 'IMAGE',
+        content: `💳 *Payment Request: ₹${data.amount.toLocaleString('en-IN')}*\n\n${data.description}\n\n🏦 UPI ID: *${upiId}*\n\nScan this QR code with any UPI app (GPay, PhonePe, Paytm) to complete payment.`,
+        mediaUrl: qrApiUrl,
+        metadata: metadataPayload
+      });
+    } else if (data.deliveryMethod === 'link') {
+      // Send single CTA link button message without image header
       await sendWhatsAppMessageAction({
         conversationId: data.conversationId,
         senderType: 'AGENT',
         senderName: 'Billing System',
         messageType: 'PAYMENT_LINK',
-        content: `💳 *Payment Request*\n\nAmount: ₹${data.amount.toLocaleString('en-IN')}\nDescription: ${data.description}\n\nClick below to pay securely:`,
-        mediaUrl: paymentUrl, // Handled as CTA URL inside sendWhatsAppMessageAction
-        metadata: JSON.stringify({ paymentLinkId: paymentLink.id, amount: data.amount, paymentUrl })
+        content: `💳 *Payment Request: ₹${data.amount.toLocaleString('en-IN')}*\n\n${data.description}\n\nClick the button below to pay securely:`,
+        mediaUrl: paymentUrl,
+        metadata: JSON.stringify({ paymentLinkId: paymentLink.id, amount: data.amount, paymentUrl, upiId })
+      });
+    } else {
+      // Both (Default): Send ONE single interactive message with QR image header AND Pay Now button!
+      const bodyContent = qrApiUrl 
+        ? `💳 *Payment Request: ₹${data.amount.toLocaleString('en-IN')}*\n\n${data.description}${upiId ? `\n\n🏦 UPI ID: *${upiId}*` : ''}\n\nScan this QR code or tap 'Pay Now' below to complete payment:`
+        : `💳 *Payment Request: ₹${data.amount.toLocaleString('en-IN')}*\n\n${data.description}\n\nClick below to pay securely:`;
+
+      await sendWhatsAppMessageAction({
+        conversationId: data.conversationId,
+        senderType: 'AGENT',
+        senderName: 'Billing System',
+        messageType: 'PAYMENT_LINK',
+        content: bodyContent,
+        mediaUrl: paymentUrl,
+        metadata: metadataPayload
       });
     }
 
