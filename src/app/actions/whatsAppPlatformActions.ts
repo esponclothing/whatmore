@@ -4722,6 +4722,409 @@ export async function toggleProductVisibilityAction(id: string, targetStatus: st
   }
 }
 
+export async function getMetaCatalogStatusAction() {
+  try {
+    const integration = await prisma.whatsAppIntegration.findFirst({
+      where: { type: 'META_CATALOG', isActive: true }
+    });
+    if (!integration || !integration.url || !integration.token) {
+      return { success: true, isConnected: false };
+    }
+    const catalogId = integration.url.trim();
+    const token = integration.token.trim();
+
+    const res = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(catalogId)}?fields=id,name,vertical,product_count&access_token=${encodeURIComponent(token)}`);
+    const data = await res.json();
+    if (res.ok && !data.error) {
+      return {
+        success: true,
+        isConnected: true,
+        catalogId: data.id,
+        catalogName: data.name || integration.name || "Meta Product Catalog",
+        productCount: data.product_count ?? 0,
+        vertical: data.vertical || "commerce"
+      };
+    }
+    return {
+      success: true,
+      isConnected: true,
+      catalogId,
+      catalogName: integration.name || "Meta Product Catalog",
+      productCount: 0
+    };
+  } catch (e: any) {
+    return { success: false, error: e.message, isConnected: false };
+  }
+}
+
+export async function syncMetaCatalogProductsAction() {
+  try {
+    const integration = await prisma.whatsAppIntegration.findFirst({
+      where: { type: 'META_CATALOG', isActive: true }
+    });
+    if (!integration || !integration.url || !integration.token) {
+      return { success: false, error: "No active Meta Product Catalog integration found. Connect it in Integrations first." };
+    }
+    const catalogId = integration.url.trim();
+    const token = integration.token.trim();
+
+    let allMetaProducts: any[] = [];
+    let nextUrl: string | null = `https://graph.facebook.com/v21.0/${encodeURIComponent(catalogId)}/products?fields=id,retailer_id,name,description,price,currency,image_url,url,availability,color,size,brand,category,sale_price,product_group&limit=100&access_token=${encodeURIComponent(token)}`;
+
+    let pageCount = 0;
+    while (nextUrl && pageCount < 5) {
+      pageCount++;
+      const res = await fetch(nextUrl);
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error?.message || "Failed to fetch products from Meta Catalog");
+      }
+      if (Array.isArray(data.data)) {
+        allMetaProducts = allMetaProducts.concat(data.data);
+      }
+      nextUrl = data.paging?.next || null;
+    }
+
+    if (allMetaProducts.length === 0) {
+      return { success: true, count: 0, message: "No products found in Meta Catalog." };
+    }
+
+    let syncedCount = 0;
+    for (const mp of allMetaProducts) {
+      const sku = (mp.retailer_id || mp.id || "").trim();
+      if (!sku) continue;
+
+      const parsePrice = (val: any) => {
+        if (!val) return 0;
+        if (typeof val === 'number') return val;
+        const cleaned = String(val).replace(/[^0-9.]/g, '');
+        return parseFloat(cleaned) || 0;
+      };
+
+      const rawMrp = parsePrice(mp.price);
+      const rawSale = parsePrice(mp.sale_price);
+
+      const sellingPrice = rawSale > 0 ? rawSale : (rawMrp > 0 ? rawMrp : 0);
+      const mrp = rawMrp > 0 ? rawMrp : sellingPrice;
+      const purchasePrice = Math.round(sellingPrice * 0.5);
+      const stockQuantity = mp.availability === 'in stock' ? 100 : 0;
+      const status = mp.availability === 'in stock' ? 'Active' : 'Out of Stock';
+
+      let displayName = mp.name || "Meta Catalog Product";
+      const variantParts: string[] = [];
+      if (mp.color && !displayName.toLowerCase().includes(mp.color.toLowerCase())) {
+        variantParts.push(mp.color);
+      }
+      if (mp.size && !displayName.toLowerCase().includes(mp.size.toLowerCase())) {
+        variantParts.push(mp.size);
+      }
+      if (variantParts.length > 0) {
+        displayName = `${displayName} - ${variantParts.join(' / ')}`;
+      }
+
+      await prisma.product.upsert({
+        where: { sku },
+        update: {
+          name: displayName,
+          articleNumber: mp.product_group?.retailer_id || null,
+          description: mp.description || null,
+          category: mp.category || mp.brand || "Meta Catalog",
+          color: mp.color || null,
+          size: mp.size || null,
+          sellingPrice,
+          mrp,
+          purchasePrice,
+          stockQuantity,
+          status,
+          images: mp.image_url ? [mp.image_url] : []
+        },
+        create: {
+          name: displayName,
+          sku,
+          articleNumber: mp.product_group?.retailer_id || null,
+          description: mp.description || null,
+          category: mp.category || mp.brand || "Meta Catalog",
+          color: mp.color || null,
+          size: mp.size || null,
+          sellingPrice,
+          mrp,
+          purchasePrice,
+          stockQuantity,
+          status,
+          images: mp.image_url ? [mp.image_url] : []
+        }
+      });
+      syncedCount++;
+    }
+
+    revalidatePath("/whatsapp/commerce");
+    return {
+      success: true,
+      count: syncedCount,
+      message: `Successfully synced ${syncedCount} products from Meta Catalog!`
+    };
+  } catch (e: any) {
+    console.error("[Meta Catalog Sync Error]:", e.message);
+    return { success: false, error: e.message };
+  }
+}
+
+export async function createAndPushCatalogProductAction(data: {
+  title: string;
+  baseSku: string;
+  description: string;
+  category?: string;
+  brand?: string;
+  imageUrl?: string;
+  sellingPrice: number;
+  compareAtPrice?: number;
+  costPrice?: number;
+  variants: Array<{
+    color?: string;
+    size?: string;
+    sku: string;
+    price: number;
+    compareAt?: number;
+    inventory?: number;
+    imageUrl?: string;
+  }>;
+  pushToMeta?: boolean;
+}) {
+  try {
+    const {
+      title,
+      baseSku,
+      description,
+      category = "Apparel",
+      brand = "Esponsports",
+      imageUrl,
+      sellingPrice,
+      compareAtPrice = sellingPrice,
+      costPrice = 0,
+      variants,
+      pushToMeta = true
+    } = data;
+
+    if (!title || !baseSku) {
+      return { success: false, error: "Product title and Base SKU are required." };
+    }
+
+    const createdProducts: any[] = [];
+    const itemsToCreate = variants && variants.length > 0 ? variants : [
+      {
+        sku: baseSku,
+        color: undefined,
+        size: undefined,
+        price: sellingPrice,
+        compareAt: compareAtPrice,
+        inventory: 20,
+        imageUrl: imageUrl
+      }
+    ];
+
+    for (const v of itemsToCreate) {
+      const vTitleParts: string[] = [];
+      if (v.color) vTitleParts.push(v.color);
+      if (v.size) vTitleParts.push(v.size);
+      const variantName = vTitleParts.length > 0 ? `${title} - ${vTitleParts.join(' / ')}` : title;
+
+      const pPrice = v.price || sellingPrice || 0;
+      const pMrp = v.compareAt || compareAtPrice || pPrice;
+      const pCost = costPrice || Math.round(pPrice * 0.5);
+      const pImg = v.imageUrl || imageUrl;
+
+      const saved = await prisma.product.upsert({
+        where: { sku: v.sku },
+        update: {
+          name: variantName,
+          articleNumber: baseSku,
+          description,
+          category,
+          color: v.color || null,
+          size: v.size || null,
+          sellingPrice: pPrice,
+          mrp: pMrp,
+          purchasePrice: pCost,
+          stockQuantity: v.inventory ?? 20,
+          status: "Active",
+          images: pImg ? [pImg] : []
+        },
+        create: {
+          name: variantName,
+          sku: v.sku,
+          articleNumber: baseSku,
+          description,
+          category,
+          color: v.color || null,
+          size: v.size || null,
+          sellingPrice: pPrice,
+          mrp: pMrp,
+          purchasePrice: pCost,
+          stockQuantity: v.inventory ?? 20,
+          status: "Active",
+          images: pImg ? [pImg] : []
+        }
+      });
+      createdProducts.push(saved);
+    }
+
+    let metaResult = { pushed: false, message: "Saved locally." };
+    if (pushToMeta) {
+      const integration = await prisma.whatsAppIntegration.findFirst({
+        where: { type: 'META_CATALOG', isActive: true }
+      });
+
+      if (integration && integration.url && integration.token) {
+        const catalogId = integration.url.trim();
+        const token = integration.token.trim();
+
+        const requests = itemsToCreate.map(v => {
+          const vTitleParts: string[] = [];
+          if (v.color) vTitleParts.push(v.color);
+          if (v.size) vTitleParts.push(v.size);
+          const variantName = vTitleParts.length > 0 ? `${title} - ${vTitleParts.join(' / ')}` : title;
+
+          const pPrice = v.price || sellingPrice || 0;
+          const pMrp = v.compareAt || compareAtPrice || pPrice;
+          const pImg = v.imageUrl || imageUrl || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800";
+
+          const regularPriceCents = Math.round(pMrp * 100);
+          const salePriceCents = pPrice < pMrp ? Math.round(pPrice * 100) : undefined;
+
+          const itemData: any = {
+            id: v.sku,
+            title: variantName,
+            description: description || title,
+            availability: (v.inventory ?? 20) > 0 ? "in stock" : "out of stock",
+            condition: "new",
+            price: regularPriceCents,
+            url: `https://esponsports.com/products/${baseSku.toLowerCase()}`,
+            image_url: pImg,
+            brand: brand || "Esponsports",
+            category: category || "Apparel & Accessories > Clothing"
+          };
+
+          if (salePriceCents) {
+            itemData.sale_price = salePriceCents;
+          }
+          if (v.color) itemData.color = v.color;
+          if (v.size) itemData.size = v.size;
+          if (itemsToCreate.length > 1) {
+            itemData.item_group_id = baseSku;
+          }
+
+          return {
+            method: "CREATE",
+            retailer_id: v.sku,
+            data: itemData
+          };
+        });
+
+        const batchRes = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(catalogId)}/items_batch?access_token=${encodeURIComponent(token)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            item_type: "PRODUCT_ITEM",
+            requests
+          })
+        });
+
+        const batchData = await batchRes.json();
+        if (batchRes.ok && !batchData.error) {
+          metaResult = {
+            pushed: true,
+            message: `Successfully created ${createdProducts.length} items and pushed to Meta Catalog!`
+          };
+        } else {
+          metaResult = {
+            pushed: false,
+            message: `Saved locally, but Meta Catalog batch returned: ${batchData.error?.message || "Check fields"}`
+          };
+        }
+      } else {
+        metaResult = {
+          pushed: false,
+          message: "Saved locally. Meta Catalog integration not connected."
+        };
+      }
+    }
+
+    revalidatePath("/whatsapp/commerce");
+    return {
+      success: true,
+      products: createdProducts,
+      metaResult
+    };
+  } catch (error: any) {
+    console.error("[Create Catalog Product Error]:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function pushSingleProductToMetaAction(productId: string) {
+  try {
+    const product = await prisma.product.findUnique({ where: { id: productId } });
+    if (!product) return { success: false, error: "Product not found" };
+
+    const integration = await prisma.whatsAppIntegration.findFirst({
+      where: { type: 'META_CATALOG', isActive: true }
+    });
+    if (!integration || !integration.url || !integration.token) {
+      return { success: false, error: "Meta Catalog is not connected. Please connect in Integrations." };
+    }
+
+    const catalogId = integration.url.trim();
+    const token = integration.token.trim();
+    const sku = product.sku || product.id;
+
+    const regularPriceCents = Math.round((product.mrp || product.sellingPrice) * 100);
+    const salePriceCents = product.sellingPrice < (product.mrp || product.sellingPrice) 
+      ? Math.round(product.sellingPrice * 100) 
+      : undefined;
+
+    const itemData: any = {
+      id: sku,
+      title: product.name,
+      description: product.description || product.name,
+      availability: product.stockQuantity > 0 ? "in stock" : "out of stock",
+      condition: "new",
+      price: regularPriceCents,
+      url: `https://esponsports.com/products/${(product.articleNumber || sku).toLowerCase()}`,
+      image_url: product.images?.[0] || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800",
+      brand: "Esponsports",
+      category: product.category || "Apparel & Accessories > Clothing"
+    };
+
+    if (salePriceCents) itemData.sale_price = salePriceCents;
+    if (product.color) itemData.color = product.color;
+    if (product.size) itemData.size = product.size;
+    if (product.articleNumber) itemData.item_group_id = product.articleNumber;
+
+    const batchRes = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(catalogId)}/items_batch?access_token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        item_type: "PRODUCT_ITEM",
+        requests: [
+          {
+            method: "CREATE",
+            retailer_id: sku,
+            data: itemData
+          }
+        ]
+      })
+    });
+
+    const batchData = await batchRes.json();
+    if (batchRes.ok && !batchData.error) {
+      return { success: true, message: `Product "${product.name}" pushed to Meta Catalog successfully!` };
+    }
+    return { success: false, error: batchData.error?.message || "Failed to push item to Meta" };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
 export async function getTeamMembersAction() {
   try {
     const employees = await prisma.employee.findMany({
