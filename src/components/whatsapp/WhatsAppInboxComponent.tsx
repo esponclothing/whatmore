@@ -2472,38 +2472,51 @@ export default function WhatsAppInboxComponent() {
                                       borderBottom: idx === items.length - 1 ? 'none' : '1px dashed #e2e8f0'
                                     }}>
                                       {/* Thumbnail */}
-                                      {it.image ? (
-                                        <img
-                                          src={it.image}
-                                          alt={it.name}
+                                      <div style={{
+                                        width: '52px',
+                                        height: '52px',
+                                        borderRadius: '8px',
+                                        background: '#f8fafc',
+                                        border: '1px solid #e2e8f0',
+                                        overflow: 'hidden',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flexShrink: 0,
+                                        position: 'relative'
+                                      }}>
+                                        {it.image ? (
+                                          <img
+                                            src={it.image}
+                                            alt={it.name || 'Product'}
+                                            style={{
+                                              width: '100%',
+                                              height: '100%',
+                                              objectFit: 'cover'
+                                            }}
+                                            onError={(e) => {
+                                              const target = e.currentTarget;
+                                              target.style.display = 'none';
+                                              const fallback = target.parentElement?.querySelector('.prod-fallback-icon') as HTMLElement;
+                                              if (fallback) fallback.style.display = 'flex';
+                                            }}
+                                          />
+                                        ) : null}
+                                        <div
+                                          className="prod-fallback-icon"
                                           style={{
-                                            width: '46px',
-                                            height: '46px',
-                                            objectFit: 'cover',
-                                            borderRadius: '8px',
-                                            border: '1px solid #e2e8f0',
-                                            flexShrink: 0
+                                            display: it.image ? 'none' : 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            width: '100%',
+                                            height: '100%',
+                                            color: '#10b981',
+                                            background: '#ecfdf5'
                                           }}
-                                          onError={(e) => {
-                                            (e.currentTarget as HTMLElement).style.display = 'none';
-                                          }}
-                                        />
-                                      ) : (
-                                        <div style={{
-                                          width: '46px',
-                                          height: '46px',
-                                          borderRadius: '8px',
-                                          background: '#f1f5f9',
-                                          border: '1px solid #e2e8f0',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          flexShrink: 0,
-                                          color: '#64748b'
-                                        }}>
-                                          <ShoppingBag size={20} />
+                                        >
+                                          <ShoppingBag size={22} />
                                         </div>
-                                      )}
+                                      </div>
 
                                       {/* Title & Qty */}
                                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -2555,8 +2568,8 @@ export default function WhatsAppInboxComponent() {
                                   </div>
                                 )}
 
-                                {/* Customer Note */}
-                                {customerNote ? (
+                                {/* Customer Note (Only when explicitly provided by customer) */}
+                                {customerNote && String(customerNote).trim() && String(customerNote).trim() !== "null" && String(customerNote).trim() !== "undefined" ? (
                                   <div style={{
                                     background: '#fffbeb',
                                     border: '1px solid #fde68a',
