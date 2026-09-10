@@ -714,9 +714,8 @@ export default function ProductsCommercePage() {
             onClick={() => {
               setShowCatalogMaker(true);
               recomputeVariantsMatrix(
-                productForm.colors,
-                productForm.sizes,
-                productForm.baseSku,
+                productOptions,
+                productForm.baseSku || "PROD",
                 Number(productForm.sellingPrice) || 0,
                 Number(productForm.compareAtPrice) || 0
               );
