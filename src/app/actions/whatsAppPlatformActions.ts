@@ -6639,7 +6639,7 @@ export async function processCampaignQueueAction(campaignId: string) {
                 messageType: 'TEMPLATE',
                 content: displayContent,
                 status: 'SENT',
-                whatsappMessageId: metaMsgId || undefined,
+                metaMessageId: metaMsgId || undefined,
                 sentAt: new Date()
               }
             });

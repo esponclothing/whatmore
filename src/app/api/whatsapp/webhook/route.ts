@@ -191,19 +191,18 @@ export async function POST(req: NextRequest) {
             }
 
             // Update matching WhatsAppMessage record
-            await prisma.whatsAppMessage.updateMany({
-              where: {
-                OR: [
-                  { whatsappMessageId: wamid },
-                  { conversation: { customer: { mobile: { endsWith: last10 } } } }
-                ]
-              },
-              data: {
-                status: targetStatus,
-                deliveredAt: targetStatus === 'DELIVERED' ? new Date() : undefined,
-                readAt: targetStatus === 'READ' ? new Date() : undefined
-              }
-            });
+            if (wamid) {
+              await prisma.whatsAppMessage.updateMany({
+                where: {
+                  metaMessageId: wamid
+                },
+                data: {
+                  status: targetStatus,
+                  deliveredAt: targetStatus === 'DELIVERED' ? new Date() : undefined,
+                  readAt: targetStatus === 'READ' ? new Date() : undefined
+                }
+              });
+            }
           }
         } catch (err) {
           console.error("[Webhook Status Receipt Error]:", err);
