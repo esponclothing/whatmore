@@ -2124,6 +2124,7 @@ export default function WhatsAppInboxComponent() {
                             <img
                               src={resolveSafeMediaUrl(mediaUrl)}
                               alt="Meta Ad Media"
+                              referrerPolicy="no-referrer"
                               style={{ width: "100%", maxHeight: "160px", objectFit: "cover", borderRadius: "10px", border: "1px solid #dbeafe" }}
                               onError={(e) => {
                                 (e.currentTarget as HTMLElement).style.display = "none";
@@ -2233,6 +2234,7 @@ export default function WhatsAppInboxComponent() {
                                 <img
                                   src={resolveSafeMediaUrl(msg.mediaUrl)}
                                   alt="Media Image"
+                                  referrerPolicy="no-referrer"
                                   style={{ width: "100%", maxHeight: "220px", objectFit: "cover", borderRadius: "8px", cursor: "pointer" }}
                                   onError={(e) => {
                                     (e.currentTarget as HTMLElement).style.display = "none";
@@ -2308,6 +2310,7 @@ export default function WhatsAppInboxComponent() {
                               <img
                                 src={resolveSafeMediaUrl(msg.mediaUrl)}
                                 alt="Header Media"
+                                referrerPolicy="no-referrer"
                                 style={{ width: "100%", aspectRatio: "1.91 / 1", objectFit: "cover", borderRadius: "8px", cursor: "pointer" }}
                                 onError={(e) => {
                                   (e.currentTarget as HTMLElement).style.display = "none";
@@ -2489,6 +2492,7 @@ export default function WhatsAppInboxComponent() {
                                           <img
                                             src={it.image}
                                             alt={it.name || 'Product'}
+                                            referrerPolicy="no-referrer"
                                             style={{
                                               width: '100%',
                                               height: '100%',
