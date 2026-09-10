@@ -588,21 +588,6 @@ export async function POST(req: NextRequest) {
         };
         console.log(`[CTWA Ad Attribution Webhook] Received referral from Meta Ad ${ctwaMetadata.source_id}: "${ctwaMetadata.headline}"`);
         
-        // Update customer leadSource & tag
-        try {
-          const existingTags = (customer.tags || '')
-            .split(',')
-            .map((t: string) => t.trim())
-            .filter(Boolean);
-          const newTags = Array.from(new Set([...existingTags, "Meta_CTWA_Ad"]));
-          await prisma.customer.update({
-            where: { id: customer.id },
-            data: { 
-              leadSource: "Meta Click-to-WhatsApp Ad",
-              tags: newTags.join(', ')
-            }
-          });
-        } catch (_) {}
       }
 
       // Combined metadata for message (CTWA ad + Catalog Order details)
@@ -612,23 +597,6 @@ export async function POST(req: NextRequest) {
           ...(ctwaMetadata ? { ctwa: ctwaMetadata } : {}),
           ...(orderMetadata ? { order: orderMetadata } : {})
         };
-      }
-
-      // If Catalog Order received, auto-tag customer
-      if (orderMetadata) {
-        try {
-          const existingTags = (customer.tags || '')
-            .split(',')
-            .map((t: string) => t.trim())
-            .filter(Boolean);
-          const newTags = Array.from(new Set([...existingTags, "Catalog_Order"]));
-          await prisma.customer.update({
-            where: { id: customer.id },
-            data: { 
-              tags: newTags.join(', ')
-            }
-          });
-        } catch (_) {}
       }
 
       // Step D: Store Incoming Message
