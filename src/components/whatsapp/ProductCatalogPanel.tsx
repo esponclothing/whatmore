@@ -129,7 +129,7 @@ export default function ProductCatalogPanel({ onClose, onSendProduct, recipientN
               {/* Product Image */}
               <div style={{ width: "56px", height: "56px", borderRadius: "8px", overflow: "hidden", flexShrink: 0, background: "#e5e7eb" }}>
                 {product.image ? (
-                  <img src={product.image} alt={product.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <img src={product.image} alt={product.title} referrerPolicy="no-referrer" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : (
                   <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <ShoppingBag size={20} color="#9ca3af" />

@@ -1672,7 +1672,7 @@ export default function WhatsAppTemplatesComponent() {
                             className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-slate-700 rounded-xl flex items-center gap-2 text-xs shadow-2xs animate-in zoom-in-95 duration-150"
                           >
                             <div className="w-5 h-5 rounded-md overflow-hidden bg-gray-100 flex-shrink-0 border border-gray-200">
-                              <img src={p.primaryImage || p.images?.[0]} alt={p.name} className="w-full h-full object-cover" />
+                              <img src={p.primaryImage || p.images?.[0]} alt={p.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
                             </div>
                             <span className="font-bold text-gray-800 dark:text-gray-100 truncate max-w-[140px]">{p.name}</span>
                             <span className="text-[10px] font-bold text-emerald-600">₹{p.sellingPrice}</span>
@@ -1759,7 +1759,7 @@ export default function WhatsAppTemplatesComponent() {
                                       className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer pointer-events-none flex-shrink-0"
                                     />
                                     <div className="w-9 h-9 rounded-lg overflow-hidden bg-white dark:bg-slate-800 border border-gray-200 flex-shrink-0">
-                                      <img src={p.primaryImage || p.images?.[0]} alt={p.name} className="w-full h-full object-cover" />
+                                      <img src={p.primaryImage || p.images?.[0]} alt={p.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <div className="text-xs font-bold text-gray-800 dark:text-gray-100 truncate">{p.name}</div>
@@ -1969,6 +1969,7 @@ export default function WhatsAppTemplatesComponent() {
                                 <img
                                   src={aiDraft.template.headerMediaUrl}
                                   alt="Header preview"
+                                  referrerPolicy="no-referrer"
                                   className="w-10 h-10 rounded-lg object-cover border border-gray-200"
                                   onError={(e: any) => { e.target.style.display = 'none'; }}
                                 />
@@ -2012,7 +2013,7 @@ export default function WhatsAppTemplatesComponent() {
                                 className="min-w-[190px] max-w-[210px] bg-gray-50/80 dark:bg-slate-900/80 border border-gray-200 dark:border-slate-700 rounded-xl p-2.5 flex flex-col gap-1.5 flex-shrink-0"
                               >
                                 <div className="w-full h-24 rounded-lg overflow-hidden bg-white dark:bg-slate-800 border border-gray-200 flex-shrink-0">
-                                  <img src={card.mediaUrl} alt={card.title} className="w-full h-full object-cover" />
+                                  <img src={card.mediaUrl} alt={card.title} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
                                 </div>
                                 <div className="font-bold text-xs text-gray-900 dark:text-white truncate" title={card.title}>
                                   #{cIdx + 1} {card.title}
@@ -2223,6 +2224,7 @@ export default function WhatsAppTemplatesComponent() {
                             <img
                               src={prod.primaryImage}
                               alt={prod.name}
+                              referrerPolicy="no-referrer"
                               className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
                               onError={(e: any) => {
                                 e.target.src = "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&auto=format&fit=crop&q=80";
@@ -2847,6 +2849,7 @@ export default function WhatsAppTemplatesComponent() {
                       <img
                         src={headerMediaPreview}
                         alt="Header preview"
+                        referrerPolicy="no-referrer"
                         className="max-h-40 rounded-xl object-contain shadow-md border border-gray-200 dark:border-slate-700"
                       />
                       <div className="flex items-center gap-2 mt-1">
@@ -3033,6 +3036,7 @@ export default function WhatsAppTemplatesComponent() {
                             <img
                               src={carouselCards[activeCarouselCardIndex].mediaUrl}
                               alt="Card media"
+                              referrerPolicy="no-referrer"
                               className="w-full h-full object-cover"
                             />
                           </div>
@@ -3654,6 +3658,7 @@ export default function WhatsAppTemplatesComponent() {
                         <img
                           src={headerMediaPreview}
                           alt="Header media preview"
+                          referrerPolicy="no-referrer"
                           className="w-full h-full object-cover"
                         />
                       </div>
@@ -3872,6 +3877,7 @@ export default function WhatsAppTemplatesComponent() {
                                   <img
                                     src={card.mediaUrl}
                                     alt={card.title}
+                                    referrerPolicy="no-referrer"
                                     className="w-full h-full object-cover"
                                   />
                                 ) : (

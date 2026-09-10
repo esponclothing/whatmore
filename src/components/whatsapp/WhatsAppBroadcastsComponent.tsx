@@ -1898,7 +1898,7 @@ export default function WhatsAppBroadcastsComponent() {
                           />
                           {headerMediaUrl && selectedTemplate.headerType.toUpperCase() === "IMAGE" && (
                             <div className="w-12 h-12 rounded-xl overflow-hidden border border-indigo-200 dark:border-indigo-700 shrink-0 bg-white shadow-xs">
-                              <img src={headerMediaUrl} alt="Thumbnail" className="w-full h-full object-cover" />
+                              <img src={headerMediaUrl} alt="Thumbnail" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
                             </div>
                           )}
                         </div>

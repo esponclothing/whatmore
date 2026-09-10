@@ -701,7 +701,7 @@ export default function WhatsAppFlowsComponent() {
                     </div>
                     
                     {cr.mediaUrl && (
-                      <img src={cr.mediaUrl} alt="Media" style={{ width: "100%", height: "120px", objectFit: "cover", borderRadius: "6px" }} />
+                      <img src={cr.mediaUrl} alt="Media" referrerPolicy="no-referrer" style={{ width: "100%", height: "120px", objectFit: "cover", borderRadius: "6px" }} />
                     )}
                     
                     <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
