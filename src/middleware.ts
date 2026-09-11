@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const SESSION_SECRET = process.env.SESSION_SECRET || "whatmore-session-2026";
-const OWNER_SECRET  = process.env.OWNER_PORTAL_SECRET || "whatmore-owner-2026";
+const SESSION_SECRET = process.env.SESSION_SECRET || "whatin-session-2026";
+const OWNER_SECRET  = process.env.OWNER_PORTAL_SECRET || "whatin-owner-2026";
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

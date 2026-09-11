@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const OWNER_SECRET = process.env.OWNER_PORTAL_SECRET || "whatmore-owner-2026";
+const OWNER_SECRET = process.env.OWNER_PORTAL_SECRET || "whatin-owner-2026";
 
 export async function POST(req: NextRequest) {
   const { password } = await req.json();

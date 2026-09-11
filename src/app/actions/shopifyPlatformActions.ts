@@ -5,7 +5,21 @@ import { revalidatePath } from "next/cache";
 import { sendWhatsAppMessageAction } from "./whatsAppPlatformActions";
 
 // Helper to get Shopify credentials from DB or Environment
-async function getShopifyCredentials() {
+async function getShopifyCredentials(clientId?: string) {
+  if (clientId) {
+    const client = await (prisma as any).whatsAppClient.findUnique({ where: { id: clientId } });
+    if (client?.shopifyDomain && client?.shopifyToken) {
+      const cleanDomain = client.shopifyDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+      return { domain: cleanDomain, token: client.shopifyToken };
+    }
+  }
+  const clientCreds = await (prisma as any).whatsAppClient.findFirst({
+    where: { shopifyDomain: { not: null }, shopifyToken: { not: null } }
+  });
+  if (clientCreds?.shopifyDomain && clientCreds?.shopifyToken) {
+    const cleanDomain = clientCreds.shopifyDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+    return { domain: cleanDomain, token: clientCreds.shopifyToken };
+  }
   const settings = await prisma.whatsAppSettings.findFirst();
   const company = await prisma.companySettings.findFirst();
   
