@@ -9,16 +9,14 @@ const SHOPIFY_ACCESS_TOKEN = process.env.VITE_SHOPIFY_ACCESS_TOKEN || '';
 // Mock AI call (You can use @google/genai or fetch in real app)
 
 export const GEMINI_MODEL_CASCADE = [
-  'gemini-3.8-flash',
-  'gemini-3.7-flash',
-  'gemini-3.6-flash',
-  'gemini-3.5-flash',
-  'gemini-3.5-flash-lite',
-  'gemini-3.1-flash-lite',
   'gemini-2.5-flash',
   'gemini-2.5-pro',
-  'gemini-3.1-pro-preview',
-  'gemini-2.0-flash'
+  'gemini-3.7-flash',
+  'gemini-3.6-flash',
+  'gemini-3.8-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+  'gemini-2.0-flash-exp'
 ];
 
 export async function callGeminiRest(apiKey: string, modelName: string, prompt: string, systemPrompt: string, maxTokens = 600) {
@@ -59,15 +57,17 @@ export async function callGeminiRest(apiKey: string, modelName: string, prompt: 
   return text.trim();
 }
 
-async function callAIEngine(messages: any[], preferredModel: string, jsonMode = false, maxTokens = 600) {
-  let apiKey = process.env.GEMINI_API_KEY || '';
-  try {
-    const settings = await prisma.whatsAppSettings.findFirst();
-    if (settings?.geminiApiKey) apiKey = settings.geminiApiKey;
-  } catch (_) {}
+async function callAIEngine(messages: any[], preferredModel: string, jsonMode = false, maxTokens = 600, customApiKey?: string) {
+  let apiKey = customApiKey || process.env.GEMINI_API_KEY || '';
+  if (!apiKey) {
+    try {
+      const settings = await prisma.whatsAppSettings.findFirst();
+      if (settings?.geminiApiKey) apiKey = settings.geminiApiKey;
+    } catch (_) {}
+  }
 
   if (!apiKey) {
-    throw new Error('No Gemini API Key found in settings or environment.');
+    throw new Error('No Gemini API Key found in client settings, platform settings or environment.');
   }
 
   const systemMsg = messages.find((m: any) => m.role === 'system')?.content || '';
@@ -443,7 +443,13 @@ export async function sendWhatsAppProductCards(toPhone: string, cards: any[]) {
   }
 }
 
-export async function handleIncomingAILogic(senderPhone: string, userText: string, historyLines: string[], conversationId?: string) {
+export async function handleIncomingAILogic(
+  senderPhone: string,
+  userText: string,
+  historyLines: string[],
+  conversationId?: string,
+  clientId?: string | null
+) {
   let brandName = "Espon Clothing";
   let brandDomain = "www.espon.in";
   let brandPhone = "+91 7206066678";
@@ -454,8 +460,21 @@ export async function handleIncomingAILogic(senderPhone: string, userText: strin
   let settings: any = null;
   let legacySetting: any = null;
   let activeCombos: any[] = [];
+  let clientRecord: any = null;
 
   try {
+    if (clientId) {
+      clientRecord = await prisma.whatsAppClient.findUnique({ where: { id: clientId } }).catch(() => null);
+    } else if (conversationId) {
+      const conv = await prisma.whatsAppConversation.findUnique({
+        where: { id: conversationId },
+        select: { clientId: true }
+      }).catch(() => null);
+      if (conv?.clientId) {
+        clientRecord = await prisma.whatsAppClient.findUnique({ where: { id: conv.clientId } }).catch(() => null);
+      }
+    }
+
     const [company, s, acc, legacy, combos] = await Promise.all([
       prisma.companySettings.findFirst().catch(() => null),
       prisma.whatsAppSettings.findFirst().catch(() => null),
@@ -467,21 +486,26 @@ export async function handleIncomingAILogic(senderPhone: string, userText: strin
     legacySetting = legacy;
     activeCombos = combos;
 
-    if (company?.companyName) brandName = company.companyName;
-    else if (acc?.name) brandName = acc.name;
-
-    if (company?.shopifyStoreDomain) {
-      brandDomain = company.shopifyStoreDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-    } else if (company?.website) {
-      brandDomain = company.website.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    if (clientRecord?.businessName) {
+      brandName = clientRecord.businessName;
+      if (clientRecord.phoneNumber) brandPhone = clientRecord.phoneNumber;
+      if (clientRecord.contactEmail) brandEmail = clientRecord.contactEmail;
+      if (clientRecord.brandSlug) brandDomain = `${clientRecord.brandSlug}.what-in.tinkal.in`;
+    } else if (company?.companyName) {
+      brandName = company.companyName;
+      if (company?.shopifyStoreDomain) {
+        brandDomain = company.shopifyStoreDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      } else if (company?.website) {
+        brandDomain = company.website.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      }
+      if (company?.mobile) brandPhone = company.mobile;
+      if (company?.email) brandEmail = company.email;
+      if (company?.address) brandAddress = `${company.address}, ${company.city || ''}, ${company.state || ''} ${company.pincode || ''}`.replace(/\s+,/g, ',').trim();
+      if (company?.gstin) gstin = company.gstin;
+    } else if (acc?.name) {
+      brandName = acc.name;
+      if (acc?.phoneNumber) brandPhone = acc.phoneNumber;
     }
-
-    if (company?.mobile) brandPhone = company.mobile;
-    else if (acc?.phoneNumber) brandPhone = acc.phoneNumber;
-
-    if (company?.email) brandEmail = company.email;
-    if (company?.address) brandAddress = `${company.address}, ${company.city || ''}, ${company.state || ''} ${company.pincode || ''}`.replace(/\s+,/g, ',').trim();
-    if (company?.gstin) gstin = company.gstin;
   } catch (_) {}
 
   const history = historyLines.join('\n');
@@ -575,13 +599,14 @@ CUSTOMER NEW MESSAGE:
 ${userText}`;
 
   try {
-    const preferredModel = settings?.aiModel || "gemini-2.0-flash";
+    const preferredModel = clientRecord?.aiModel || settings?.aiModel || "gemini-2.5-flash";
+    const customApiKey = clientRecord?.geminiApiKey || settings?.geminiApiKey;
     let aiReply = await callAIEngine(
       [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userText }
       ],
-      preferredModel, false, 2000
+      preferredModel, false, 2000, customApiKey
     );
 
     let sendCarousel = carouselCards.length > 0;
