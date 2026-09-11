@@ -753,14 +753,17 @@ export default function WhatsAppChatbotBuilderPage() {
     }
   };
 
-    // Fetch Saved Chatbot Flows from DB
+  // Fetch Saved Chatbot Flows from DB
   const fetchFlows = async () => {
     setIsLoadingFlows(true);
     const res = await getWhatsAppChatbotFlows();
     if (res.success && res.flows) {
       setSavedFlows(res.flows);
       if (res.flows.length > 0) {
-        const target = res.flows.find((f: any) => f.id === currentFlowId) || res.flows[0];
+        const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        const queryFlowId = urlParams?.get('flowId');
+        const target = (queryFlowId && res.flows.find((f: any) => f.id === queryFlowId)) || res.flows.find((f: any) => f.id === currentFlowId) || res.flows[0];
+
         setCurrentFlowId(target.id);
         setFlowName(target.name);
         setTriggerKeyword(target.triggerKeyword || "HI, HELLO, CATALOG");
@@ -770,12 +773,29 @@ export default function WhatsAppChatbotBuilderPage() {
         setLastSavedTriggerKeyword(target.triggerKeyword || "HI, HELLO, CATALOG");
         setLastSavedIsBotActive(target.isActive);
         try {
-          const parsedNodes = JSON.parse(target.nodesJson);
-          if (Array.isArray(parsedNodes)) {
-            setNodes(parsedNodes);
-            setHistoryStack([parsedNodes]);
+          const parsed = JSON.parse(target.nodesJson);
+          let loadedNodes: any[] = [];
+          if (Array.isArray(parsed)) {
+            loadedNodes = parsed;
+          } else if (parsed && Array.isArray(parsed.nodes)) {
+            loadedNodes = parsed.nodes.map((n: any) => ({
+              id: n.id,
+              type: n.type || "TEXT",
+              category: n.category || (n.type === "START" ? "start" : n.type === "CHOICE" || n.type === "QUESTION" ? "choice" : "message"),
+              title: n.title || "Step",
+              x: n.position?.x ?? n.x ?? 100,
+              y: n.position?.y ?? n.y ?? 100,
+              text: n.data?.text ?? n.text ?? "",
+              imageUrl: n.data?.imageUrl ?? n.imageUrl,
+              choices: n.data?.buttons ? n.data.buttons.map((b: string, i: number) => ({ id: `c_${i}`, text: b })) : (n.choices || []),
+              outputPort: n.outputPort
+            }));
+          }
+          if (loadedNodes.length > 0) {
+            setNodes(loadedNodes);
+            setHistoryStack([loadedNodes]);
             setHistoryIndex(0);
-            setLastSavedNodesJson(JSON.stringify(parsedNodes));
+            setLastSavedNodesJson(JSON.stringify(loadedNodes));
           }
         } catch (e) {
           console.error("Failed to parse nodesJson:", e);
@@ -864,14 +884,31 @@ export default function WhatsAppChatbotBuilderPage() {
     setLastSavedTriggerKeyword(target.triggerKeyword || "HI, HELLO, CATALOG");
     setLastSavedIsBotActive(target.isActive);
     try {
-      const parsedNodes = JSON.parse(target.nodesJson);
-      if (Array.isArray(parsedNodes)) {
-        setNodes(parsedNodes);
-        setHistoryStack([parsedNodes]);
+      const parsed = JSON.parse(target.nodesJson);
+      let loadedNodes: any[] = [];
+      if (Array.isArray(parsed)) {
+        loadedNodes = parsed;
+      } else if (parsed && Array.isArray(parsed.nodes)) {
+        loadedNodes = parsed.nodes.map((n: any) => ({
+          id: n.id,
+          type: n.type || "TEXT",
+          category: n.category || (n.type === "START" ? "start" : n.type === "CHOICE" || n.type === "QUESTION" ? "choice" : "message"),
+          title: n.title || "Step",
+          x: n.position?.x ?? n.x ?? 100,
+          y: n.position?.y ?? n.y ?? 100,
+          text: n.data?.text ?? n.text ?? "",
+          imageUrl: n.data?.imageUrl ?? n.imageUrl,
+          choices: n.data?.buttons ? n.data.buttons.map((b: string, i: number) => ({ id: `c_${i}`, text: b })) : (n.choices || []),
+          outputPort: n.outputPort
+        }));
+      }
+      if (loadedNodes.length > 0) {
+        setNodes(loadedNodes);
+        setHistoryStack([loadedNodes]);
         setHistoryIndex(0);
         setSelectedNodeId(null);
         setIsDrawerOpen(false);
-        setLastSavedNodesJson(JSON.stringify(parsedNodes));
+        setLastSavedNodesJson(JSON.stringify(loadedNodes));
       }
     } catch (e) {
       console.error("Error loading selected flow nodes:", e);
