@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUser, isOwnerAuthenticated } from '@/lib/authSession';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getAuthenticatedUser(req);
+    const isOwner = isOwnerAuthenticated(req);
+    if (!isOwner && (!user || (user.role !== "ADMIN" && user.role !== "SUPER_ADMIN" && user.role !== "MANAGER"))) {
+      return NextResponse.json({ success: false, error: "Unauthorized access" }, { status: 401 });
+    }
+
     const formData = await req.formData();
     const file = formData.get('file') as File;
     

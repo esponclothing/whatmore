@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { GEMINI_MODEL_CASCADE } from '@/lib/whatsappAI';
+import { getAuthenticatedUser, isOwnerAuthenticated } from '@/lib/authSession';
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getAuthenticatedUser(req);
+    const isOwner = isOwnerAuthenticated(req);
+    if (!user && !isOwner) {
+      return NextResponse.json({ success: false, valid: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json().catch(() => ({}));
     const key = body.apiKey;
     const model = body.model || 'gemini-3.8-flash';
@@ -15,6 +22,12 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    const user = await getAuthenticatedUser(req);
+    const isOwner = isOwnerAuthenticated(req);
+    if (!user && !isOwner) {
+      return NextResponse.json({ success: false, valid: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const key = searchParams.get('apiKey') || undefined;
     const model = searchParams.get('model') || 'gemini-3.8-flash';

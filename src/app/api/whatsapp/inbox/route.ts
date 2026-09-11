@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getAuthenticatedUser, isOwnerAuthenticated } from "@/lib/authSession";
 
 // Helper to get the WhatsApp account and its token from DB
 async function getAccount() {
@@ -26,20 +27,12 @@ export async function GET(req: NextRequest) {
           mediaUrl: null
         }
       }).catch(err => console.error("[Auto-Delete Media Old 30 Days Error]:", err));
-      // Filtering logic based on cookies
-      const cookieStore = require("next/headers").cookies;
-      const wmUser = (await cookieStore()).get("wm_user")?.value;
-      let userRole = "SALES";
-      let userEmail = "";
-      if (wmUser) {
-        try {
-          const parsed = JSON.parse(wmUser);
-          userRole = parsed.role || "SALES";
-          userEmail = parsed.email || "";
-        } catch (e) {}
-      }
 
-      const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN' || userRole === 'MANAGER';
+      const authUser = await getAuthenticatedUser(req);
+      const isOwner = isOwnerAuthenticated(req);
+      const userRole = authUser?.role || "SALES";
+      const userEmail = authUser?.email || "";
+      const isAdmin = isOwner || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN' || userRole === 'MANAGER';
       const where: any = {};
 
       if (!isAdmin) {
@@ -413,15 +406,12 @@ export async function GET(req: NextRequest) {
 // --- POST --------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
-    const cookieStore = require("next/headers").cookies;
-    const wmUser = (await cookieStore()).get("wm_user")?.value;
-    let userName = "Agent";
-    if (wmUser) {
-      try {
-        const parsed = JSON.parse(wmUser);
-        if (parsed.name) userName = parsed.name;
-      } catch (e) {}
+    const authUser = await getAuthenticatedUser(req);
+    const isOwner = isOwnerAuthenticated(req);
+    if (!authUser && !isOwner) {
+      return NextResponse.json({ error: "Unauthorized access" }, { status: 401 });
     }
+    const userName = authUser?.name || (isOwner ? "Owner" : "Agent");
 
     const body = await req.json();
     const { action: postAction, phone, ai_paused, text, media_url, template_name, template_params, type, chat_status, convId } = body;
@@ -610,6 +600,13 @@ export async function POST(req: NextRequest) {
 
 // --- DELETE CONVERSATION ----------------------------------------------------
 export async function DELETE(req: NextRequest) {
+  const isOwner = isOwnerAuthenticated(req);
+  const authUser = await getAuthenticatedUser(req);
+  const isAdmin = isOwner || (authUser && (authUser.role === "ADMIN" || authUser.role === "SUPER_ADMIN" || authUser.role === "MANAGER"));
+  if (!isAdmin) {
+    return NextResponse.json({ error: "Unauthorized access: Only administrators can delete conversations" }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const convId = searchParams.get("convId");
   if (!convId) return NextResponse.json({ error: "convId required" }, { status: 400 });

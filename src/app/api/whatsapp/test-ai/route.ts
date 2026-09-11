@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { callGeminiRest, GEMINI_MODEL_CASCADE } from '@/lib/whatsappAI';
+import { getAuthenticatedUser, isOwnerAuthenticated } from '@/lib/authSession';
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getAuthenticatedUser(req);
+    const isOwner = isOwnerAuthenticated(req);
+    if (!user && !isOwner) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json().catch(() => ({}));
     const message = body.message?.trim();
     if (!message) {

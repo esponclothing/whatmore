@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import * as cheerio from 'cheerio';
+import { getAuthenticatedUser, isOwnerAuthenticated } from '@/lib/authSession';
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getAuthenticatedUser(req);
+    const isOwner = isOwnerAuthenticated(req);
+    if (!isOwner && (!user || (user.role !== "ADMIN" && user.role !== "SUPER_ADMIN" && user.role !== "MANAGER"))) {
+      return NextResponse.json({ success: false, error: "Unauthorized access" }, { status: 401 });
+    }
+
     const { url } = await req.json();
     if (!url) {
       return NextResponse.json({ success: false, error: 'No URL provided' }, { status: 400 });
