@@ -1,8 +1,25 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUser, isOwnerAuthenticated } from '@/lib/authSession';
 
 export async function getPaymentGatewaySettings() {
+  const user = await getAuthenticatedUser();
+  const isOwner = await isOwnerAuthenticated();
+
+  if (!isOwner && (!user || (user.role !== 'ADMIN' && user.role !== 'OWNER' && user.role !== 'SUPER_ADMIN'))) {
+    return {
+      activeGateway: null,
+      razorpayKeyId: '',
+      razorpayKeySecret: '',
+      cashfreeAppId: '',
+      cashfreeSecretKey: '',
+      merchantUpiId: '',
+      merchantUpiName: '',
+      error: "Unauthorized"
+    };
+  }
+
   const settings = await prisma.whatsAppSettings.findFirst();
   return {
     activeGateway: settings?.activeGateway || null,
@@ -24,6 +41,13 @@ export async function savePaymentGatewaySettings(data: {
   merchantUpiId?: string;
   merchantUpiName?: string;
 }) {
+  const user = await getAuthenticatedUser();
+  const isOwner = await isOwnerAuthenticated();
+
+  if (!isOwner && (!user || (user.role !== 'ADMIN' && user.role !== 'OWNER' && user.role !== 'SUPER_ADMIN'))) {
+    return { success: false, error: "Unauthorized: Admin privileges required to update payment gateways" };
+  }
+
   const existing = await prisma.whatsAppSettings.findFirst();
   if (existing) {
     await prisma.whatsAppSettings.update({
@@ -54,7 +78,7 @@ export async function savePaymentGatewaySettings(data: {
   return { success: true };
 }
 
-/** Helper used by flow engine to get active gateway creds */
+/** Helper used by flow engine internally to get active gateway creds */
 export async function getActiveGateway() {
   const settings = await prisma.whatsAppSettings.findFirst();
   if (!settings?.activeGateway) return null;

@@ -1,9 +1,16 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { GoogleGenAI } from '@google/genai';
+import { getAuthenticatedUser, isOwnerAuthenticated } from '@/lib/authSession';
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    const isOwner = isOwnerAuthenticated(req);
+    const user = await getAuthenticatedUser(req);
+    if (!isOwner && !user) {
+      return NextResponse.json({ error: "Unauthorized access" }, { status: 401 });
+    }
+
     const { conversationId, customPrompt } = await req.json();
 
     if (!conversationId) {

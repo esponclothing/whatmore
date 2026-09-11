@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import webPush from "web-push";
+import { getAuthenticatedUser, isOwnerAuthenticated } from "@/lib/authSession";
 
 const VAPID_PUBLIC_KEY = "BB-KZlpv_rpNWxWRhy0qmhKvmRPSD54y7BKlbA07xsuRbUlEbDLASekDIHTFgX-au3sAOSG4WJ5ZaHgk9tJ0HEg";
 const VAPID_PRIVATE_KEY = "yWJ-C37EvnvQMHhHuwWSwCiOn3Ni7x5Rt3pywRbdjso";
@@ -12,9 +13,13 @@ webPush.setVapidDetails(
 
 export async function POST(req: NextRequest) {
   try {
+    const isOwner = isOwnerAuthenticated(req);
+    const user = await getAuthenticatedUser(req);
     const secret = req.headers.get("x-internal-secret");
-    if (secret !== (process.env.INTERNAL_API_SECRET || 'crm_internal_2026')) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const isSecretValid = process.env.INTERNAL_API_SECRET && secret === process.env.INTERNAL_API_SECRET;
+
+    if (!isOwner && !user && !isSecretValid) {
+      return NextResponse.json({ error: "Unauthorized access" }, { status: 401 });
     }
 
     const { subscription, payload } = await req.json();
