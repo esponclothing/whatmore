@@ -965,11 +965,29 @@ async function runNodes(nodes: any[], startNodeId: string, vars: Record<string, 
 /**
  * Main Flow Engine Entry Point
  */
-export async function executeFlowEngine(senderPhone: string, userText: string, conversationId: string, wasClosed: boolean = false): Promise<boolean> {
+export async function executeFlowEngine(
+  senderPhone: string, 
+  userText: string, 
+  conversationId: string, 
+  wasClosed: boolean = false,
+  clientId?: string
+): Promise<boolean> {
   try {
+    let effectiveClientId = clientId;
+    if (!effectiveClientId && conversationId) {
+      const conv = await prisma.whatsAppConversation.findUnique({
+        where: { id: conversationId },
+        select: { clientId: true }
+      });
+      if (conv?.clientId) effectiveClientId = conv.clientId;
+    }
+
     // 1. Check active flow triggers first to see if a flow matches the keyword!
     const activeFlows = await prisma.whatsAppChatbotFlow.findMany({
-      where: { isActive: true }
+      where: {
+        isActive: true,
+        ...(effectiveClientId ? { clientId: effectiveClientId } : {})
+      }
     });
 
     let matchedFlow = null;
@@ -1003,12 +1021,16 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
     if (matchedFlow && matchedNextNodeId) {
       // Clear any existing/stuck flow states for this phone so it triggers fresh!
       await prisma.whatsAppFlowState.deleteMany({
-        where: { phone: senderPhone }
+        where: { 
+          phone: senderPhone,
+          ...(effectiveClientId ? { clientId: effectiveClientId } : {})
+        }
       });
 
       // Insert new flow state
-      await prisma.whatsAppFlowState.create({
+      const newFlowState = await prisma.whatsAppFlowState.create({
         data: {
+          clientId: effectiveClientId || matchedFlow.clientId || null,
           phone: senderPhone,
           flowId: matchedFlow.id,
           currentNodeId: matchedNextNodeId,
@@ -1023,9 +1045,6 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
       const customerForVars = await prisma.customer.findFirst({
         where: { OR: [{ mobile: { contains: cleanPhoneForVars } }, { whatsappNumber: { contains: cleanPhoneForVars } }] }
       });
-      const convForVars = customerForVars ? await prisma.whatsAppConversation.findFirst({
-        where: { customerId: customerForVars.id }, orderBy: { updatedAt: 'desc' }
-      }) : null;
       const profileVars: Record<string, string> = {
         name: customerForVars?.contactPerson || customerForVars?.businessName || '',
         businessName: customerForVars?.businessName || '',
@@ -1041,10 +1060,15 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
       const result = await runNodes(nodes, matchedNextNodeId, profileVars, senderPhone, conversationId, wasClosed);
 
       if (result.status === 'ended') {
-        await prisma.whatsAppFlowState.deleteMany({ where: { phone: senderPhone } });
+        await prisma.whatsAppFlowState.deleteMany({
+          where: { 
+            phone: senderPhone,
+            ...(effectiveClientId ? { clientId: effectiveClientId } : {})
+          }
+        });
       } else {
         await prisma.whatsAppFlowState.update({
-          where: { phone: senderPhone },
+          where: { id: newFlowState.id },
           data: { currentNodeId: result.nodeId! }
         });
       }
@@ -1058,8 +1082,12 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
     }
 
     // 2. If it is NOT a trigger keyword, process existing flow state if present
-    const userState = await prisma.whatsAppFlowState.findUnique({
-      where: { phone: senderPhone }
+    const userState = await prisma.whatsAppFlowState.findFirst({
+      where: { 
+        phone: senderPhone,
+        ...(effectiveClientId ? { clientId: effectiveClientId } : {})
+      },
+      orderBy: { updatedAt: 'desc' }
     });
 
     if (userState) {
@@ -1068,7 +1096,7 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
       });
 
       if (!flowRecord?.nodesJson) {
-        await prisma.whatsAppFlowState.delete({ where: { phone: senderPhone } });
+        await prisma.whatsAppFlowState.delete({ where: { id: userState.id } });
         return false;
       }
 
@@ -1080,7 +1108,7 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
       const currentNode = nodes.find((n: any) => n.id === userState.currentNodeId);
 
       if (!currentNode) {
-        await prisma.whatsAppFlowState.delete({ where: { phone: senderPhone } });
+        await prisma.whatsAppFlowState.delete({ where: { id: userState.id } });
         return false;
       }
 
@@ -1110,7 +1138,7 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
           nextNodeId = choices[matchIndex].targetNode;
         } else {
           // Unrecognized input on a CHOICE node — hand off to AI
-          await prisma.whatsAppFlowState.delete({ where: { phone: senderPhone } });
+          await prisma.whatsAppFlowState.delete({ where: { id: userState.id } });
           return false; // Let AI handle this
         }
       }
@@ -1122,17 +1150,17 @@ export async function executeFlowEngine(senderPhone: string, userText: string, c
 
       if (!nextNodeId) {
         // Flow ended
-        await prisma.whatsAppFlowState.delete({ where: { phone: senderPhone } });
+        await prisma.whatsAppFlowState.delete({ where: { id: userState.id } });
         return true; 
       }
 
       const result = await runNodes(nodes, nextNodeId, vars, senderPhone, conversationId);
 
       if (result.status === 'ended') {
-        await prisma.whatsAppFlowState.delete({ where: { phone: senderPhone } });
+        await prisma.whatsAppFlowState.delete({ where: { id: userState.id } });
       } else {
         await prisma.whatsAppFlowState.update({
-          where: { phone: senderPhone },
+          where: { id: userState.id },
           data: { currentNodeId: result.nodeId!, variables: JSON.stringify(vars) }
         });
       }
