@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect } from "react";
 import { CheckCircle2, AlertTriangle, RefreshCw, PhoneCall, TrendingUp, Users, MessageSquare, Zap, Activity, Box, Search, Bell } from "lucide-react";
@@ -88,13 +88,21 @@ export default function WhatmoreDashboard() {
       <div className="grid grid-cols-4 gap-5">
         <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
           <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 flex items-center justify-between">Total Revenue <TrendingUp size={16} className="text-green-500"/></div>
-          <div className="text-3xl font-extrabold text-gray-900 dark:text-white">₹2,45,900</div>
-          <div className="text-xs text-green-500 font-medium mt-2 flex items-center gap-1">+14.5% from last month</div>
+          <div className="text-3xl font-extrabold text-gray-900 dark:text-white">
+            ₹{(data?.metrics?.totalRevenue || 0).toLocaleString("en-IN")}
+          </div>
+          <div className="text-xs text-green-500 font-medium mt-2 flex items-center gap-1">
+            {data?.metrics?.totalOrders ? `${data.metrics.totalOrders} Orders Synced` : "+14.5% from last month"}
+          </div>
         </div>
         <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
           <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 flex items-center justify-between">Active Products <Box size={16} className="text-indigo-500"/></div>
-          <div className="text-3xl font-extrabold text-gray-900 dark:text-white">0</div>
-          <div className="text-xs text-indigo-500 font-medium mt-2 flex items-center gap-1">Synced with Shopify</div>
+          <div className="text-3xl font-extrabold text-gray-900 dark:text-white">
+            {(data?.metrics?.activeProducts ?? 0).toLocaleString()}
+          </div>
+          <div className="text-xs text-indigo-500 font-medium mt-2 flex items-center gap-1">
+            {data?.metrics?.totalProducts ? `${data.metrics.totalProducts} Total Catalog Items` : "Synced with Shopify"}
+          </div>
         </div>
         <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
           <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 flex items-center justify-between">Automated Replies <Zap size={16} className="text-amber-500"/></div>
@@ -130,7 +138,7 @@ export default function WhatmoreDashboard() {
              <div className="col-span-2 mt-2">
                 <button onClick={handleRefreshSync} disabled={refreshing} className="w-full py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl text-sm font-bold shadow-md hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
                   <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
-                  {refreshing ? "Syncing with Meta..." : "Force Sync Integration"}
+                  {refreshing ? "Syncing with Meta & Shopify..." : "Force Sync Integration"}
                 </button>
              </div>
           </div>
@@ -139,25 +147,36 @@ export default function WhatmoreDashboard() {
         {/* Messaging Capacity */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden p-6 flex flex-col justify-center">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white m-0">Messaging Tier Capacity</h3>
-          <p className="text-sm text-gray-500 m-0 mt-1 mb-6">Tier 2 Meta WhatsApp Business limits (24hr rolling window).</p>
+          <p className="text-sm text-gray-500 m-0 mt-1 mb-6">
+            {data?.account?.tierName || "Tier 2"} Meta WhatsApp Business limits (24hr rolling window).
+          </p>
           
           <div className="flex justify-between items-end mb-2">
             <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Usage Today</span>
             <span className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">
-              {(data?.metrics?.sentToday || 0).toLocaleString()} <span className="text-sm text-gray-400 font-medium">/ 10,000</span>
+              {(data?.metrics?.sentToday || 0).toLocaleString()} <span className="text-sm text-gray-400 font-medium">/ {(data?.account?.dailyLimitNumber || 10000).toLocaleString()}</span>
             </span>
           </div>
           <div className="w-full h-3 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full" style={{ width: `${Math.min(100, ((data?.metrics?.sentToday || 0) / 10000) * 100)}%` }}></div>
+            <div 
+              className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500" 
+              style={{ width: `${Math.min(100, Math.max(1, (((data?.metrics?.sentToday || 0) / (data?.account?.dailyLimitNumber || 10000)) * 100)))}%` }}
+            ></div>
           </div>
           <div className="mt-6 flex justify-between">
              <div className="text-center">
                <div className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-1">Quality Rating</div>
-               <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 rounded-full text-xs font-bold"><div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> High</div>
+               <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 rounded-full text-xs font-bold">
+                 <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> 
+                 {data?.account?.qualityRatingText || (data?.account?.qualityRating === "GREEN" ? "High" : data?.account?.qualityRating || "High")}
+               </div>
              </div>
              <div className="text-center">
                <div className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-1">Status</div>
-               <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 rounded-full text-xs font-bold"><div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> Connected</div>
+               <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 rounded-full text-xs font-bold">
+                 <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> 
+                 {isConnected ? "Connected" : "Disconnected"}
+               </div>
              </div>
           </div>
         </div>
