@@ -784,7 +784,7 @@ export default function WhatsAppBroadcastsComponent() {
           </span>
           <span className="px-2.5 py-1 rounded-full font-bold text-[11px] bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 flex items-center gap-1">
             <Radio size={12} className="text-sky-500" />
-            Throughput: {metaHealth.throughput} msgs/sec
+            Throughput: {String(metaHealth.throughput).toUpperCase() === "STANDARD" || metaHealth.throughput === 80 ? "80 msgs/sec" : `${metaHealth.throughput} msgs/sec`}
           </span>
         </div>
         <div className="flex items-center gap-2">
