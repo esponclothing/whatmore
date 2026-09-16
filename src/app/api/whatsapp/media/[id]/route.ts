@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthenticatedUser, isOwnerAuthenticated } from "@/lib/authSession";
+import { getAuthenticatedUser } from "@/lib/authSession";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,16 +13,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // 1. Check permanent database storage (WhatsAppUploadedMedia) first
     try {
-      const dbMedia = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT "data", "mimeType", "size" FROM "WhatsAppUploadedMedia" WHERE "id" = $1 LIMIT 1;`,
-        cleanId
-      );
-      if (dbMedia && dbMedia.length > 0 && dbMedia[0].data) {
-        const buf = Buffer.from(dbMedia[0].data);
+      const dbMedia = await prisma.whatsAppUploadedMedia.findUnique({
+        where: { id: cleanId }
+      });
+      if (dbMedia?.data) {
+        const buf = Buffer.from(dbMedia.data);
         return new NextResponse(buf, {
           status: 200,
           headers: {
-            'Content-Type': dbMedia[0].mimeType || 'image/jpeg',
+            'Content-Type': dbMedia.mimeType || 'image/jpeg',
             'Content-Length': buf.length.toString(),
             'Cache-Control': 'public, max-age=31536000, immutable',
             'Content-Disposition': `inline; filename="whatsapp-media-${cleanId}"`
@@ -33,16 +32,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // 2. Check ProductUploadedImage database storage
     try {
-      const dbProductImg = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT "data", "mimeType", "size" FROM "ProductUploadedImage" WHERE "id" = $1 LIMIT 1;`,
-        cleanId
-      );
-      if (dbProductImg && dbProductImg.length > 0 && dbProductImg[0].data) {
-        const buf = Buffer.from(dbProductImg[0].data);
+      const dbProductImg = await prisma.productUploadedImage.findUnique({
+        where: { id: cleanId }
+      });
+      if (dbProductImg?.data) {
+        const buf = Buffer.from(dbProductImg.data);
         return new NextResponse(buf, {
           status: 200,
           headers: {
-            'Content-Type': dbProductImg[0].mimeType || 'image/jpeg',
+            'Content-Type': dbProductImg.mimeType || 'image/jpeg',
             'Content-Length': buf.length.toString(),
             'Cache-Control': 'public, max-age=31536000, immutable',
             'Content-Disposition': `inline; filename="product-media-${cleanId}"`
@@ -91,15 +89,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!token) {
       // Fallback: Check if we have an activewear default banner
       try {
-        const fallbackMedia = await prisma.$queryRawUnsafe<any[]>(
-          `SELECT "data", "mimeType" FROM "WhatsAppUploadedMedia" WHERE "id" = 'espon_activewear_welcome' LIMIT 1;`
-        );
-        if (fallbackMedia && fallbackMedia.length > 0 && fallbackMedia[0].data) {
-          const buf = Buffer.from(fallbackMedia[0].data);
+        const fallbackMedia = await prisma.whatsAppUploadedMedia.findUnique({
+          where: { id: 'espon_activewear_welcome' }
+        });
+        if (fallbackMedia?.data) {
+          const buf = Buffer.from(fallbackMedia.data);
           return new NextResponse(buf, {
             status: 200,
             headers: {
-              'Content-Type': fallbackMedia[0].mimeType || 'image/jpeg',
+              'Content-Type': fallbackMedia.mimeType || 'image/jpeg',
               'Content-Length': buf.length.toString(),
               'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
               'Content-Disposition': `inline; filename="espon-welcome.jpg"`
@@ -115,20 +113,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const metaUrlRes = await fetch(`https://graph.facebook.com/v20.0/${cleanId}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    const metaUrlData = await metaUrlRes.json();
+    const metaUrlData = await metaUrlRes.json().catch(() => ({}));
 
     if (!metaUrlData.url || !metaUrlRes.ok) {
       // Check if this was a chatbot welcome banner or if we have activewear fallback
       try {
-        const fallbackMedia = await prisma.$queryRawUnsafe<any[]>(
-          `SELECT "data", "mimeType" FROM "WhatsAppUploadedMedia" WHERE "id" = 'espon_activewear_welcome' LIMIT 1;`
-        );
-        if (fallbackMedia && fallbackMedia.length > 0 && fallbackMedia[0].data) {
-          const buf = Buffer.from(fallbackMedia[0].data);
+        const fallbackMedia = await prisma.whatsAppUploadedMedia.findUnique({
+          where: { id: 'espon_activewear_welcome' }
+        });
+        if (fallbackMedia?.data) {
+          const buf = Buffer.from(fallbackMedia.data);
           return new NextResponse(buf, {
             status: 200,
             headers: {
-              'Content-Type': fallbackMedia[0].mimeType || 'image/jpeg',
+              'Content-Type': fallbackMedia.mimeType || 'image/jpeg',
               'Content-Length': buf.length.toString(),
               'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
               'Content-Disposition': `inline; filename="espon-welcome.jpg"`
@@ -188,16 +186,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const buffer = Buffer.from(arrayBuffer);
 
     try {
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO "WhatsAppUploadedMedia" ("id", "filename", "mimeType", "data", "size", "createdAt")
-         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
-         ON CONFLICT ("id") DO NOTHING;`,
-        cleanId,
-        `meta_media_${cleanId}`,
-        contentType,
-        buffer,
-        buffer.length
-      );
+      await prisma.whatsAppUploadedMedia.upsert({
+        where: { id: cleanId },
+        update: { data: buffer, size: buffer.length, mimeType: contentType },
+        create: {
+          id: cleanId,
+          filename: `meta_media_${cleanId}`,
+          mimeType: contentType,
+          data: buffer,
+          size: buffer.length
+        }
+      });
     } catch (_) {}
     
     return new NextResponse(buffer, {
@@ -215,3 +214,4 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
+
