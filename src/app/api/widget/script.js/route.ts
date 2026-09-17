@@ -28,6 +28,25 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const clientId = searchParams.get("clientId") || searchParams.get("tenant") || "";
 
+  if (!clientId || clientId.trim().length < 5) {
+    return new NextResponse("// WhatIn / WhatMore Widget: Missing or invalid clientId parameter.", {
+      status: 400,
+      headers: { "Content-Type": "application/javascript", ...corsHeaders },
+    });
+  }
+
+  const client = await prisma.whatsAppClient.findUnique({
+    where: { id: clientId.trim() },
+    include: { websiteWidget: true },
+  });
+
+  if (!client || !client.isActive) {
+    return new NextResponse("// WhatIn / WhatMore Widget: Client not found or inactive.", {
+      status: 403,
+      headers: { "Content-Type": "application/javascript", ...corsHeaders },
+    });
+  }
+
   let widgetConfig: any = {
     themeColor: "#25D366",
     position: "bottom-right",
@@ -37,7 +56,7 @@ export async function GET(req: NextRequest) {
     avatarUrl: "",
     requireLeadForm: false,
     showOnMobile: true,
-    phoneNumber: "917404388242",
+    phoneNumber: (client.phoneNumber || "917404388242").replace(/\D/g, ""),
     clientCategory: "GENERAL",
     departments: [],
     proactiveNudge: false,
@@ -50,14 +69,6 @@ export async function GET(req: NextRequest) {
     timezone: "Asia/Kolkata",
     offlineNotice: "We are currently offline. Leave a message and we will get back to you during business hours!",
   };
-
-  if (clientId) {
-    const client = await prisma.whatsAppClient.findUnique({
-      where: { id: clientId },
-      include: { websiteWidget: true },
-    });
-    if (client) {
-      if (client.phoneNumber) widgetConfig.phoneNumber = client.phoneNumber.replace(/\D/g, "");
       if (client.websiteWidget) {
         let depts = [];
         if (client.websiteWidget.departments) {
@@ -91,8 +102,6 @@ export async function GET(req: NextRequest) {
           offlineNotice: client.websiteWidget.offlineNotice || widgetConfig.offlineNotice,
         };
       }
-    }
-  }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://whatsapp.esponsports.com";
 
