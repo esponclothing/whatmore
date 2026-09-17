@@ -14,11 +14,11 @@ export default function WhatsAppLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100%", width: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", maxHeight: "100vh", width: "100%", overflow: "hidden" }}>
       <PaymentWarningBanner />
       <WhatsAppHeaderNav />
       <PushNotificationInitializer />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
         {children}
       </div>
     </div>
