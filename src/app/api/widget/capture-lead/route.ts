@@ -87,12 +87,68 @@ export async function POST(req: NextRequest) {
     const effectivePlatform = platform || "Website";
     const source = utmSource || `${effectivePlatform} Widget`;
 
+    // Helper: Recursively unwrap nested proxy URLs to guarantee clean store URLs
+    function cleanActualStoreUrl(rawUrl: string | null | undefined): string {
+      if (!rawUrl || typeof rawUrl !== "string") return "";
+      let url = rawUrl.trim();
+      let maxDepth = 15;
+      while (maxDepth > 0 && (url.includes("/api/cobrowse/proxy?url=") || url.includes("/api/cobrowse/proxy?"))) {
+        maxDepth--;
+        try {
+          const match = url.match(/[?&]url=([^&]+)/);
+          if (match && match[1]) {
+            url = decodeURIComponent(match[1]);
+          } else {
+            break;
+          }
+        } catch {
+          break;
+        }
+      }
+      url = url.replace(/([?&])device=[^&]+/gi, '');
+      url = url.replace(/([?&])cb_ts=[^&]+/gi, '');
+      url = url.replace(/\?$/, '');
+      if (url.includes("/api/cobrowse/proxy")) return "https://esponsports.com";
+      return url;
+    }
+
+    const effectivePageUrl = cleanActualStoreUrl(pageUrl);
+
+    let cleanedCart = cart ? { ...cart } : null;
+    if (cleanedCart) {
+      // Recover prices that were stored as fractions due to extra /100 divisions.
+      // Keep multiplying by 100 until price reaches a sane value (>= 100 rupees or 5 iterations max).
+      let tp = typeof cleanedCart.total_price === 'number' ? cleanedCart.total_price : parseFloat(cleanedCart.total_price);
+      if (!isNaN(tp) && isFinite(tp)) {
+        let iters = 0;
+        while (tp > 0 && tp < 50 && iters < 5) { tp = tp * 100; iters++; }
+        cleanedCart.total_price = Math.round(tp);
+      }
+      if (Array.isArray(cleanedCart.items)) {
+        cleanedCart.items = cleanedCart.items.map((it: any) => {
+          let pr = typeof it.price === 'number' ? it.price : parseFloat(it.price);
+          if (!isNaN(pr) && isFinite(pr)) {
+            let iters = 0;
+            while (pr > 0 && pr < 50 && iters < 5) { pr = pr * 100; iters++; }
+            pr = Math.round(pr);
+          }
+          return { ...it, price: pr };
+        });
+      }
+    }
+
+    const cleanedJourney = (Array.isArray(pageJourney) ? pageJourney : []).map((step: any) => ({
+      ...step,
+      url: cleanActualStoreUrl(step.url || step.path),
+      path: cleanActualStoreUrl(step.path || step.url)
+    }));
+
     // Persist visitor session context for chatbox attribution (Meta Ad style referral)
     if (refId) {
       const isAddToCart = eventType === "ADD_TO_CART";
-      const cartSummaryText = cart && cart.item_count ? ` (${cart.item_count} items - ₹${cart.total_price || 0})` : "";
+      const cartSummaryText = cleanedCart && cleanedCart.item_count ? ` (${cleanedCart.item_count} items - ₹${cleanedCart.total_price || 0})` : "";
       
-      let actionDesc = `Website context: ${pageTitle || pageUrl || "Storefront"}${cartSummaryText}`;
+      let actionDesc = `Website context: ${pageTitle || effectivePageUrl || "Storefront"}${cartSummaryText}`;
       if (isAddToCart) {
         actionDesc = `Live Add-To-Cart: ${pageTitle || "Product"}${cartSummaryText}`;
       } else if (categoryInsights && categoryInsights.category === "EDUCATION" && categoryInsights.courses?.length) {
@@ -113,15 +169,15 @@ export async function POST(req: NextRequest) {
           payload: {
             refId: refId.toString().toUpperCase(),
             eventType: eventType || "VISITOR_CLICK",
-            pageUrl: pageUrl || "",
+            pageUrl: effectivePageUrl,
             pageTitle: pageTitle || "",
             platform: effectivePlatform,
             detectedProduct: detectedProduct || null,
-            cart: cart || null,
+            cart: cleanedCart,
             customMessage: customMessage || null,
             name: leadName !== "Website Visitor" ? leadName : null,
             phone: cleanPhone || null,
-            pageJourney: Array.isArray(pageJourney) ? pageJourney : [],
+            pageJourney: cleanedJourney,
             searches: Array.isArray(searches) ? searches : [],
             categoryInsights: categoryInsights || null,
             sessionStats: sessionStats || null,

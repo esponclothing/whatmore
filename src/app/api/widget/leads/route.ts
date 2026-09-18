@@ -156,31 +156,84 @@ export async function GET(req: NextRequest) {
       const startTime = new Date(firstItem.log.createdAt);
       const endTime = new Date(lastItem.log.createdAt);
 
-      // Find cart from any entry that had cart items in this session
-      let finalCart: any = null;
-      for (let i = group.length - 1; i >= 0; i--) {
-        if (group[i].payload.cart && (group[i].payload.cart.item_count > 0 || group[i].payload.cart.items?.length > 0)) {
-          finalCart = group[i].payload.cart;
+    // Helper: Recursively unwrap nested proxy URLs to guarantee clean store URLs
+    function cleanActualStoreUrl(rawUrl: string | null | undefined): string {
+      if (!rawUrl || typeof rawUrl !== "string") return "";
+      let url = rawUrl.trim();
+      let maxDepth = 15;
+      while (maxDepth > 0 && (url.includes("/api/cobrowse/proxy?url=") || url.includes("/api/cobrowse/proxy?"))) {
+        maxDepth--;
+        try {
+          const match = url.match(/[?&]url=([^&]+)/);
+          if (match && match[1]) {
+            url = decodeURIComponent(match[1]);
+          } else {
+            break;
+          }
+        } catch {
           break;
         }
       }
-      if (!finalCart) {
-        finalCart = lastItem.payload.cart || firstItem.payload.cart || null;
-      }
+      url = url.replace(/([?&])device=[^&]+/gi, '');
+      url = url.replace(/([?&])cb_ts=[^&]+/gi, '');
+      url = url.replace(/\?$/, '');
+      if (url.includes("/api/cobrowse/proxy")) return "https://esponsports.com";
+      return url;
+    }
 
-      // Merge unique page journey
-      const seenUrls = new Set<string>();
-      const mergedJourney: any[] = [];
-      for (const item of group) {
-        const j = Array.isArray(item.payload.pageJourney) ? item.payload.pageJourney : [];
-        for (const step of j) {
-          const key = (step.path || step.url || "") + "_" + (step.title || "");
-          if (!seenUrls.has(key)) {
-            seenUrls.add(key);
-            mergedJourney.push(step);
+    // Find cart from any entry that had cart items in this session
+    let finalCart: any = null;
+    for (let i = group.length - 1; i >= 0; i--) {
+      if (group[i].payload.cart && (group[i].payload.cart.item_count > 0 || group[i].payload.cart.items?.length > 0)) {
+        finalCart = group[i].payload.cart;
+        break;
+      }
+    }
+    if (!finalCart) {
+      finalCart = lastItem.payload.cart || firstItem.payload.cart || null;
+    }
+
+    // Sanitize & recover cart prices from repeating division loops
+    if (finalCart) {
+      finalCart = { ...finalCart };
+      let tp = typeof finalCart.total_price === 'number' ? finalCart.total_price : parseFloat(finalCart.total_price);
+      if (!isNaN(tp) && isFinite(tp)) {
+        let iters = 0;
+        while (tp > 0 && tp < 50 && iters < 5) { tp = tp * 100; iters++; }
+        finalCart.total_price = Math.round(tp);
+      }
+      if (Array.isArray(finalCart.items)) {
+        finalCart.items = finalCart.items.map((it: any) => {
+          let pr = typeof it.price === 'number' ? it.price : parseFloat(it.price);
+          if (!isNaN(pr) && isFinite(pr)) {
+            let iters = 0;
+            while (pr > 0 && pr < 50 && iters < 5) { pr = pr * 100; iters++; }
+            pr = Math.round(pr);
           }
+          return { ...it, price: pr };
+        });
+      }
+    }
+
+    // Merge unique page journey and unwrap URLs
+    const seenUrls = new Set<string>();
+    const mergedJourney: any[] = [];
+    for (const item of group) {
+      const j = Array.isArray(item.payload.pageJourney) ? item.payload.pageJourney : [];
+      for (const step of j) {
+        const cleanPath = cleanActualStoreUrl(step.path || step.url);
+        const cleanUrl = cleanActualStoreUrl(step.url || step.path);
+        const key = (cleanPath || cleanUrl) + "_" + (step.title || "");
+        if (!seenUrls.has(key)) {
+          seenUrls.add(key);
+          mergedJourney.push({
+            ...step,
+            path: cleanPath,
+            url: cleanUrl
+          });
         }
       }
+    }
 
       // Merge unique searches
       const searchSet = new Set<string>();
@@ -239,7 +292,7 @@ export async function GET(req: NextRequest) {
         name: lastItem.payload.name || firstItem.payload.name || null,
         eventType: lastItem.payload.eventType || "VISITOR_SESSION",
         actionDesc: lastItem.log.actionDesc || lastItem.payload.pageTitle || "Website Visit",
-        pageUrl: lastItem.payload.pageUrl || firstItem.payload.pageUrl || "",
+        pageUrl: cleanActualStoreUrl(lastItem.payload.pageUrl || firstItem.payload.pageUrl || ""),
         pageTitle: lastItem.payload.pageTitle || firstItem.payload.pageTitle || "Online Store",
         platform: lastItem.payload.platform || "Shopify",
         detectedProduct: lastItem.payload.detectedProduct || firstItem.payload.detectedProduct || null,
