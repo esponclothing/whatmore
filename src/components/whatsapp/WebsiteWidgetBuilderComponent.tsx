@@ -70,9 +70,9 @@ const COLOR_PRESETS = [
 function fmtPrice(raw: number | string | undefined | null): string {
   if (raw === null || raw === undefined || raw === "") return "0";
   let n = typeof raw === "number" ? raw : parseFloat(String(raw));
-  if (!isFinite(n) || n <= 0) return "0";
-  let iters = 0;
-  while (n > 0 && n < 50 && iters < 6) { n = n * 100; iters++; }
+  if (!isFinite(n) || isNaN(n) || n <= 0) return "0";
+  if (n < 1) return "0";  // Corrupt value (e.g. 7.6e-148) → discard
+  if (n > 999999) return "0";  // Sanity cap
   return Math.round(n).toLocaleString("en-IN");
 }
 

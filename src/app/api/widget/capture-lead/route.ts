@@ -22,6 +22,26 @@ export async function OPTIONS() {
 }
 
 /**
+ * Sanitize a raw price value to a clean integer rupee amount.
+ * - Values < 1 (e.g. 7.6e-148 from repeated /100 divisions) → 0
+ * - Integer values assumed to be paise → divide by 100
+ * - Float values in a sane rupee range → round to integer
+ * - Anything > 999999 or invalid → 0
+ */
+function sanitizeRupeePrice(raw: any): number {
+  if (raw === null || raw === undefined) return 0;
+  const n = typeof raw === 'number' ? raw : parseFloat(String(raw));
+  if (!isFinite(n) || isNaN(n)) return 0;
+  // Anything unreasonably tiny (e.g. 7.6e-148) → corrupt value, discard
+  if (n > 0 && n < 1) return 0;
+  // Negative or zero
+  if (n <= 0) return 0;
+  // Sanity cap: no product costs more than ₹9,99,999
+  if (n > 999999) return 0;
+  return Math.round(n);
+}
+
+/**
  * POST /api/widget/capture-lead
  * Captures visitor clicks, browsing context, active cart items, and optional form leads before launching WhatsApp.
  */
@@ -116,24 +136,12 @@ export async function POST(req: NextRequest) {
 
     let cleanedCart = cart ? { ...cart } : null;
     if (cleanedCart) {
-      // Recover prices that were stored as fractions due to extra /100 divisions.
-      // Keep multiplying by 100 until price reaches a sane value (>= 100 rupees or 5 iterations max).
-      let tp = typeof cleanedCart.total_price === 'number' ? cleanedCart.total_price : parseFloat(cleanedCart.total_price);
-      if (!isNaN(tp) && isFinite(tp)) {
-        let iters = 0;
-        while (tp > 0 && tp < 50 && iters < 5) { tp = tp * 100; iters++; }
-        cleanedCart.total_price = Math.round(tp);
-      }
+      cleanedCart.total_price = sanitizeRupeePrice(cleanedCart.total_price);
       if (Array.isArray(cleanedCart.items)) {
-        cleanedCart.items = cleanedCart.items.map((it: any) => {
-          let pr = typeof it.price === 'number' ? it.price : parseFloat(it.price);
-          if (!isNaN(pr) && isFinite(pr)) {
-            let iters = 0;
-            while (pr > 0 && pr < 50 && iters < 5) { pr = pr * 100; iters++; }
-            pr = Math.round(pr);
-          }
-          return { ...it, price: pr };
-        });
+        cleanedCart.items = cleanedCart.items.map((it: any) => ({
+          ...it,
+          price: sanitizeRupeePrice(it.price)
+        }));
       }
     }
 

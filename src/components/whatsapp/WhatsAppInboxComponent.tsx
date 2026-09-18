@@ -174,10 +174,11 @@ export const renderWhatsAppFormattedText = (text: string) => {
 function fmtPrice(raw: number | string | undefined | null): string {
   if (raw === null || raw === undefined || raw === "") return "0";
   let n = typeof raw === "number" ? raw : parseFloat(String(raw));
-  if (!isFinite(n) || n <= 0) return "0";
-  // Recover extremely small values (from old bad DB data with repeated /100 divisions)
-  let iters = 0;
-  while (n > 0 && n < 50 && iters < 6) { n = n * 100; iters++; }
+  if (!isFinite(n) || isNaN(n) || n <= 0) return "0";
+  // Values < 1 are corrupt (e.g. 7.6e-148 from repeated /100 divisions in old code)
+  if (n < 1) return "0";
+  // Sanity cap
+  if (n > 999999) return "0";
   return Math.round(n).toLocaleString("en-IN");
 }
 

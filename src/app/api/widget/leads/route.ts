@@ -20,6 +20,16 @@ async function resolveClient(req: NextRequest) {
   return await prisma.whatsAppClient.findFirst({ where: { isActive: true } });
 }
 
+/** Sanitize a raw price to a clean integer rupee amount. Values < 1 (e.g. 7.6e-148 from repeated /100 divisions) are corrupt → return 0. */
+function sanitizeRupeePrice(raw: any): number {
+  if (raw === null || raw === undefined) return 0;
+  const n = typeof raw === 'number' ? raw : parseFloat(String(raw));
+  if (!isFinite(n) || isNaN(n) || n <= 0) return 0;
+  if (n < 1) return 0;  // Scientifically tiny = corrupt data from repeated /100 divisions
+  if (n > 999999) return 0;  // Sanity cap (no product > ₹9,99,999)
+  return Math.round(n);
+}
+
 /**
  * GET /api/widget/leads
  * Fetches captured website leads, contact information, browsing context, and recent storefront sessions.
@@ -196,22 +206,12 @@ export async function GET(req: NextRequest) {
     // Sanitize & recover cart prices from repeating division loops
     if (finalCart) {
       finalCart = { ...finalCart };
-      let tp = typeof finalCart.total_price === 'number' ? finalCart.total_price : parseFloat(finalCart.total_price);
-      if (!isNaN(tp) && isFinite(tp)) {
-        let iters = 0;
-        while (tp > 0 && tp < 50 && iters < 5) { tp = tp * 100; iters++; }
-        finalCart.total_price = Math.round(tp);
-      }
+      finalCart.total_price = sanitizeRupeePrice(finalCart.total_price);
       if (Array.isArray(finalCart.items)) {
-        finalCart.items = finalCart.items.map((it: any) => {
-          let pr = typeof it.price === 'number' ? it.price : parseFloat(it.price);
-          if (!isNaN(pr) && isFinite(pr)) {
-            let iters = 0;
-            while (pr > 0 && pr < 50 && iters < 5) { pr = pr * 100; iters++; }
-            pr = Math.round(pr);
-          }
-          return { ...it, price: pr };
-        });
+        finalCart.items = finalCart.items.map((it: any) => ({
+          ...it,
+          price: sanitizeRupeePrice(it.price)
+        }));
       }
     }
 
