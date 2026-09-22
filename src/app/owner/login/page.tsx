@@ -41,7 +41,7 @@ export default function OwnerLoginPage() {
             👑
           </div>
           <h1 style={{ fontSize: "26px", fontWeight: 900, color: "#0f172a", margin: 0, letterSpacing: "-0.5px" }}>Owner Console</h1>
-          <p style={{ color: "#64748b", fontSize: "14px", marginTop: "4px" }}>What-In Super Admin Portal</p>
+          <p style={{ color: "#64748b", fontSize: "14px", marginTop: "4px" }}>WhatMore Super Admin Portal</p>
         </div>
 
         {/* Card */}

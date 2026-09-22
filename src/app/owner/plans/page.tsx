@@ -67,7 +67,7 @@ export default function OwnerPlansPage() {
           <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "linear-gradient(135deg, #4f46e5, #7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", color: "white", boxShadow: "0 2px 8px rgba(79,70,229,0.25)" }}>👑</div>
           <div>
             <h1 style={{ margin: 0, fontSize: "16px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.2px" }}>Owner Console</h1>
-            <p style={{ margin: 0, fontSize: "11px", color: "#64748b" }}>What-In SaaS Management</p>
+            <p style={{ margin: 0, fontSize: "11px", color: "#64748b" }}>WhatMore SaaS Management</p>
           </div>
         </div>
         <nav style={{ display: "flex", gap: "4px", alignItems: "center" }}>
@@ -93,7 +93,7 @@ export default function OwnerPlansPage() {
       <main style={{ padding: "28px", maxWidth: "1600px", margin: "0 auto" }}>
         <div style={{ marginBottom: "24px" }}>
           <h2 style={{ fontSize: "22px", fontWeight: 900, color: "#0f172a", margin: "0 0 2px 0", letterSpacing: "-0.4px" }}>💎 SaaS Subscription Tier Reference</h2>
-          <p style={{ color: "#64748b", fontSize: "13px", margin: 0 }}>Standard pricing tiers and feature allocations for What-In clients. Plans and custom monthly fees are assigned per client in the Clients tab.</p>
+          <p style={{ color: "#64748b", fontSize: "13px", margin: 0 }}>Standard pricing tiers and feature allocations for WhatMore clients. Plans and custom monthly fees are assigned per client in the Clients tab.</p>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "20px" }}>

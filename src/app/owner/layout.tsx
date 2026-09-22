@@ -2,10 +2,10 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import React from "react";
 
-const OWNER_SECRET = process.env.OWNER_PORTAL_SECRET || "whatin-owner-2026";
+const OWNER_SECRET = process.env.OWNER_PORTAL_SECRET || "whatmore-owner-2026";
 
 export const metadata = {
-  title: "What-In Owner Console",
+  title: "WhatMore Owner Console",
   description: "Super Admin portal for managing SaaS clients"
 };
 

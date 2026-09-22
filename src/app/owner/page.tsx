@@ -63,7 +63,7 @@ export default function OwnerDashboardPage() {
           <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "linear-gradient(135deg, #4f46e5, #7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", color: "white", boxShadow: "0 2px 8px rgba(79,70,229,0.25)" }}>👑</div>
           <div>
             <h1 style={{ margin: 0, fontSize: "16px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.2px" }}>Owner Console</h1>
-            <p style={{ margin: 0, fontSize: "11px", color: "#64748b" }}>What-In SaaS Management</p>
+            <p style={{ margin: 0, fontSize: "11px", color: "#64748b" }}>WhatMore SaaS Management</p>
           </div>
         </div>
         <nav style={{ display: "flex", gap: "4px", alignItems: "center" }}>

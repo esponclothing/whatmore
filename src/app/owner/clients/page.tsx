@@ -134,12 +134,12 @@ export default function OwnerClientsPage() {
   };
 
   const generateRandomPassword = () => {
-    const pass = "WhatIn@" + Math.floor(100000 + Math.random() * 900000);
+    const pass = "WhatMore@" + Math.floor(100000 + Math.random() * 900000);
     setForm(p => ({ ...p, adminPassword: pass }));
   };
 
   const handleOpenAdd = () => {
-    const defaultPass = "WhatIn@" + Math.floor(100000 + Math.random() * 900000);
+    const defaultPass = "WhatMore@" + Math.floor(100000 + Math.random() * 900000);
     setForm({
       businessName: "",
       contactEmail: "",
@@ -169,11 +169,12 @@ export default function OwnerClientsPage() {
     const res = await createClientAction(form);
     if (res.success) {
       setShowAdd(false);
+      const appOrigin = typeof window !== "undefined" ? window.location.origin : "https://whatsapp.esponsports.com";
       setAddSuccessInfo({
         businessName: form.businessName,
         email: form.contactEmail,
         password: form.adminPassword || res.defaultPassword,
-        loginUrl: "https://what-in.tinkal.in/login"
+        loginUrl: `${appOrigin}/login`
       });
       load();
     } else {
@@ -345,7 +346,7 @@ export default function OwnerClientsPage() {
     setImpersonating(client.id);
     const res = await loginAsClientAction(client.id);
     if (res.success && res.user) {
-      document.cookie = `wm_session=whatin-session-2026; path=/; max-age=86400; SameSite=Lax`;
+      document.cookie = `wm_session=whatmore-session-2026; path=/; max-age=86400; SameSite=Lax`;
       document.cookie = `wm_user=${encodeURIComponent(JSON.stringify(res.user))}; path=/; max-age=86400; SameSite=Lax`;
       window.open("/whatsapp/dashboard", "_blank");
     } else {
@@ -385,7 +386,7 @@ export default function OwnerClientsPage() {
     return c.subscriptionStatus === statusFilter;
   });
 
-  const webhookBase = "https://what-in.tinkal.in";
+  const webhookBase = typeof window !== "undefined" ? window.location.origin : "https://whatsapp.esponsports.com";
 
   // Summary counts
   const totalCount = clients.length;
@@ -402,7 +403,7 @@ export default function OwnerClientsPage() {
           <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "linear-gradient(135deg, #4f46e5, #7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", color: "white", boxShadow: "0 2px 8px rgba(79,70,229,0.25)" }}>👑</div>
           <div>
             <h1 style={{ margin: 0, fontSize: "16px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.2px" }}>Owner Console</h1>
-            <p style={{ margin: 0, fontSize: "11px", color: "#64748b" }}>What-In SaaS Management</p>
+            <p style={{ margin: 0, fontSize: "11px", color: "#64748b" }}>WhatMore SaaS Management</p>
           </div>
         </div>
         <nav style={{ display: "flex", gap: "4px", alignItems: "center" }}>
@@ -998,7 +999,7 @@ export default function OwnerClientsPage() {
 
             <div style={{ display: "flex", gap: "10px" }}>
               <button onClick={() => {
-                const text = `🎉 Welcome to What-In WhatsApp Platform!\n\nHere are your dashboard access credentials:\n\n📱 Login URL: ${addSuccessInfo.loginUrl}\n📧 Email: ${addSuccessInfo.email}\n🔑 Password: ${addSuccessInfo.password}\n\nUpon your first login, you will be prompted to set your permanent private password.`;
+                const text = `🎉 Welcome to WhatMore WhatsApp Platform!\n\nHere are your dashboard access credentials:\n\n📱 Login URL: ${addSuccessInfo.loginUrl}\n📧 Email: ${addSuccessInfo.email}\n🔑 Password: ${addSuccessInfo.password}\n\nUpon your first login, you will be prompted to set your permanent private password.`;
                 navigator.clipboard.writeText(text);
                 alert("✅ Credentials message copied to clipboard! You can now paste it into WhatsApp.");
               }} style={{ flex: 1, padding: "12px", background: "linear-gradient(135deg, #16a34a, #15803d)", border: "none", borderRadius: "10px", color: "white", fontWeight: 700, fontSize: "13px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
@@ -1146,9 +1147,9 @@ export default function OwnerClientsPage() {
           <div style={{ background: "#ffffff", color: "#0f172a", borderRadius: "16px", padding: "36px", width: "100%", maxWidth: "560px", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #e2e8f0", paddingBottom: "16px", marginBottom: "20px" }}>
               <div>
-                <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 900, color: "#4338ca", letterSpacing: "-0.5px" }}>WHAT-IN SAAS</h2>
-                <p style={{ margin: "2px 0 0 0", fontSize: "11px", color: "#64748b" }}>Developed by tinkal.in • Cloud WhatsApp SaaS</p>
-                <p style={{ margin: "2px 0 0 0", fontSize: "11px", color: "#64748b" }}>https://what-in.tinkal.in</p>
+                <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 900, color: "#4338ca", letterSpacing: "-0.5px" }}>WHATMORE SAAS</h2>
+                <p style={{ margin: "2px 0 0 0", fontSize: "11px", color: "#64748b" }}>Cloud WhatsApp Commerce & Automation Platform</p>
+                <p style={{ margin: "2px 0 0 0", fontSize: "11px", color: "#64748b" }}>https://esponsports.com</p>
               </div>
               <div style={{ textAlign: "right" }}>
                 <span style={{ display: "inline-block", background: "#dcfce7", color: "#15803d", padding: "4px 12px", borderRadius: "999px", fontSize: "12px", fontWeight: 800 }}>
@@ -1181,7 +1182,7 @@ export default function OwnerClientsPage() {
                 <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
                   <td style={{ padding: "12px" }}>
                     <div style={{ fontWeight: 700, fontSize: "13px", color: "#0f172a" }}>
-                      What-In {selectedReceipt.client.subscriptionPlan || "Standard"} Plan Subscription
+                      WhatMore {selectedReceipt.client.subscriptionPlan || "Standard"} Plan Subscription
                     </div>
                     <div style={{ fontSize: "11px", color: "#64748b" }}>
                       Access: {new Date(selectedReceipt.payment.periodStart).toLocaleDateString("en-IN")} to {new Date(selectedReceipt.payment.periodEnd).toLocaleDateString("en-IN")}
@@ -1236,7 +1237,7 @@ export default function OwnerClientsPage() {
               <div style={{ background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: "12px", padding: "14px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                   <label style={{ fontSize: "11px", fontWeight: 800, color: "#4338ca", textTransform: "uppercase" }}>🔑 Client Admin Login Password</label>
-                  <button type="button" onClick={() => setEditPassword("WhatIn@" + Math.floor(100000 + Math.random() * 900000))} style={{ background: "none", border: "none", color: "#4f46e5", fontSize: "11px", fontWeight: 800, cursor: "pointer", padding: 0 }}>🎲 Generate New</button>
+                  <button type="button" onClick={() => setEditPassword("WhatMore@" + Math.floor(100000 + Math.random() * 900000))} style={{ background: "none", border: "none", color: "#4f46e5", fontSize: "11px", fontWeight: 800, cursor: "pointer", padding: 0 }}>🎲 Generate New</button>
                 </div>
                 <input type="text" value={editPassword} onChange={e => setEditPassword(e.target.value)} placeholder="Enter new password for client admin" style={{ width: "100%", padding: "10px 12px", background: "#ffffff", border: "1px solid #c7d2fe", borderRadius: "8px", color: "#0f172a", fontSize: "14px", fontWeight: 700, outline: "none", boxSizing: "border-box" }} />
                 <span style={{ fontSize: "11px", color: "#475569", marginTop: "4px", display: "block" }}>Client can log into <code>/login</code> with email <b>{editClient.contactEmail}</b> and this password.</span>

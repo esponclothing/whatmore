@@ -92,7 +92,7 @@ export default function OwnerAnnouncementsPage() {
           <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "linear-gradient(135deg, #4f46e5, #7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", color: "white", boxShadow: "0 2px 8px rgba(79,70,229,0.25)" }}>👑</div>
           <div>
             <h1 style={{ margin: 0, fontSize: "16px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.2px" }}>Owner Console</h1>
-            <p style={{ margin: 0, fontSize: "11px", color: "#64748b" }}>What-In SaaS Management</p>
+            <p style={{ margin: 0, fontSize: "11px", color: "#64748b" }}>WhatMore SaaS Management</p>
           </div>
         </div>
         <nav style={{ display: "flex", gap: "4px", alignItems: "center" }}>
@@ -214,7 +214,7 @@ export default function OwnerAnnouncementsPage() {
 
               <div>
                 <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#475569", marginBottom: "6px", textTransform: "uppercase" }}>Message Body *</label>
-                <textarea value={form.message} onChange={e => setForm({ ...form, message: e.target.value })} placeholder="e.g. What-In will undergo scheduled server optimization at 11:30 PM IST for ~15 minutes. WhatsApp automated webhooks will continue processing uninterrupted." required style={{ width: "100%", padding: "11px 14px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "10px", color: "#0f172a", fontSize: "13px", outline: "none", minHeight: "80px", resize: "vertical", boxSizing: "border-box" }} />
+                <textarea value={form.message} onChange={e => setForm({ ...form, message: e.target.value })} placeholder="e.g. WhatMore will undergo scheduled server optimization at 11:30 PM IST for ~15 minutes. WhatsApp automated webhooks will continue processing uninterrupted." required style={{ width: "100%", padding: "11px 14px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "10px", color: "#0f172a", fontSize: "13px", outline: "none", minHeight: "80px", resize: "vertical", boxSizing: "border-box" }} />
               </div>
 
               <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
