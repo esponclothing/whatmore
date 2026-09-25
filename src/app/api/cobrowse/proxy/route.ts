@@ -1,9 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAuthenticatedUser, isOwnerAuthenticated } from "@/lib/authSession";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
+    const isOwner = isOwnerAuthenticated(req);
+    const authUser = await getAuthenticatedUser(req);
+    if (!isOwner && authUser?.clientId) {
+      const client = await prisma.whatsAppClient.findUnique({
+        where: { id: authUser.clientId },
+        select: { enabledModules: true }
+      });
+      if (client?.enabledModules) {
+        try {
+          const modules = JSON.parse(client.enabledModules);
+          if (Array.isArray(modules) && !modules.includes("COBROWSE")) {
+            return new NextResponse(
+              `<html><body style='font-family:sans-serif;background:#0f172a;color:#f87171;padding:40px;text-align:center;'><h3>🔒 Live Co-Browsing Disabled</h3><p style='color:#94a3b8;'>The Live Co-Browsing Screen Assist module is deactivated for your tenant workspace.</p></body></html>`,
+              { status: 403, headers: { "Content-Type": "text/html; charset=utf-8" } }
+            );
+          }
+        } catch {}
+      }
+    }
+
     const { searchParams } = new URL(req.url);
     let targetUrl = searchParams.get("url") || "";
 
