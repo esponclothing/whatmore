@@ -2,6 +2,9 @@
 import React, { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+
 function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,14 +45,26 @@ function LoginForm() {
         <div style={{ position: "absolute", bottom: "20%", right: "15%", width: "300px", height: "300px", background: "radial-gradient(circle, rgba(16,185,129,0.08) 0%, transparent 70%)", borderRadius: "50%" }} />
       </div>
 
-      <div style={{ width: "100%", maxWidth: "440px", padding: "24px", position: "relative" }}>
+      <div style={{ width: "100%", maxWidth: "440px", padding: "24px", position: "relative", zIndex: 10 }}>
+        {/* Back to Landing Page */}
+        <div style={{ marginBottom: "20px" }}>
+          <Link
+            href="/"
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "#94a3b8", textDecoration: "none", fontSize: "13px", fontWeight: 600, transition: "color 0.2s" }}
+            onMouseOver={e => e.currentTarget.style.color = "#a855f7"}
+            onMouseOut={e => e.currentTarget.style.color = "#94a3b8"}
+          >
+            <ArrowLeft size={16} /> Back to WhatMore Landing Page
+          </Link>
+        </div>
+
         {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: "40px" }}>
+        <div style={{ textAlign: "center", marginBottom: "32px" }}>
           <div style={{ width: "68px", height: "68px", borderRadius: "20px", background: "linear-gradient(135deg, #7c3aed, #4f46e5)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: "30px", boxShadow: "0 0 50px rgba(124, 58, 237, 0.35)" }}>
             💬
           </div>
           <h1 style={{ fontSize: "28px", fontWeight: 900, color: "#f8fafc", margin: "0 0 6px 0", letterSpacing: "-0.5px" }}>Whatmore</h1>
-          <p style={{ color: "#64748b", fontSize: "14px", margin: 0 }}>WhatsApp Business Automation Platform</p>
+          <p style={{ color: "#94a3b8", fontSize: "14px", margin: 0 }}>WhatsApp Business Automation Platform</p>
         </div>
 
         {/* Card */}
