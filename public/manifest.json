@@ -1,0 +1,39 @@
+{
+  "name": "WhatMore - WhatsApp Business OS",
+  "short_name": "WhatMore",
+  "description": "Autonomous AI WhatsApp Commerce & Live Multi-Agent Team Inbox",
+  "start_url": "/whatsapp/inbox",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Live Team Inbox",
+      "short_name": "Inbox",
+      "url": "/whatsapp/inbox",
+      "description": "Respond instantly to customer WhatsApp conversations"
+    },
+    {
+      "name": "Store Orders",
+      "short_name": "Orders",
+      "url": "/whatsapp/orders",
+      "description": "Fulfill WhatsApp Catalog & Shopify Orders"
+    }
+  ]
+}
