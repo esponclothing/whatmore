@@ -85,7 +85,7 @@ import {
   parseEnabledModules
 } from "@/lib/moduleRegistry";
 
-const PLANS = ["ALL", "STARTER", "GROWTH", "BUSINESS", "ENTERPRISE", "CUSTOM"];
+const PLANS = ["ALL", "BASIC", "GROWTH", "ENTERPRISE", "STARTER", "BUSINESS", "CUSTOM"];
 
 const STATUS_CONFIG: Record<string, { bg: string; border: string; text: string; dot: string; label: string }> = {
   ACTIVE:   { bg: "bg-emerald-50 dark:bg-emerald-950/60", border: "border-emerald-200 dark:border-emerald-800/80", text: "text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500", label: "Active" },
@@ -95,6 +95,7 @@ const STATUS_CONFIG: Record<string, { bg: string; border: string; text: string; 
 };
 
 const PLAN_BADGES: Record<string, { bg: string; text: string; border: string }> = {
+  BASIC:      { bg: "bg-emerald-50 dark:bg-emerald-950/60", text: "text-emerald-700 dark:text-emerald-300", border: "border-emerald-200 dark:border-emerald-800/80" },
   STARTER:    { bg: "bg-emerald-50 dark:bg-emerald-950/60", text: "text-emerald-700 dark:text-emerald-300", border: "border-emerald-200 dark:border-emerald-800/80" },
   GROWTH:     { bg: "bg-indigo-50 dark:bg-indigo-950/60", text: "text-indigo-700 dark:text-indigo-300", border: "border-indigo-200 dark:border-indigo-800/80" },
   BUSINESS:   { bg: "bg-amber-50 dark:bg-amber-950/60", text: "text-amber-700 dark:text-amber-300", border: "border-amber-200 dark:border-amber-800/80" },
@@ -191,11 +192,11 @@ export default function OwnerClientsPage() {
     contactEmail: "",
     adminPassword: "",
     contactPhone: "",
-    subscriptionPlan: "STARTER",
-    monthlyFee: 999,
-    maxAgents: 3,
+    subscriptionPlan: "BASIC",
+    monthlyFee: 1999,
+    maxAgents: 5,
     monthlyMessageQuota: 5000,
-    monthlyAiQuota: 500,
+    monthlyAiQuota: 0,
     initialStatus: "ACTIVE",
     notes: "",
     ownerWhatsApp: "",
@@ -268,17 +269,17 @@ export default function OwnerClientsPage() {
 
   const handleOpenAdd = () => {
     const defaultPassword = "WhatMore@" + Math.floor(100000 + Math.random() * 900000);
-    const starterPlan = DEFAULT_PLAN_TIERS[0];
+    const basicPlan = DEFAULT_PLAN_TIERS[0];
     setForm({
       businessName: "",
       contactEmail: "",
       adminPassword: defaultPassword,
       contactPhone: "",
-      subscriptionPlan: "STARTER",
-      monthlyFee: 999,
-      maxAgents: 3,
-      monthlyMessageQuota: 5000,
-      monthlyAiQuota: 500,
+      subscriptionPlan: basicPlan.id,
+      monthlyFee: basicPlan.monthlyFee,
+      maxAgents: basicPlan.maxAgents,
+      monthlyMessageQuota: basicPlan.monthlyMessageQuota,
+      monthlyAiQuota: basicPlan.monthlyAiQuota,
       initialStatus: "ACTIVE",
       notes: "",
       ownerWhatsApp: "",
@@ -289,7 +290,7 @@ export default function OwnerClientsPage() {
       phoneNumber: "",
       shopifyDomain: "",
       shopifyToken: "",
-      enabledModules: starterPlan.modules
+      enabledModules: basicPlan.modules
     });
     setShowMetaFields(false);
     setShowAdd(true);
