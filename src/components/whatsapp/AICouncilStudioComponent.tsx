@@ -209,10 +209,10 @@ export default function AICouncilStudioComponent({ embedded = false }: AICouncil
           vetoDetails: data.vetoDetails,
         });
       } else {
-        alert("Simulation error: " + data.error);
+        alert("⚠️ " + (data.error || data.bossReasoning || "Simulation failed. Please verify your Gemini API key in the AI Settings tab."));
       }
     } catch (err: any) {
-      alert("Simulation failed: " + err.message);
+      alert("Simulation failed: " + (err.message || "Network error"));
     } finally {
       setIsSimulating(false);
     }

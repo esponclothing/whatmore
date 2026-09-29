@@ -426,19 +426,61 @@ YOUR TASK:
   "finalAnswer": "The exact natural, polished WhatsApp message in Hinglish/English ready to send to customer"
 }`;
 
-  try {
-    const rawResponse = await callGeminiRest(
-      apiKey,
-      model,
-      prompt,
-      "You are the Autonomous Multi-Agent Swarm Debate Engine. Always respond in strict valid JSON.",
-      1200
-    );
-    if (!rawResponse) {
-      throw new Error("Empty response from AI engine");
-    }
+  const primaryModel = modelOverride || HARDCODED_PRIMARY_MODEL || "gemini-flash-lite-latest";
+  const cascade = [
+    primaryModel,
+    "gemini-flash-latest",
+    "gemini-3.5-flash",
+    "gemini-3.6-flash",
+    "gemini-3.7-flash",
+    "gemini-3.8-flash",
+  ];
 
-    // Clean JSON markdown fences
+  let rawResponse = "";
+  let lastError = "";
+
+  for (const modelToTry of cascade) {
+    try {
+      rawResponse = await callGeminiRest(
+        apiKey,
+        modelToTry,
+        prompt,
+        "You are the Autonomous Multi-Agent Swarm Debate Engine. Always respond in strict valid JSON.",
+        1500
+      );
+      if (rawResponse && rawResponse.trim()) {
+        break;
+      }
+    } catch (e: any) {
+      lastError = e.message;
+      console.warn(`[AI Council] Model ${modelToTry} failed:`, e.message);
+    }
+  }
+
+  if (!rawResponse) {
+    return {
+      success: false,
+      thoughts: enabledAgents.map((a) => ({
+        agentId: a.id,
+        agentName: a.name,
+        role: a.role,
+        avatar: a.avatar,
+        color: a.color,
+        thought: "Awaiting API response...",
+        verdict: "APPROVED",
+        proposedAction: "Review customer message",
+        confidenceScore: 70,
+      })),
+      finalAnswer: "Thank you for reaching out! Our team is reviewing your inquiry.",
+      bossReasoning: `Google AI API error: ${lastError || "No response received. Please verify your Gemini API key."}`,
+      overallConfidence: 65,
+      hasVeto: false,
+      recommendedHandover: true,
+      vetoDetails: lastError,
+    };
+  }
+
+  try {
     let cleaned = rawResponse.trim();
     if (cleaned.startsWith("```json")) {
       cleaned = cleaned.replace(/^```json\s*/, "").replace(/\s*```$/, "");
@@ -446,11 +488,24 @@ YOUR TASK:
       cleaned = cleaned.replace(/^```\s*/, "").replace(/\s*```$/, "");
     }
 
-    const parsed = JSON.parse(cleaned);
+    // Resilient JSON substring finder
+    let jsonStr = cleaned;
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      jsonStr = cleaned.slice(firstBrace, lastBrace + 1);
+    }
+
+    const parsed = JSON.parse(jsonStr);
 
     // Merge agent UI colors/avatars in case AI returned partial
     const enrichedThoughts: AgentDebateThought[] = (parsed.thoughts || []).map((t: any, index: number) => {
-      const matched = enabledAgents.find((a) => a.id === t.agentId || a.name.toLowerCase() === (t.agentName || "").toLowerCase()) || enabledAgents[index] || enabledAgents[0];
+      const matched =
+        enabledAgents.find(
+          (a) => a.id === t.agentId || a.name.toLowerCase() === (t.agentName || "").toLowerCase()
+        ) ||
+        enabledAgents[index] ||
+        enabledAgents[0];
       return {
         agentId: matched.id,
         agentName: matched.name,
@@ -466,16 +521,26 @@ YOUR TASK:
 
     return {
       success: true,
-      thoughts: enrichedThoughts,
+      thoughts: enrichedThoughts.length > 0 ? enrichedThoughts : enabledAgents.map((a) => ({
+        agentId: a.id,
+        agentName: a.name,
+        role: a.role,
+        avatar: a.avatar,
+        color: a.color,
+        thought: "Evaluated inquiry against guidelines.",
+        verdict: "APPROVED",
+        proposedAction: "Engage customer with best offer",
+        confidenceScore: 85,
+      })),
       finalAnswer: parsed.finalAnswer || "Hello! How can we assist you today?",
       bossReasoning: parsed.bossReasoning || "Consensus achieved across council.",
       overallConfidence: parsed.overallConfidence || 85,
       hasVeto: !!parsed.hasVeto,
       vetoDetails: parsed.vetoDetails || "",
-      recommendedHandover: !!parsed.recommendedHandover || parsed.overallConfidence < config.minConsensusConfidence,
+      recommendedHandover: !!parsed.recommendedHandover || (parsed.overallConfidence || 85) < config.minConsensusConfidence,
     };
   } catch (err: any) {
-    console.error("[executeCouncilDebate Error]:", err);
+    console.error("[executeCouncilDebate JSON Parse Error]:", err);
     return {
       success: false,
       thoughts: enabledAgents.map((a) => ({
@@ -490,7 +555,7 @@ YOUR TASK:
         confidenceScore: 75,
       })),
       finalAnswer: "Thank you for reaching out! We are reviewing your inquiry to provide you with the best solution.",
-      bossReasoning: `Fallback triggered: ${err.message}`,
+      bossReasoning: `AI output parsing fallback: ${err.message}`,
       overallConfidence: 70,
       hasVeto: false,
       recommendedHandover: true,
