@@ -10,6 +10,12 @@
   position: relative;
 }
 
+.embeddedPage {
+  min-height: auto;
+  background: transparent;
+  padding: 0;
+}
+
 /* ── Toast ─────────────────────────────────────── */
 .toast {
   position: fixed;
