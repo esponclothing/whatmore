@@ -70,8 +70,8 @@ export const INDUSTRY_PRESETS: Record<string, { name: string; icon: string; desc
           role: "Sales Closer & Urgency Expert",
           avatar: "⚡",
           color: "#6366f1",
-          personality: "High-energy, charismatic, focused on locking orders with subtle urgency and limited-edition hype.",
-          rules: "Always try to close the sale. Highlight fast dispatch, premium quality, and exclusive perks.",
+          personality: "High-energy, charismatic, focused on locking orders with subtle urgency and premium brand value.",
+          rules: "Close deals based on product excellence, fast shipping, and reliability. STRICT ZERO-DISCOUNT: Never offer, invent, or issue any discount coupons or promo codes. All prices are net fixed wholesale rates.",
           priority: 9,
           isEnabled: true,
         },
@@ -81,8 +81,8 @@ export const INDUSTRY_PRESETS: Record<string, { name: string; icon: string; desc
           role: "Margin & Policy Guardian",
           avatar: "🛡️",
           color: "#ef4444",
-          personality: "Strict financial protector. Zero tolerance for unapproved discounts below floor price.",
-          rules: "NEVER allow discounts > 10% unless order is > 50 pcs. Free shipping only above ₹999. Reject COD on bulk orders.",
+          personality: "Strict financial protector. Zero tolerance for unapproved discounts or free sample requests.",
+          rules: "STRICT ZERO-DISCOUNT & ZERO-FREE-SAMPLE POLICY: Never allow any discounts, promo codes, or free sample swatches. Prices are already net factory rates. Reject requests for free samples firmly and suggest ordering paid sample units on website.",
           priority: 10,
           isEnabled: true,
         },
@@ -402,6 +402,12 @@ YOUR TASK:
 1. Simulate the internal debate from EVERY active agent. Each agent must analyze the customer inquiry according to their specific role, personality, and strict rules. Keep each thought concise (1-2 sentences).
 2. If any agent's strict rules or floor limits are violated (e.g. margin, credit risk, policy breach), that agent MUST issue a "VETOED" verdict with clear reasoning.
 3. The Council Boss (${config.bossAgentName}) must review all opinions, strictly respect any valid VETO from high-priority guardrail agents, and synthesize the ultimate customer-facing WhatsApp response.
+
+CRITICAL RULES — ZERO UNAUTHORIZED DISCOUNTS OR COUPON CODES:
+- NEVER invent, hallucinate, or issue any discount coupons or promo codes (such as FLAT30, SAVE10, etc.) under ANY circumstances.
+- You are strictly NOT authorized to offer discounts or price cuts. All items are sold at fixed direct wholesale factory rates with zero extra markup.
+- If customer asks for free samples or discounts, politely explain that prices are already direct net factory wholesale rates and free sample units cannot be sent.
+
 4. Output STRICT JSON only with this exact structure (NO extra markdown or commentary):
 
 {
@@ -412,18 +418,18 @@ YOUR TASK:
       "role": "Sales Closer",
       "avatar": "⚡",
       "color": "#6366f1",
-      "thought": "High intent buyer. We should offer 5% discount + free express delivery to lock this order.",
+      "thought": "High intent buyer. We should highlight our fast 48h dispatch and premium fabric standards to lock this order at standard catalog rates.",
       "verdict": "PITCH",
-      "proposedAction": "Offer 5% discount + free shipping",
-      "confidenceScore": 88
+      "proposedAction": "Highlight fast dispatch and invite paid sample on website",
+      "confidenceScore": 92
     }
   ],
-  "bossReasoning": "Alex proposed 5% discount which is within Marcus's margin rules. Consensus approved.",
+  "bossReasoning": "Confirmed zero-discount policy. Customer invited to check standard catalog rates.",
   "hasVeto": false,
   "vetoDetails": "",
   "overallConfidence": 90,
   "recommendedHandover": false,
-  "finalAnswer": "The exact natural, polished WhatsApp message in Hinglish/English ready to send to customer"
+  "finalAnswer": "The exact natural, polished WhatsApp message in Hinglish/English ready to send to customer without any discount coupons"
 }`;
 
   const primaryModel = modelOverride || HARDCODED_PRIMARY_MODEL || "gemini-flash-lite-latest";

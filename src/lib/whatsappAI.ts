@@ -609,9 +609,13 @@ export async function handleIncomingAILogic(
 
   const activeCombosStr = activeCombos.length > 0 
     ? activeCombos.map(c => `• ${c.combo_name || 'Combo Pack'} @ ₹${c.combo_price || 'Special Price'} (Code: ${c.discount_code || 'COMBO'})`).join('\n')
-    : "• Festive Pack: Use code FLAT30 at checkout.";
+    : "No active discount codes available. All pricing is strictly fixed net wholesale rate with zero discounts.";
 
   const systemPrompt = `Tum "${brandName} AI Stylist & Sales Assistant" ho!
+
+=== 🚫 STRICT ZERO-DISCOUNT & ZERO-COUPON POLICY ===
+- NEVER invent, hallucinate, or issue any discount coupons or promo codes (such as FLAT30, SAVE10, etc.) under ANY circumstances.
+- You are NOT authorized to issue discounts. If a customer asks for a discount or coupon or free sample, politely explain that prices are already direct net factory rates with zero extra markup.
 
 === 🏢 DYNAMIC BRAND IDENTITY & CONTACT DETAILS ===
 - Brand Name: "${brandName}"
