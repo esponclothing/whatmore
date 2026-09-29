@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  MessageSquare, LayoutDashboard, Bot, ShoppingBag, ShoppingCart, Key, Activity, Box, GitBranch, FileCode, Zap, Bell, Sun, Moon, LogOut, CreditCard
+  MessageSquare, LayoutDashboard, Bot, ShoppingBag, ShoppingCart, Key, Activity, Box, GitBranch, FileCode, Zap, Bell, Sun, Moon, LogOut, CreditCard, Mic
 } from "lucide-react";
 import "./WhatsAppHeaderNav.css";
 import { getWhatsAppDashboardMetrics, syncSessionRoleAction } from "@/app/actions/whatsAppPlatformActions";
@@ -39,6 +39,7 @@ const subNavItems: SubNavItem[] = [
   { name: "WhatsApp", path: "/whatsapp/templates", icon: Bot, requiredModule: ["CHATBOT", "BROADCASTS"] },
   { name: "Integrations", path: "/whatsapp/integrations", icon: Zap, requiredModule: ["WIDGET", "DEVELOPER_API", "META_PIXEL_CAPI", "SHOPIFY_INTEGRATION", "PAYMENT_GATEWAY"] },
   { name: "Products & Prices", path: "/whatsapp/commerce", icon: Box, requiredModule: ["META_CATALOG", "SHOPIFY_INTEGRATION"] },
+  { name: "Silent Listener", path: "/whatsapp/silent-listener", icon: Mic, requiredModule: "AI_AGENT" },
   { name: "Settings", path: "/whatsapp/api-settings", icon: Key },
   { name: "Logs", path: "/whatsapp/logs", icon: Activity, requiredModule: "DEVELOPER_API" },
 ];
