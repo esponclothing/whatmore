@@ -12,24 +12,25 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const clientId = searchParams.get('clientId') || user?.clientId;
+    const clientId = searchParams.get('clientId') || user?.clientId || null;
     const status = searchParams.get('status') || 'PENDING';
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
 
-    if (!clientId) return NextResponse.json({ error: 'clientId required' }, { status: 400 });
+    // Owner without clientId can see all entries across all clients
+    const whereBase = clientId ? { clientId } : {};
 
     const [entries, total, stats] = await Promise.all([
       prisma.silentListenerEntry.findMany({
-        where: { clientId, status },
+        where: { ...whereBase, status },
         orderBy: { overallScore: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      prisma.silentListenerEntry.count({ where: { clientId, status } }),
+      prisma.silentListenerEntry.count({ where: { ...whereBase, status } }),
       prisma.silentListenerEntry.groupBy({
         by: ['status'],
-        where: { clientId },
+        where: whereBase,
         _count: { status: true },
       }),
     ]);
