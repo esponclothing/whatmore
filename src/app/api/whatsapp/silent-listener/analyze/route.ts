@@ -3,8 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUser, isOwnerAuthenticated } from '@/lib/authSession';
 import { callGeminiRest, HARDCODED_PRIMARY_MODEL } from '@/lib/whatsappAI';
 
-// How many recent conversations to scan per run
-const SCAN_LIMIT = 20;
+// How many recent conversations to scan per run (increase if needed)
+const SCAN_LIMIT = 200;
 // Only capture pairs with overall score >= this threshold
 const MIN_QUALITY_THRESHOLD = 0.72;
 
