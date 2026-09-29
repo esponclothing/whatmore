@@ -5,8 +5,8 @@ import { callGeminiRest, HARDCODED_PRIMARY_MODEL } from '@/lib/whatsappAI';
 
 // How many recent conversations to scan per run (increase if needed)
 const SCAN_LIMIT = 200;
-// Only capture pairs with overall score >= this threshold
-const MIN_QUALITY_THRESHOLD = 0.72;
+// Only capture pairs with overall score >= this threshold (0.65 allows casual real conversations)
+const MIN_QUALITY_THRESHOLD = 0.65;
 
 export async function POST(req: NextRequest) {
   try {
@@ -63,7 +63,8 @@ export async function POST(req: NextRequest) {
         messages: {
           where: {
             isInternalNote: false,
-            senderType: { in: ['CUSTOMER', 'AGENT'] },
+            // Include ALL non-system sender types to allow lookahead matching
+            senderType: { in: ['CUSTOMER', 'AGENT', 'AI'] },
           },
           orderBy: { sentAt: 'asc' },
           select: {
@@ -89,26 +90,42 @@ export async function POST(req: NextRequest) {
 
     for (const convo of conversations) {
       try {
-        // Build Q-A exchange pairs (customer message → next agent reply)
+        // Build Q-A pairs using lookahead — handles BOT/AI/SYSTEM messages in between
+        // For each CUSTOMER message, find the NEXT AGENT/AI reply (not necessarily immediately next)
         const pairs: { question: string; answer: string; agentName: string; agentId: string }[] = [];
         const msgs = convo.messages;
-        for (let i = 0; i < msgs.length - 1; i++) {
-          if (msgs[i].senderType === 'CUSTOMER' && msgs[i + 1].senderType === 'AGENT') {
-            const question = msgs[i].content?.trim();
-            const answer = msgs[i + 1].content?.trim();
-            if (question && answer && question.length > 5 && answer.length > 10) {
-              // Skip already-captured pairs (for OPEN conversation re-scans)
-              const pairKey = `${convo.id}|||${question.slice(0, 80)}`;
-              if (capturedSet.has(pairKey)) continue;
 
-              pairs.push({
-                question,
-                answer,
-                agentName: msgs[i + 1].senderName || 'Agent',
-                agentId: msgs[i + 1].senderId || '',
-              });
+        for (let i = 0; i < msgs.length; i++) {
+          if (msgs[i].senderType !== 'CUSTOMER') continue;
+
+          const question = msgs[i].content?.trim();
+          if (!question || question.length < 3) continue;
+
+          // Lookahead: find next AGENT or AI message
+          let agentMsg = null;
+          for (let j = i + 1; j < msgs.length; j++) {
+            if (msgs[j].senderType === 'CUSTOMER') break; // New customer message = no reply found
+            if (msgs[j].senderType === 'AGENT' || msgs[j].senderType === 'AI') {
+              agentMsg = msgs[j];
+              break;
             }
           }
+
+          if (!agentMsg) continue;
+
+          const answer = agentMsg.content?.trim();
+          if (!answer || answer.length < 5) continue;
+
+          // Skip already-captured pairs (for OPEN conversation re-scans)
+          const pairKey = `${convo.id}|||${question.slice(0, 80)}`;
+          if (capturedSet.has(pairKey)) continue;
+
+          pairs.push({
+            question,
+            answer,
+            agentName: agentMsg.senderName || 'Agent',
+            agentId: agentMsg.senderId || '',
+          });
         }
 
         if (pairs.length === 0) continue;
