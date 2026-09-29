@@ -70,18 +70,27 @@ export async function PATCH(req: NextRequest) {
     }
 
     const { entryId, action, clientId: bodyClientId } = await req.json();
-    // action: "APPROVE" | "REJECT" | "INJECT"
-    if (!entryId || !action) {
-      return NextResponse.json({ error: 'entryId and action required' }, { status: 400 });
+    // action: "APPROVE" | "REJECT" | "INJECT" | "APPROVE_ALL"
+    if (!action) {
+      return NextResponse.json({ error: 'action required' }, { status: 400 });
+    }
+    // Single-entry actions require entryId
+    const singleActions = ['APPROVE', 'REJECT', 'INJECT'];
+    if (singleActions.includes(action) && !entryId) {
+      return NextResponse.json({ error: 'entryId required for this action' }, { status: 400 });
     }
 
-    const clientId = user?.clientId || bodyClientId;
-    const reviewedBy = user?.email || 'owner';
+    const clientId = user?.clientId || bodyClientId || null;
+    const reviewedBy = user?.email || (isOwner ? 'owner' : 'admin');
 
-    const entry = await prisma.silentListenerEntry.findUnique({ where: { id: entryId } });
-    if (!entry) return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
-    if (entry.clientId !== clientId && !isOwner) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // For single-entry actions, validate the entry exists
+    let entry = null;
+    if (entryId) {
+      entry = await prisma.silentListenerEntry.findUnique({ where: { id: entryId } });
+      if (!entry) return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
+      if (entry.clientId !== clientId && !isOwner) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     if (action === 'APPROVE') {
@@ -89,7 +98,7 @@ export async function PATCH(req: NextRequest) {
         where: { id: entryId },
         data: { status: 'APPROVED', reviewedAt: new Date(), reviewedBy },
       });
-      return NextResponse.json({ success: true, message: 'Entry approved' });
+      return NextResponse.json({ success: true, message: 'Entry approved ✅' });
     }
 
     if (action === 'REJECT') {
@@ -101,53 +110,109 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (action === 'INJECT') {
-      // Append the kbEntry to WhatsAppClient.aiKnowledgeBase
+      if (!entry) return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
       const kbText = entry.kbEntry || `Q: ${entry.customerQuestion}\nA: ${entry.agentAnswer}`;
+      const targetClientId = entry.clientId;
 
-      // Append to existing KB via raw SQL concat
-      await prisma.$executeRaw`
-        UPDATE "WhatsAppClient"
-        SET "aiKnowledgeBase" = COALESCE("aiKnowledgeBase", '') || E'\n\n---\n' || ${kbText}
-        WHERE id = ${entry.clientId}
-      `;
+      // Append to WhatsAppClient KB using Prisma update
+      const clientRec = await prisma.whatsAppClient.findUnique({
+        where: { id: targetClientId },
+        select: { aiKnowledgeBase: true },
+      });
+
+      if (clientRec) {
+        const existingKb = clientRec.aiKnowledgeBase ? clientRec.aiKnowledgeBase.trim() : '';
+        const updatedKb = existingKb ? `${existingKb}\n\n---\n${kbText}` : kbText;
+        await prisma.whatsAppClient.update({
+          where: { id: targetClientId },
+          data: { aiKnowledgeBase: updatedKb },
+        });
+      }
+
+      // Also update default WhatsAppSettings KB if it exists
+      try {
+        const defaultSettings = await prisma.whatsAppSettings.findFirst();
+        if (defaultSettings) {
+          const curSettingsKb = defaultSettings.aiKnowledgeBase ? defaultSettings.aiKnowledgeBase.trim() : '';
+          const updatedSettingsKb = curSettingsKb ? `${curSettingsKb}\n\n---\n${kbText}` : kbText;
+          await prisma.whatsAppSettings.update({
+            where: { id: defaultSettings.id },
+            data: { aiKnowledgeBase: updatedSettingsKb },
+          });
+        }
+      } catch (_) {}
 
       await prisma.silentListenerEntry.update({
         where: { id: entryId },
         data: { status: 'INJECTED', reviewedAt: new Date(), reviewedBy },
       });
 
-      return NextResponse.json({ success: true, message: 'Injected into AI Knowledge Base ✅' });
+      return NextResponse.json({ success: true, message: 'Injected into AI Knowledge Base 🧠✅' });
     }
 
-    // Bulk approve all PENDING
+    // Bulk approve and inject all PENDING
     if (action === 'APPROVE_ALL') {
+      const whereClause = clientId ? { clientId, status: 'PENDING' } : { status: 'PENDING' };
       const pendingEntries = await prisma.silentListenerEntry.findMany({
-        where: { clientId, status: 'PENDING' },
-        select: { id: true, kbEntry: true, customerQuestion: true, agentAnswer: true },
+        where: whereClause,
+        select: { id: true, clientId: true, kbEntry: true, customerQuestion: true, agentAnswer: true },
       });
 
-      await prisma.silentListenerEntry.updateMany({
-        where: { clientId, status: 'PENDING' },
-        data: { status: 'APPROVED', reviewedAt: new Date(), reviewedBy },
+      if (pendingEntries.length === 0) {
+        return NextResponse.json({ success: true, message: 'No pending entries to inject' });
+      }
+
+      // Group entries by clientId
+      const byClient: Record<string, typeof pendingEntries> = {};
+      for (const e of pendingEntries) {
+        if (!byClient[e.clientId]) byClient[e.clientId] = [];
+        byClient[e.clientId].push(e);
+      }
+
+      for (const [cId, cEntries] of Object.entries(byClient)) {
+        const newKbSnippets = cEntries
+          .map((e) => e.kbEntry || `Q: ${e.customerQuestion}\nA: ${e.agentAnswer}`)
+          .join('\n\n---\n');
+
+        const clientRec = await prisma.whatsAppClient.findUnique({
+          where: { id: cId },
+          select: { aiKnowledgeBase: true },
+        });
+
+        if (clientRec) {
+          const existingKb = clientRec.aiKnowledgeBase ? clientRec.aiKnowledgeBase.trim() : '';
+          const updatedKb = existingKb ? `${existingKb}\n\n---\n${newKbSnippets}` : newKbSnippets;
+          await prisma.whatsAppClient.update({
+            where: { id: cId },
+            data: { aiKnowledgeBase: updatedKb },
+          });
+        }
+
+        // Also update WhatsAppSettings
+        try {
+          const defaultSettings = await prisma.whatsAppSettings.findFirst();
+          if (defaultSettings) {
+            const curSettingsKb = defaultSettings.aiKnowledgeBase ? defaultSettings.aiKnowledgeBase.trim() : '';
+            const updatedSettingsKb = curSettingsKb ? `${curSettingsKb}\n\n---\n${newKbSnippets}` : newKbSnippets;
+            await prisma.whatsAppSettings.update({
+              where: { id: defaultSettings.id },
+              data: { aiKnowledgeBase: updatedSettingsKb },
+            });
+          }
+        } catch (_) {}
+
+        // Mark entries as INJECTED
+        const ids = cEntries.map((e) => e.id);
+        await prisma.silentListenerEntry.updateMany({
+          where: { id: { in: ids } },
+          data: { status: 'INJECTED', reviewedAt: new Date(), reviewedBy },
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Successfully injected ${pendingEntries.length} Q&A pairs into AI Knowledge Base! 🧠🎉`,
       });
-
-      // Inject all approved into KB
-      const combined = pendingEntries
-        .map((e) => e.kbEntry || `Q: ${e.customerQuestion}\nA: ${e.agentAnswer}`)
-        .join('\n\n---\n');
-
-      await prisma.$executeRaw`
-        UPDATE "WhatsAppClient"
-        SET "aiKnowledgeBase" = COALESCE("aiKnowledgeBase", '') || E'\n\n---\n' || ${combined}
-        WHERE id = ${clientId}
-      `;
-
-      await prisma.silentListenerEntry.updateMany({
-        where: { clientId, status: 'APPROVED' },
-        data: { status: 'INJECTED' },
-      });
-
-      return NextResponse.json({ success: true, message: `${pendingEntries.length} entries injected` });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
