@@ -4,17 +4,18 @@ import React, { useState, useEffect } from "react";
 import { 
   Bot, Save, Sparkles, AlertCircle, Database, Globe, Settings2, 
   Cpu, KeyRound, CheckCircle2, RefreshCw, Eye, EyeOff, ShieldCheck, 
-  ExternalLink, HelpCircle, Mic
+  ExternalLink, HelpCircle, Mic, Users
 } from "lucide-react";
 import SilentListenerComponent from "./SilentListenerComponent";
+import AICouncilStudioComponent from "./AICouncilStudioComponent";
 
 interface WhatsAppAIAutomationComponentProps {
   embedded?: boolean;
-  initialSubTab?: "config" | "silent-listener";
+  initialSubTab?: "config" | "silent-listener" | "ai-council";
 }
 
 export default function WhatsAppAIAutomationComponent({ embedded = false, initialSubTab = "config" }: WhatsAppAIAutomationComponentProps) {
-  const [activeSubTab, setActiveSubTab] = useState<"config" | "silent-listener">(initialSubTab);
+  const [activeSubTab, setActiveSubTab] = useState<"config" | "silent-listener" | "ai-council">(initialSubTab);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -25,13 +26,13 @@ export default function WhatsAppAIAutomationComponent({ embedded = false, initia
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const sub = params.get("subtab");
-      if (sub === "silent-listener" || sub === "config") {
-        setActiveSubTab(sub);
+      if (sub === "silent-listener" || sub === "config" || sub === "ai-council") {
+        setActiveSubTab(sub as any);
       }
     }
   }, []);
 
-  const handleSubTabChange = (tab: "config" | "silent-listener") => {
+  const handleSubTabChange = (tab: "config" | "silent-listener" | "ai-council") => {
     setActiveSubTab(tab);
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
@@ -266,10 +267,10 @@ export default function WhatsAppAIAutomationComponent({ embedded = false, initia
       </div>
 
       {/* Subtab Navigation Pills */}
-      <div className="flex items-center gap-2 mb-6 border-b border-gray-200 dark:border-slate-700 pb-3">
+      <div className="flex items-center gap-2 mb-6 border-b border-gray-200 dark:border-slate-700 pb-3 flex-wrap">
         <button
           onClick={() => handleSubTabChange("config")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
             activeSubTab === "config"
               ? "bg-indigo-600 text-white shadow-sm"
               : "bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700"
@@ -280,20 +281,33 @@ export default function WhatsAppAIAutomationComponent({ embedded = false, initia
         </button>
         <button
           onClick={() => handleSubTabChange("silent-listener")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
             activeSubTab === "silent-listener"
               ? "bg-indigo-600 text-white shadow-sm"
               : "bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700"
           }`}
         >
           <Mic size={16} />
-          Silent Listener (Auto-Learn from Agents)
+          Silent Listener (Auto-Learn)
+        </button>
+        <button
+          onClick={() => handleSubTabChange("ai-council")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+            activeSubTab === "ai-council"
+              ? "bg-indigo-600 text-white shadow-sm"
+              : "bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          <Users size={16} />
+          🏛️ AI Council (Multi-Agent Swarm)
         </button>
       </div>
 
       {/* Tab Content */}
       {activeSubTab === "silent-listener" ? (
         <SilentListenerComponent embedded onInjected={fetchSettings} />
+      ) : activeSubTab === "ai-council" ? (
+        <AICouncilStudioComponent embedded />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
         {/* Main Editor Section */}
