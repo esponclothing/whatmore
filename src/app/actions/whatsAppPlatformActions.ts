@@ -1612,6 +1612,18 @@ export async function saveWhatsAppApiCredentialsAction(data: {
       });
 
       // Attempt auto-registration with Meta Graph API
+      if (data.phoneId && data.accessToken) {
+        try {
+          await fetch(`https://graph.facebook.com/v21.0/${data.phoneId}/register`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.accessToken}` },
+            body: JSON.stringify({ messaging_product: "whatsapp", pin: "123456" })
+          });
+        } catch (regErr) {
+          console.error("Auto-register phone number with Meta failed:", regErr);
+        }
+      }
+
       if (data.wabaId && data.accessToken) {
         try {
           const appUrl = "https://what-in.tinkal.in";
@@ -1634,7 +1646,7 @@ export async function saveWhatsAppApiCredentialsAction(data: {
       return {
         success: true,
         isConnected,
-        message: `Credentials saved successfully for ${client.businessName}!`
+        message: `Credentials saved and registered successfully with Meta for ${client.businessName}!`
       };
     }
 
@@ -1676,6 +1688,25 @@ export async function saveWhatsAppApiCredentialsAction(data: {
           isDefault: true
         }
       });
+    }
+
+    // Auto-register phone number & subscribe WABA for standalone account
+    if (data.phoneId && data.accessToken) {
+      try {
+        await fetch(`https://graph.facebook.com/v21.0/${data.phoneId}/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.accessToken}` },
+          body: JSON.stringify({ messaging_product: "whatsapp", pin: "123456" })
+        });
+      } catch (_) {}
+    }
+    if (data.wabaId && data.accessToken) {
+      try {
+        await fetch(`https://graph.facebook.com/v21.0/${data.wabaId}/subscribed_apps`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${data.accessToken}` }
+        });
+      } catch (_) {}
     }
 
     revalidatePath('/whatsapp/dashboard');

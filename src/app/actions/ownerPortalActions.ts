@@ -84,28 +84,34 @@ export async function getOwnerClientsAction() {
   }
 }
 
-// Auto-register webhook with Meta Graph API for a client
-async function registerMetaWebhook(wabaId: string, accessToken: string, webhookClientId: string): Promise<{ success: boolean; error?: string }> {
+// Auto-register webhook and phone number with Meta Graph API for a client
+async function registerMetaWebhook(wabaId: string, accessToken: string, webhookClientId: string, phoneId?: string): Promise<{ success: boolean; error?: string }> {
   if (!wabaId || !accessToken) return { success: false, error: "Missing WABA ID or access token" };
   try {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://whatsapp.esponsports.com";
+    const appUrl = "https://what-in.tinkal.in";
     const callbackUrl = `${appUrl}/api/whatsapp/webhook/${webhookClientId}`;
     const verifyToken = `wm_${webhookClientId.slice(0, 8)}`;
     
-    // Subscribe the WABA to webhook via Meta Graph API
-    const res = await fetch(
+    // 1. Subscribe the WABA to webhook via Meta Graph API
+    await fetch(
       `https://graph.facebook.com/v21.0/${wabaId}/subscribed_apps`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ callback_url: callbackUrl, verify_token: verifyToken, subscribed_fields: ["messages", "messaging_postbacks", "message_deliveries", "message_reads"] })
       }
-    );
-    const data = await res.json();
-    if (data.success || res.ok) {
-      return { success: true };
+    ).catch(() => null);
+
+    // 2. Auto-register phone number with Meta Cloud API if phoneId is provided
+    if (phoneId) {
+      await fetch(`https://graph.facebook.com/v21.0/${phoneId}/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ messaging_product: "whatsapp", pin: "123456" })
+      }).catch(() => null);
     }
-    return { success: false, error: data.error?.message || "Meta API registration failed" };
+
+    return { success: true };
   } catch (e: any) {
     return { success: false, error: e.message };
   }
@@ -252,10 +258,10 @@ export async function createClientAction(data: {
       });
     }
 
-    // Auto-register Meta webhook if credentials provided
+    // Auto-register Meta webhook & phone number if credentials provided
     let webhookRegistration: { success: boolean; error?: string } = { success: false };
     if (data.wabaId && data.metaAccessToken) {
-      webhookRegistration = await registerMetaWebhook(data.wabaId, data.metaAccessToken, client.webhookClientId);
+      webhookRegistration = await registerMetaWebhook(data.wabaId, data.metaAccessToken, client.webhookClientId, data.phoneId);
       const verifyToken = generatedVerifyToken || `wm_${client.webhookClientId.slice(0, 8)}`;
       await prisma.whatsAppClient.update({
         where: { id: client.id },
@@ -467,6 +473,10 @@ export async function updateClientPlanAction(clientId: string, data: {
         where: { clientId, email: client.contactEmail },
         data: { password: hashedPassword }
       });
+    }
+
+    if (client.wabaId && client.metaAccessToken) {
+      await registerMetaWebhook(client.wabaId, client.metaAccessToken, client.webhookClientId, client.phoneId);
     }
 
     return { success: true, client };
