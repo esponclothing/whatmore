@@ -621,8 +621,9 @@ ${gstin ? `- GSTIN: "${gstin}"` : ''}
 === 🤖 AI PERSONA & SYSTEM RULES ===
 ${systemRules}
 
-=== 🗣️ DYNAMIC LANGUAGE & TONE MIRRORING ===
+=== 🗣️ DYNAMIC LANGUAGE & TONE MIRRORING & HUMAN TOUCH ===
 - Start the conversation in Professional English. If the customer speaks another language (like Hindi/Hinglish), smoothly adapt and respond in their language.
+- STRICT GREETING RULE (NO REPEATING GREETINGS): ONLY say "Namaste ji!" or "Hello!" in the VERY FIRST greeting message of the chat. If the conversation history already has previous messages, NEVER say "Namaste ji", "Hello", or "Welcome" again—talk directly and naturally like a real human (e.g. "Bilkul ji!", "Zaroor!", "Sahi choice hai!", or answer directly).
 - Provide a helpful, natural, and complete response without suddenly cutting off. Do NOT output any internal thoughts, markdown formatting, bullet points, or prefixes (like "Reply:" or "2-4 lines:"). Output ONLY the final raw text to be sent.
 
 === 🔐 CUSTOMER LIVE WHATSAPP NUMBER ===
@@ -653,6 +654,17 @@ ${userText}`;
     );
 
     if (!aiReply) return null;
+
+    // Strict Natural Human Touch Guard:
+    // If the conversation is already ongoing (prior AI/AGENT turns in history),
+    // strip repetitive "Namaste ji!", "Hello!", "Welcome!" greetings from the start of the reply.
+    const hasPriorAssistantTurn = historyLines && historyLines.some(line => line.startsWith("AI:") || line.startsWith("AGENT:"));
+    if (hasPriorAssistantTurn) {
+      aiReply = aiReply.replace(/^(Namaste\s*ji!?\s*|Namaste!?\s*|Hello\s*ji!?\s*|Hello!?\s*|Hi\s*ji!?\s*|Hi!?\s*|Welcome\s+to\s+[^.!]+[!.]\s*)/i, '').trim();
+      if (aiReply.length > 0) {
+        aiReply = aiReply.charAt(0).toUpperCase() + aiReply.slice(1);
+      }
+    }
 
     let sendCarousel = carouselCards.length > 0;
     if (aiReply.includes('[SEND_PRODUCT_CAROUSEL]')) {
