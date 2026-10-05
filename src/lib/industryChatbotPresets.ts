@@ -551,5 +551,73 @@ export const INDUSTRY_CHATBOT_PRESETS: IndustryChatbotPreset[] = [
         { from: "node_location_capture", to: "node_tech_dispatch_confirm" }
       ]
     })
+  },
+  // 10. B2B MANUFACTURING & EXPORTS (R3 EXPORTS)
+  {
+    id: "r3-exports-b2b-glassware",
+    name: "🥂 R3 Exports – Premium Glassware B2B Factory Bot",
+    industry: "Manufacturing & B2B Wholesale",
+    category: "Lead Qualification & Wholesale Quotes",
+    badge: "B2B Factory Direct",
+    iconName: "Sparkles",
+    description: "Official 10-step B2B qualification bot for R3 Exports Agra factory (50,000+ pcs/mo). Handles MOQs, trade tiers, custom logo baking, sample requests, and instant sales handover.",
+    triggerKeyword: "hi, hello, glassware, catalog, wholesale, r3, export",
+    recommendedAiSystemPrompt: "Tum R3 Exports ke official WhatsApp AI Sales & Product Specialist ho! Natural Hinglish with human touch me baat karo. Direct Agra factory advantage, ₹15,000 min order, ₹500 sample (100% adjustable), logo bake ₹30/pc, aur 500+ pcs leads ko turant human sales manager ko transfer karo.",
+    nodesJson: JSON.stringify({
+      nodes: [
+        {
+          id: "node_start",
+          type: "START",
+          title: "🚀 Buyer Initiates Inquiry",
+          position: { x: 50, y: 150 },
+          data: { triggerKeyword: "hi, hello, glassware, wholesale, r3" }
+        },
+        {
+          id: "node_welcome",
+          type: "MESSAGE",
+          title: "👋 R3 Factory Welcome & Purpose",
+          position: { x: 300, y: 150 },
+          data: {
+            text: "👋 *Namaste & Welcome to R3 Exports!*\n\nHum Agra factory se direct premium borosilicate glassware manufacture karte hain (50,000+ pcs/month capacity).\n\nAaj aap kis requirement ke liye enquire kar rahe hain?",
+            buttons: ["🏢 Buy for Business", "🎁 Corporate / Festive Gifts", "🎨 Custom Logo Glassware", "📖 Just Browsing Catalogue"]
+          }
+        },
+        {
+          id: "node_biz_type",
+          type: "QUESTION",
+          title: "🏢 Business Category",
+          position: { x: 600, y: 100 },
+          data: {
+            text: "Great! Aapka business category kaun sa hai?\n1️⃣ Café / Restaurant / Bar\n2️⃣ Home Décor Store / Brand\n3️⃣ Wholesaler / Distributor\n4️⃣ Online Seller (Amazon/Shopify)\n5️⃣ Personal Use (Min trade order ₹15,000)",
+            variable: "business_category"
+          }
+        },
+        {
+          id: "node_product_interest",
+          type: "MESSAGE",
+          title: "✨ Product Selection & Tiers",
+          position: { x: 900, y: 100 },
+          data: {
+            text: "Aapko kaun se glassware designs mein interest hai?\n\n• *Coffee Cups & Mugs* (Ergonomic handle)\n• *Double-Wall Glasses* (Heat insulated)\n• *Tumblers & Barware* (Crystal clear)\n• *Exclusive Designer* (Happy Faces, Wildlife in a Cup, Love Handles from ₹200/pc)",
+            buttons: ["☕ Coffee Mugs", "🥛 Double-Wall", "✨ Exclusive Designer", "🔬 Need Sample First (₹500)"]
+          }
+        },
+        {
+          id: "node_quote_handover",
+          type: "MESSAGE",
+          title: "✅ Sales Manager Handover",
+          position: { x: 1200, y: 100 },
+          data: {
+            text: "✅ *Thank you for connecting with R3 Exports!*\n\n• Direct Factory Pricing\n• GST Tax Invoice\n• In-stock orders dispatch in 2 days\n\nHamare Senior Sales Executive aapko next 15-30 minutes mein WhatsApp karenge full trade price list ke saath. Call/WhatsApp: +91 9958173594."
+          }
+        }
+      ],
+      connections: [
+        { from: "node_start", to: "node_welcome" },
+        { from: "node_welcome", to: "node_biz_type" },
+        { from: "node_biz_type", to: "node_product_interest" },
+        { from: "node_product_interest", to: "node_quote_handover" }
+      ]
+    })
   }
 ];
