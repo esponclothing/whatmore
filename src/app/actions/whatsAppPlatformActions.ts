@@ -4190,17 +4190,24 @@ export async function getWhatsAppAutomationRules() {
   }
 }
 
-export async function getWhatsAppChatbotFlows() {
+export async function getWhatsAppChatbotFlows(explicitClientId?: string) {
   try {
     const user = await getAuthenticatedUser().catch(() => null);
-    const isOwner = await isOwnerAuthenticated();
+
+    // Resolve target client ID strictly:
+    // If explicitClientId is provided, use it.
+    // If user?.clientId is present (e.g. client admin or owner inside client tenant), STRICTLY filter by that clientId!
+    const targetClientId = explicitClientId || user?.clientId;
 
     let whereClause: any = {};
-    if (!isOwner && user?.role !== 'OWNER' && user?.role !== 'SUPER_ADMIN') {
-      const targetClientId = user?.clientId;
-      if (targetClientId) {
-        whereClause = { clientId: targetClientId };
+    if (targetClientId) {
+      whereClause = { clientId: targetClientId };
+    } else {
+      const isOwner = await isOwnerAuthenticated();
+      if (!isOwner && user?.role !== 'OWNER' && user?.role !== 'SUPER_ADMIN') {
+        return { success: true, flows: [] };
       }
+      // Pure global super admin without any client scope
     }
 
     const flows = await prisma.whatsAppChatbotFlow.findMany({

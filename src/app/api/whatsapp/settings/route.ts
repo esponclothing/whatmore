@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
       settings = await prisma.whatsAppSettings.create({ data: {} });
     }
 
-    // If client tenant user, merge client-specific AI and gateway configurations
+    // If client tenant user, strictly isolate client-specific AI and gateway configurations
     if (user?.clientId) {
       const client = await prisma.whatsAppClient.findUnique({
         where: { id: user.clientId }
@@ -24,11 +24,11 @@ export async function GET(req: NextRequest) {
       if (client) {
         settings = {
           ...settings,
-          geminiApiKey: client.geminiApiKey || settings.geminiApiKey,
-          aiModel: "gemini-flash-lite-latest",
-          aiSystemPrompt: client.aiSystemPrompt || settings.aiSystemPrompt,
-          aiKnowledgeBase: client.aiKnowledgeBase || settings.aiKnowledgeBase,
-          welcomeMessage: client.welcomeMessage || settings.welcomeMessage,
+          geminiApiKey: client.geminiApiKey || "",
+          aiModel: client.aiModel || "gemini-flash-lite-latest",
+          aiSystemPrompt: client.aiSystemPrompt || "",
+          aiKnowledgeBase: client.aiKnowledgeBase || "",
+          welcomeMessage: client.welcomeMessage || "Welcome! How can we help you today?",
           workingHoursStart: client.workingHoursStart || settings.workingHoursStart,
           workingHoursEnd: client.workingHoursEnd || settings.workingHoursEnd,
           activeGateway: client.activeGateway || settings.activeGateway,
@@ -82,9 +82,7 @@ export async function POST(req: NextRequest) {
         data: clientData
       });
 
-      if (!isOwner) {
-        return NextResponse.json({ success: true, settings: updatedClient });
-      }
+      return NextResponse.json({ success: true, settings: updatedClient });
     }
 
     let settings = await prisma.whatsAppSettings.findFirst();
