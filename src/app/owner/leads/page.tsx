@@ -60,7 +60,7 @@ export default function OwnerLeadsPage() {
     }
   }, [statusFilter, platformFilter]);
 
-  const loadLeads = async () => {
+  async function loadLeads() {
     setLoading(true);
     const res = await getPlatformLeadsAction({
       status: statusFilter,

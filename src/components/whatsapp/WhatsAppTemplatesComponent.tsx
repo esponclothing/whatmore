@@ -169,81 +169,6 @@ export default function WhatsAppTemplatesComponent() {
   // Live Clock
   const [liveCurrentTime, setLiveCurrentTime] = useState<string>("");
 
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setLiveCurrentTime(
-        now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })
-      );
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Fetch brand details, verified WhatsApp name & AI intelligence on component mount
-  useEffect(() => {
-    getMetaPhoneHealthAndLimitsAction().then((healthRes) => {
-      if (healthRes && healthRes.verifiedName && healthRes.verifiedName !== "WhatsApp Account") {
-        setWhatsAppDisplayName(healthRes.verifiedName);
-      }
-    }).catch(() => {});
-
-    getWhatsAppBrandDetailsAction().then((res) => {
-      if (res) {
-        if (res.verifiedName || res.whatsAppDisplayName) {
-          setWhatsAppDisplayName(res.verifiedName || res.whatsAppDisplayName);
-        }
-        if (res.brandName) {
-          setBrandName(res.brandName);
-        }
-        if (res.brandDomain) setBrandDomain(res.brandDomain);
-        if (res.phoneNumber || res.brandPhone) setBrandPhone(res.phoneNumber || res.brandPhone);
-        if (res.brandEmail) setBrandEmail(res.brandEmail);
-        if (res.hasAiKnowledge !== undefined) setHasAiKnowledge(res.hasAiKnowledge);
-        if (res.productsCount) setProductsCount(res.productsCount);
-        if (res.combosCount) setCombosCount(res.combosCount);
-        if (res.metaCatalogId) setCatalogId(res.metaCatalogId);
-
-        // Also update initial carousel cards with real brand name & domain
-        setCarouselCards([
-          {
-            id: "card_1",
-            mediaUrl: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&auto=format&fit=crop&q=80",
-            headerType: "IMAGE",
-            title: `${res.brandName} Performance Tee`,
-            bodyText: "₹899 • Breathable 4-way stretch fabric",
-            buttons: [
-              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "esponsports.com"}/products/tee`, urlType: "STATIC" },
-              { type: "URL", text: "Explore More", url: `https://${res.brandDomain || "esponsports.com"}/collections/all`, urlType: "STATIC" }
-            ]
-          },
-          {
-            id: "card_2",
-            mediaUrl: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=500&auto=format&fit=crop&q=80",
-            headerType: "IMAGE",
-            title: `${res.brandName} Pro Shorts`,
-            bodyText: "₹1,199 • Zipper pockets & sweat-wicking",
-            buttons: [
-              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "esponsports.com"}/products/shorts`, urlType: "STATIC" },
-              { type: "URL", text: "Explore More", url: `https://${res.brandDomain || "esponsports.com"}/collections/all`, urlType: "STATIC" }
-            ]
-          }
-        ]);
-      }
-    });
-
-    getWhatsAppMetaFlows().then((res) => {
-      if (res && res.success && res.flows && res.flows.length > 0) {
-        setMetaFlows(res.flows);
-        setSelectedMetaFlow(res.flows[0]);
-        setSelectedMetaFlowId(res.flows[0].flowId || res.flows[0].id);
-        if (res.flows[0].ctaText) setFlowButtonText(res.flows[0].ctaText);
-        if (res.flows[0].screenName) setFlowScreen(res.flows[0].screenName);
-      }
-    }).catch(() => {});
-  }, []);
-
   // -------------------------------------------------------------
   // Full-Page Template Studio State
   // -------------------------------------------------------------
@@ -362,6 +287,81 @@ export default function WhatsAppTemplatesComponent() {
   const [aiVariants, setAiVariants] = useState<any[]>([]);
   const [aiVariantsLoading, setAiVariantsLoading] = useState(false);
   const [aiVariantIndex, setAiVariantIndex] = useState(0);
+
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setLiveCurrentTime(
+        now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })
+      );
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch brand details, verified WhatsApp name & AI intelligence on component mount
+  useEffect(() => {
+    getMetaPhoneHealthAndLimitsAction().then((healthRes) => {
+      if (healthRes && healthRes.verifiedName && healthRes.verifiedName !== "WhatsApp Account") {
+        setWhatsAppDisplayName(healthRes.verifiedName);
+      }
+    }).catch(() => {});
+
+    getWhatsAppBrandDetailsAction().then((res) => {
+      if (res) {
+        if (res.verifiedName || res.whatsAppDisplayName) {
+          setWhatsAppDisplayName(res.verifiedName || res.whatsAppDisplayName);
+        }
+        if (res.brandName) {
+          setBrandName(res.brandName);
+        }
+        if (res.brandDomain) setBrandDomain(res.brandDomain);
+        if (res.phoneNumber || res.brandPhone) setBrandPhone(res.phoneNumber || res.brandPhone);
+        if (res.brandEmail) setBrandEmail(res.brandEmail);
+        if (res.hasAiKnowledge !== undefined) setHasAiKnowledge(res.hasAiKnowledge);
+        if (res.productsCount) setProductsCount(res.productsCount);
+        if (res.combosCount) setCombosCount(res.combosCount);
+        if (res.metaCatalogId) setCatalogId(res.metaCatalogId);
+
+        // Also update initial carousel cards with real brand name & domain
+        setCarouselCards([
+          {
+            id: "card_1",
+            mediaUrl: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&auto=format&fit=crop&q=80",
+            headerType: "IMAGE",
+            title: `${res.brandName} Performance Tee`,
+            bodyText: "₹899 • Breathable 4-way stretch fabric",
+            buttons: [
+              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "esponsports.com"}/products/tee`, urlType: "STATIC" },
+              { type: "URL", text: "Explore More", url: `https://${res.brandDomain || "esponsports.com"}/collections/all`, urlType: "STATIC" }
+            ]
+          },
+          {
+            id: "card_2",
+            mediaUrl: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=500&auto=format&fit=crop&q=80",
+            headerType: "IMAGE",
+            title: `${res.brandName} Pro Shorts`,
+            bodyText: "₹1,199 • Zipper pockets & sweat-wicking",
+            buttons: [
+              { type: "URL", text: "Buy Now", url: `https://${res.brandDomain || "esponsports.com"}/products/shorts`, urlType: "STATIC" },
+              { type: "URL", text: "Explore More", url: `https://${res.brandDomain || "esponsports.com"}/collections/all`, urlType: "STATIC" }
+            ]
+          }
+        ]);
+      }
+    });
+
+    getWhatsAppMetaFlows().then((res) => {
+      if (res && res.success && res.flows && res.flows.length > 0) {
+        setMetaFlows(res.flows);
+        setSelectedMetaFlow(res.flows[0]);
+        setSelectedMetaFlowId(res.flows[0].flowId || res.flows[0].id);
+        if (res.flows[0].ctaText) setFlowButtonText(res.flows[0].ctaText);
+        if (res.flows[0].screenName) setFlowScreen(res.flows[0].screenName);
+      }
+    }).catch(() => {});
+  }, []);
 
   const toggleSelectProductForAI = (p: any) => {
     setAiSelectedProducts((prev) => {

@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { sendWhatsAppMessageAction } from "@/app/actions/whatsAppPlatformActions";
 import { parseEnabledModules } from "@/lib/moduleRegistry";
@@ -705,7 +706,6 @@ async function runNodes(
             const eventId = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
             if (pixelId && accessToken) {
-              const crypto = require('crypto');
               const hashedPhone = crypto.createHash('sha256').update(cleanPhone).digest('hex');
 
               const queryParam = testCode ? `?test_event_code=${encodeURIComponent(testCode)}` : '';
@@ -797,7 +797,6 @@ async function runNodes(
           console.log(`[Meta Audience Engine] Auto-creating & syncing user ${cleanPhone} to Meta Custom Audience "${audienceName}"...`);
           
           try {
-            const crypto = require('crypto');
             const hashedPhone = crypto.createHash('sha256').update(cleanPhone).digest('hex');
             const integration = await prisma.whatsAppIntegration.findFirst({ where: { type: 'META_CAPI', isActive: true } });
             

@@ -118,7 +118,7 @@ export default function OwnerAnnouncementsPage() {
     }
   }, []);
 
-  const load = async () => {
+  async function load() {
     setLoading(true);
     const res = await getAnnouncementsAction();
     if (res.success && res.announcements) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { isOwnerAuthenticated, getAuthenticatedUser } from "@/lib/authSession";
@@ -104,7 +105,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       console.error("[Agent Sync] Failed to update User/Employee:", syncErr);
     }
 
-    const { revalidatePath } = require("next/cache");
     revalidatePath('/whatsapp/inbox');
     revalidatePath('/whatsapp/team-inbox');
     revalidatePath('/whatsapp/api-settings');

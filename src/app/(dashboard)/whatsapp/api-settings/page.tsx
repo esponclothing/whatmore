@@ -146,7 +146,7 @@ export default function WhatsAppAPISettingsPage() {
     loadAllSettings();
   }, []);
 
-  const loadAllSettings = () => {
+  function loadAllSettings() {
     Promise.all([
       getWhatsAppApiCredentialsAction(),
       getShopifyCredentialsAction(),

@@ -189,7 +189,7 @@ export default function IntegrationsHubPage() {
     loadAllSettings();
   }, []);
 
-  const loadAllSettings = () => {
+  function loadAllSettings() {
     Promise.all([
       getWhatsAppApiCredentialsAction(),
       getShopifyCredentialsAction(),

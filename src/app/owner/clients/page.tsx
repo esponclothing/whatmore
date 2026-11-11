@@ -266,7 +266,7 @@ export default function OwnerClientsPage() {
     }
   }, []);
 
-  const load = async () => {
+  async function load() {
     setLoading(true);
     await syncSubscriptionStatusesAction();
     const res = await getOwnerClientsAction();

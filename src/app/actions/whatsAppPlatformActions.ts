@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { seedWhatsAppPlatformData } from "@/lib/seedWhatsApp";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_noStore as noStore } from "next/cache";
 import { formatWhatsAppPhone, getPhoneLookupKeys, normalizePhoneKey, resolveWhatsAppDispatchPhone } from "@/lib/phoneUtils";
 import { notifyAdminsOfTemplateStatusChange } from "@/lib/pushNotifications";
 import { getAuthenticatedUser, isOwnerAuthenticated } from "@/lib/authSession";
@@ -128,7 +128,6 @@ export interface ConversationFilterOptions {
 }
 
 export async function getWhatsAppConversations(filters: ConversationFilterOptions = {}) {
-  const { unstable_noStore: noStore } = require("next/cache");
   noStore();
   // await ensureSeeded();
   try {
@@ -4693,7 +4692,6 @@ export async function assignWhatsAppLeadAction(data: {
 }
 
 export async function getAllEmployeesAndTeams() {
-  const { unstable_noStore: noStore } = require("next/cache");
   noStore();
   await ensureSeeded();
   try {

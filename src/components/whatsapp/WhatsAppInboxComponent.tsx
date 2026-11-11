@@ -403,6 +403,19 @@ export default function WhatsAppInboxComponent() {
   const [enabledModules, setEnabledModules] = useState<string[]>([]);
   const [modulesFetched, setModulesFetched] = useState<boolean>(false);
 
+  // Mentions Autocomplete State
+  const [showMentionsMenu, setShowMentionsMenu] = useState<boolean>(false);
+  const [mentionSearch, setMentionSearch] = useState<string>("");
+  const [filterTag, setFilterTag] = useState<string>("ALL");
+  const [filterSearch, setFilterSearch] = useState<string>("");
+
+  // CRM Integrations
+  const [integrations, setIntegrations] = useState<any[]>([]);
+  const [pushingToCrm, setPushingToCrm] = useState(false);
+  const [showIntegrationsMenu, setShowIntegrationsMenu] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // mobile bottom-sheet
+
   const isModuleActive = (mod: string | string[]) => {
     if (!modulesFetched) return true;
     if (!enabledModules || enabledModules.length === 0) return false;
@@ -612,19 +625,6 @@ export default function WhatsAppInboxComponent() {
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [showCannedResponses]);
   
-  // Mentions Autocomplete State
-  const [showMentionsMenu, setShowMentionsMenu] = useState<boolean>(false);
-  const [mentionSearch, setMentionSearch] = useState<string>("");
-  const [filterTag, setFilterTag] = useState<string>("ALL");
-  const [filterSearch, setFilterSearch] = useState<string>("");
-
-  // CRM Integrations
-  const [integrations, setIntegrations] = useState<any[]>([]);
-  const [pushingToCrm, setPushingToCrm] = useState(false);
-  const [showIntegrationsMenu, setShowIntegrationsMenu] = useState(false);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // mobile bottom-sheet
-
   // Toggle Full Screen Mode (Overlay + Native Fullscreen API)
   const toggleFullScreenMode = () => {
     if (!isFullScreen) {
@@ -806,22 +806,25 @@ export default function WhatsAppInboxComponent() {
     );
     if (!ctxMsg) return null;
     try {
-      const parsed = typeof ctxMsg.metadata === "string" ? JSON.parse(ctxMsg.metadata) : ctxMsg.metadata;
-      if (parsed && typeof parsed === "object") {
-        if (parsed.pageUrl) parsed.pageUrl = cleanActualStoreUrl(parsed.pageUrl);
-        if (Array.isArray(parsed.pageJourney)) {
-          parsed.pageJourney = parsed.pageJourney.map((step: any) => ({
-            ...step,
-            url: cleanActualStoreUrl(step.url || step.path || ""),
-            path: cleanActualStoreUrl(step.path || step.url || "")
-          }));
-        }
+      const raw = typeof ctxMsg.metadata === "string" ? JSON.parse(ctxMsg.metadata) : ctxMsg.metadata;
+      if (raw && typeof raw === "object") {
+        return {
+          ...raw,
+          pageUrl: raw.pageUrl ? cleanActualStoreUrl(raw.pageUrl) : raw.pageUrl,
+          pageJourney: Array.isArray(raw.pageJourney)
+            ? raw.pageJourney.map((step: any) => ({
+                ...step,
+                url: cleanActualStoreUrl(step.url || step.path || ""),
+                path: cleanActualStoreUrl(step.path || step.url || "")
+              }))
+            : raw.pageJourney
+        };
       }
-      return parsed;
+      return raw;
     } catch (_) {
       return null;
     }
-  }, [activeConvDetail?.messages]);
+  }, [activeConvDetail]);
 
   // Consolidated Website Tracking Data (Live or Historical Session Replay)
   const activeWebsiteTrackingData = useMemo(() => {
@@ -1389,7 +1392,7 @@ export default function WhatsAppInboxComponent() {
     fetchIntegrations();
   }, []);
 
-  const fetchIntegrations = async () => {
+  async function fetchIntegrations() {
     const res = await getWhatsAppIntegrationsAction();
     if (res.success && res.integrations) {
       // Exclude Meta CAPI / Pixel integrations so only CRM / ERP webhook integrations appear
@@ -5447,7 +5450,7 @@ export default function WhatsAppInboxComponent() {
                   {activeConvDetail.customer?.id && (
                     <div style={{ marginTop: "10px", textAlign: "center" }}>
                       <Link
-                        href={`/customers/${activeConvDetail.customer.id}`}
+                        href={`/whatsapp/contacts?search=${encodeURIComponent(activeConvDetail.customer.mobile || activeConvDetail.customer.whatsappPhone || activeConvDetail.customer.name || activeConvDetail.customer.id)}`}
                         style={{
                           fontSize: "12px",
                           fontWeight: 700,

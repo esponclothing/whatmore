@@ -81,7 +81,7 @@ export default function OwnerDashboardPage() {
     }
   }, []);
 
-  const loadStats = async () => {
+  async function loadStats() {
     setLoading(true);
     await syncSubscriptionStatusesAction();
     const [statsRes, telemetryRes, leadsRes] = await Promise.all([

@@ -3,6 +3,7 @@ import { exec } from "child_process";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import ffmpegPath from "ffmpeg-static";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, isOwnerAuthenticated } from "@/lib/authSession";
 
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
       fs.writeFileSync(inputPath, buffer);
 
       try {
-        const ffmpeg = require("ffmpeg-static");
+        const ffmpeg = ffmpegPath;
         await new Promise<void>((resolve, reject) => {
           exec(`"${ffmpeg}" -i "${inputPath}" -codec:a libmp3lame -qscale:a 2 "${outputPath}"`, (error, stdout, stderr) => {
             if (error) {

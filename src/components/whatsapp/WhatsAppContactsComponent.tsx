@@ -198,6 +198,15 @@ export default function WhatsAppContactsComponent() {
 
   useEffect(() => {
     loadEmployeesAndTeams();
+    try {
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const tagParam = params.get("tag");
+        const searchParam = params.get("search") || params.get("phone");
+        if (tagParam) setTagFilter(tagParam);
+        if (searchParam) setSearch(searchParam);
+      }
+    } catch (_) {}
   }, []);
 
   const fetchContacts = async (targetPage?: number) => {
