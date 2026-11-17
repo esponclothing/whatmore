@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
       bodySizeLimit: "50mb",
-      allowedOrigins: ["whatsapp.esponsports.com", "*.railway.app", "localhost:3000"]
+      allowedOrigins: ["whatsapp.esponsports.com", "*.railway.app", "*.vercel.app", "localhost:3000"]
     }
   }
 };
